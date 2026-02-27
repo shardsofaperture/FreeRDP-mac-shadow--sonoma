@@ -1482,9 +1482,17 @@ static UINT rdpdr_send_device_list_announce_request(rdpdrPlugin* rdpdr, BOOL use
 		return CHANNEL_RC_OK;
 	}
 	pos = Stream_GetPosition(s);
-	Stream_SetPosition(s, count_pos);
+	if (!Stream_SetPosition(s, count_pos))
+	{
+		Stream_Release(s);
+		return ERROR_INVALID_DATA;
+	}
 	Stream_Write_UINT32(s, arg.count);
-	Stream_SetPosition(s, pos);
+	if (!Stream_SetPosition(s, pos))
+	{
+		Stream_Release(s);
+		return ERROR_INVALID_DATA;
+	}
 	Stream_SealLength(s);
 	return rdpdr_send(rdpdr, s);
 }
@@ -1514,7 +1522,11 @@ static UINT dummy_irp_response(rdpdrPlugin* rdpdr, wStream* s)
 		return CHANNEL_RC_NO_MEMORY;
 	}
 
-	Stream_SetPosition(s, 4); /* see "rdpdr_process_receive" */
+	if (!Stream_SetPosition(s, 4)) /* see "rdpdr_process_receive" */
+	{
+		Stream_Release(output);
+		return ERROR_INVALID_DATA;
+	}
 
 	const uint32_t DeviceId = Stream_Get_UINT32(s);     /* DeviceId (4 bytes) */
 	const uint32_t FileId = Stream_Get_UINT32(s);       /* FileId (4 bytes) */

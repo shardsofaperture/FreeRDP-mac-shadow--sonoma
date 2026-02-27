@@ -233,7 +233,8 @@ static UINT rdpei_send_pdu(GENERIC_CHANNEL_CALLBACK* callback, wStream* s, UINT1
 	Stream_ResetPosition(s);
 	Stream_Write_UINT16(s, eventId);   /* eventId (2 bytes) */
 	Stream_Write_UINT32(s, (UINT32)pduLength); /* pduLength (4 bytes) */
-	Stream_SetPosition(s, Stream_Length(s));
+	if (!Stream_SetPosition(s, Stream_Length(s)))
+		return ERROR_INVALID_DATA;
 	const UINT status = callback->channel->Write(callback->channel, (UINT32)Stream_Length(s),
 	                                             Stream_Buffer(s), nullptr);
 #ifdef WITH_DEBUG_RDPEI

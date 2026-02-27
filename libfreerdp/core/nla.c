@@ -1267,7 +1267,8 @@ static MSV1_0_REMOTE_SUPPLEMENTAL_CREDENTIAL* nla_read_NtlmCreds(WINPR_ATTR_UNUS
 	if (!Stream_CheckAndLogRequiredLength(TAG, s, EncryptedCredsSize))
 		return nullptr;
 
-	Stream_SetPosition(s, pos);
+	if (!Stream_SetPosition(s, pos))
+		return nullptr;
 
 	MSV1_0_REMOTE_SUPPLEMENTAL_CREDENTIAL* ret = (MSV1_0_REMOTE_SUPPLEMENTAL_CREDENTIAL*)calloc(
 	    1, sizeof(MSV1_0_REMOTE_SUPPLEMENTAL_CREDENTIAL) - 1 + EncryptedCredsSize);

@@ -494,7 +494,8 @@ static void rdpdr_dump_packet(wLog* log, DWORD lvl, wStream* s, const char* cust
 	}
 
 	// winpr_HexLogDump(log, lvl, Stream_Buffer(s), pos);
-	Stream_SetPosition(s, gpos);
+	if (!Stream_SetPosition(s, gpos))
+		WLog_Print(log, WLOG_ERROR, "Stream_SetPosition(%" PRIuz ") failed", gpos);
 }
 
 void rdpdr_dump_received_packet(wLog* log, DWORD lvl, wStream* out, const char* custom)

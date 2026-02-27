@@ -103,7 +103,8 @@ static UINT location_channel_send(IWTSVirtualChannel* channel, wStream* s)
 	if (len > UINT32_MAX)
 		return ERROR_INTERNAL_ERROR;
 
-	Stream_SetPosition(s, 2);
+	if (!Stream_SetPosition(s, 2))
+		return ERROR_INVALID_DATA;
 	Stream_Write_UINT32(s, (UINT32)len);
 
 	WINPR_ASSERT(channel);

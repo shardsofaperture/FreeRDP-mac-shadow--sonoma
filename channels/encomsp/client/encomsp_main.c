@@ -176,7 +176,8 @@ static UINT encomsp_recv_filter_updated_pdu(encomspPlugin* encomsp, wStream* s,
 		if (!Stream_CheckAndLogRequiredLength(TAG, s, (size_t)(body - end)))
 			return ERROR_INVALID_DATA;
 
-		Stream_SetPosition(s, body);
+		if (!Stream_SetPosition(s, body))
+			return ERROR_INVALID_DATA;
 	}
 
 	IFCALLRET(context->FilterUpdated, error, context, &pdu);
@@ -237,7 +238,8 @@ static UINT encomsp_recv_application_created_pdu(encomspPlugin* encomsp, wStream
 		if (!Stream_CheckAndLogRequiredLength(TAG, s, (size_t)(body - end)))
 			return ERROR_INVALID_DATA;
 
-		Stream_SetPosition(s, body);
+		if (!Stream_SetPosition(s, body))
+			return ERROR_INVALID_DATA;
 	}
 
 	IFCALLRET(context->ApplicationCreated, error, context, &pdu);
@@ -290,7 +292,8 @@ static UINT encomsp_recv_application_removed_pdu(encomspPlugin* encomsp, wStream
 		if (!Stream_CheckAndLogRequiredLength(TAG, s, (size_t)(body - end)))
 			return ERROR_INVALID_DATA;
 
-		Stream_SetPosition(s, body);
+		if (!Stream_SetPosition(s, body))
+			return ERROR_INVALID_DATA;
 	}
 
 	IFCALLRET(context->ApplicationRemoved, error, context, &pdu);
@@ -352,7 +355,8 @@ static UINT encomsp_recv_window_created_pdu(encomspPlugin* encomsp, wStream* s,
 		if (!Stream_CheckAndLogRequiredLength(TAG, s, (size_t)(body - end)))
 			return ERROR_INVALID_DATA;
 
-		Stream_SetPosition(s, body);
+		if (!Stream_SetPosition(s, body))
+			return ERROR_INVALID_DATA;
 	}
 
 	IFCALLRET(context->WindowCreated, error, context, &pdu);
@@ -405,7 +409,8 @@ static UINT encomsp_recv_window_removed_pdu(encomspPlugin* encomsp, wStream* s,
 		if (!Stream_CheckAndLogRequiredLength(TAG, s, (size_t)(body - end)))
 			return ERROR_INVALID_DATA;
 
-		Stream_SetPosition(s, body);
+		if (!Stream_SetPosition(s, body))
+			return ERROR_INVALID_DATA;
 	}
 
 	IFCALLRET(context->WindowRemoved, error, context, &pdu);
@@ -458,7 +463,8 @@ static UINT encomsp_recv_show_window_pdu(encomspPlugin* encomsp, wStream* s,
 		if (!Stream_CheckAndLogRequiredLength(TAG, s, (size_t)(body - end)))
 			return ERROR_INVALID_DATA;
 
-		Stream_SetPosition(s, body);
+		if (!Stream_SetPosition(s, body))
+			return ERROR_INVALID_DATA;
 	}
 
 	IFCALLRET(context->ShowWindow, error, context, &pdu);
@@ -520,7 +526,8 @@ static UINT encomsp_recv_participant_created_pdu(encomspPlugin* encomsp, wStream
 		if (!Stream_CheckAndLogRequiredLength(TAG, s, (size_t)(body - end)))
 			return ERROR_INVALID_DATA;
 
-		Stream_SetPosition(s, body);
+		if (!Stream_SetPosition(s, body))
+			return ERROR_INVALID_DATA;
 	}
 
 	IFCALLRET(context->ParticipantCreated, error, context, &pdu);
@@ -572,7 +579,8 @@ static UINT encomsp_recv_participant_removed_pdu(encomspPlugin* encomsp, wStream
 		if (!Stream_CheckAndLogRequiredLength(TAG, s, (size_t)(body - end)))
 			return ERROR_INVALID_DATA;
 
-		Stream_SetPosition(s, body);
+		if (!Stream_SetPosition(s, body))
+			return ERROR_INVALID_DATA;
 	}
 
 	IFCALLRET(context->ParticipantRemoved, error, context, &pdu);
@@ -626,7 +634,8 @@ static UINT encomsp_recv_change_participant_control_level_pdu(encomspPlugin* enc
 		if (!Stream_CheckAndLogRequiredLength(TAG, s, (size_t)(body - end)))
 			return ERROR_INVALID_DATA;
 
-		Stream_SetPosition(s, body);
+		if (!Stream_SetPosition(s, body))
+			return ERROR_INVALID_DATA;
 	}
 
 	IFCALLRET(context->ChangeParticipantControlLevel, error, context, &pdu);
@@ -713,7 +722,8 @@ static UINT encomsp_recv_graphics_stream_paused_pdu(encomspPlugin* encomsp, wStr
 		if (!Stream_CheckAndLogRequiredLength(TAG, s, (size_t)(body - end)))
 			return ERROR_INVALID_DATA;
 
-		Stream_SetPosition(s, body);
+		if (!Stream_SetPosition(s, body))
+			return ERROR_INVALID_DATA;
 	}
 
 	IFCALLRET(context->GraphicsStreamPaused, error, context, &pdu);
@@ -762,7 +772,8 @@ static UINT encomsp_recv_graphics_stream_resumed_pdu(encomspPlugin* encomsp, wSt
 		if (!Stream_CheckAndLogRequiredLength(TAG, s, (size_t)(body - end)))
 			return ERROR_INVALID_DATA;
 
-		Stream_SetPosition(s, body);
+		if (!Stream_SetPosition(s, body))
+			return ERROR_INVALID_DATA;
 	}
 
 	IFCALLRET(context->GraphicsStreamResumed, error, context, &pdu);

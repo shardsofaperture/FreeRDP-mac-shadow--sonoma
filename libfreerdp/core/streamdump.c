@@ -362,7 +362,8 @@ static int stream_dump_replay_transport_read(rdpTransport* transport, wStream* s
 	const size_t start = Stream_GetPosition(s);
 	do
 	{
-		Stream_SetPosition(s, start);
+		if (!Stream_SetPosition(s, start))
+			return -1;
 		if (stream_dump_get(ctx, &flags, s, &ctx->dump->replayOffset, &ts) < 0)
 			return -1;
 	} while (flags & STREAM_MSG_SRV_RX);

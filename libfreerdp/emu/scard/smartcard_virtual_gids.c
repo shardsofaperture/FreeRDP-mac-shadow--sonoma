@@ -384,6 +384,9 @@ static BOOL vgids_ef_read_do(vgidsEF* ef, UINT16 doID, BYTE** data, DWORD* dataS
 
 			/* Include Tag and length in result */
 			doSize += (UINT16)(Stream_GetPosition(ef->data) - curPos);
+			if (!Stream_SetPosition(ef->data, curPos))
+				return FALSE;
+
 			outData = malloc(doSize);
 			if (!outData)
 			{
@@ -391,7 +394,6 @@ static BOOL vgids_ef_read_do(vgidsEF* ef, UINT16 doID, BYTE** data, DWORD* dataS
 				return FALSE;
 			}
 
-			Stream_SetPosition(ef->data, curPos);
 			Stream_Read(ef->data, outData, doSize);
 			*data = outData;
 			*dataSize = doSize;

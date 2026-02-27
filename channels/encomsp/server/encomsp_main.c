@@ -84,7 +84,8 @@ static UINT encomsp_recv_change_participant_control_level_pdu(EncomspServerConte
 		if (!Stream_CheckAndLogRequiredLength(TAG, s, (size_t)((beg + header->Length) - end)))
 			return ERROR_INVALID_DATA;
 
-		Stream_SetPosition(s, (beg + header->Length));
+		if (!Stream_SetPosition(s, (beg + header->Length)))
+			return ERROR_INVALID_DATA;
 	}
 
 	IFCALLRET(context->ChangeParticipantControlLevel, error, context, &pdu);

@@ -72,8 +72,9 @@ WINPR_ATTR_NODISCARD FREERDP_LOCAL wStream* rail_pdu_init(size_t length);
 WINPR_ATTR_NODISCARD FREERDP_LOCAL UINT rail_read_pdu_header(wStream* s, UINT16* orderType,
                                                              UINT16* orderLength);
 
+WINPR_ATTR_NODISCARD
 FREERDP_LOCAL
-void rail_write_pdu_header(wStream* s, UINT16 orderType, UINT16 orderLength);
+BOOL rail_write_pdu_header(wStream* s, UINT16 orderType, UINT16 orderLength);
 
 WINPR_ATTR_NODISCARD FREERDP_LOCAL UINT
 rail_write_unicode_string(wStream* s, const RAIL_UNICODE_STRING* unicode_string);

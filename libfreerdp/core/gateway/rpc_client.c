@@ -424,7 +424,8 @@ static int rpc_client_recv_fragment(rdpRpc* rpc, wStream* fragment)
 
 				if (Stream_Length(fragment) < StubOffset + 4)
 					goto fail;
-				Stream_SetPosition(fragment, StubOffset);
+				if (!Stream_SetPosition(fragment, StubOffset))
+					goto fail;
 				Stream_Read_UINT32(fragment, rpc->result);
 
 				utils_abort_connect(context->rdp);
@@ -470,7 +471,8 @@ static int rpc_client_recv_fragment(rdpRpc* rpc, wStream* fragment)
 			if (Stream_Length(fragment) < StubOffset + StubLength)
 				goto fail;
 
-			Stream_SetPosition(fragment, StubOffset);
+			if (!Stream_SetPosition(fragment, StubOffset))
+				goto fail;
 			Stream_Write(pdu->s, Stream_ConstPointer(fragment), StubLength);
 			rpc->StubFragCount++;
 
@@ -493,7 +495,8 @@ static int rpc_client_recv_fragment(rdpRpc* rpc, wStream* fragment)
 			const rpcconn_response_hdr_t* response = &header.response;
 			if (Stream_Length(fragment) < StubOffset + StubLength)
 				goto fail;
-			Stream_SetPosition(fragment, StubOffset);
+			if (!Stream_SetPosition(fragment, StubOffset))
+				goto fail;
 			rpc_client_receive_pipe_write(rpc->client, Stream_ConstPointer(fragment), StubLength);
 			rpc->StubFragCount++;
 
@@ -704,7 +707,8 @@ static SSIZE_T rpc_client_default_out_channel_recv(rdpRpc* rpc)
 			if (rc == RTS_PDU_FAIL)
 				return -1;
 
-			Stream_SetPosition(fragment, pos);
+			if (!Stream_SetPosition(fragment, pos))
+				return -1;
 
 			if (header.frag_length > rpc->max_recv_frag)
 			{

@@ -113,10 +113,13 @@ UINT rail_read_pdu_header(wStream* s, UINT16* orderType, UINT16* orderLength)
 	return CHANNEL_RC_OK;
 }
 
-void rail_write_pdu_header(wStream* s, UINT16 orderType, UINT16 orderLength)
+BOOL rail_write_pdu_header(wStream* s, UINT16 orderType, UINT16 orderLength)
 {
+	if (!Stream_EnsureRemainingCapacity(s, 4))
+		return FALSE;
 	Stream_Write_UINT16(s, orderType);   /* orderType (2 bytes) */
 	Stream_Write_UINT16(s, orderLength); /* orderLength (2 bytes) */
+	return TRUE;
 }
 
 wStream* rail_pdu_init(size_t length)

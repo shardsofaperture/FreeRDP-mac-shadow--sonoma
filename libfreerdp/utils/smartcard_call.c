@@ -1860,7 +1860,8 @@ LONG smartcard_irp_device_control_call(scard_call_context* ctx, wStream* out, NT
 	objectBufferLength = outputBufferLength - RDPDR_DEVICE_IO_RESPONSE_LENGTH;
 	WINPR_ASSERT(outputBufferLength <= UINT32_MAX);
 	WINPR_ASSERT(objectBufferLength <= UINT32_MAX);
-	Stream_SetPosition(out, RDPDR_DEVICE_IO_RESPONSE_LENGTH);
+	if (!Stream_SetPosition(out, RDPDR_DEVICE_IO_RESPONSE_LENGTH))
+		return SCARD_E_BAD_SEEK;
 
 	/* [MS-RDPESC] 3.2.5.2 Processing Incoming Replies
 	 *
@@ -1888,7 +1889,8 @@ LONG smartcard_irp_device_control_call(scard_call_context* ctx, wStream* out, NT
 	smartcard_pack_private_type_header(
 	    out, (UINT32)objectBufferLength); /* PrivateTypeHeader (8 bytes) */
 	Stream_Write_INT32(out, result);      /* Result (4 bytes) */
-	Stream_SetPosition(out, Stream_Length(out));
+	if (!Stream_SetPosition(out, Stream_Length(out)))
+		return SCARD_E_BAD_SEEK;
 	return SCARD_S_SUCCESS;
 }
 

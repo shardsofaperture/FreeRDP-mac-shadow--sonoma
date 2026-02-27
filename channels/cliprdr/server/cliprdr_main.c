@@ -94,7 +94,8 @@ static UINT cliprdr_server_packet_send(CliprdrServerPrivate* cliprdr, wStream* s
 	}
 
 	dataLen = (UINT32)(pos - 8);
-	Stream_SetPosition(s, 4);
+	if (!Stream_SetPosition(s, 4))
+		goto fail;
 	Stream_Write_UINT32(s, dataLen);
 
 	WINPR_ASSERT(pos <= UINT32_MAX);
@@ -1116,7 +1117,8 @@ static UINT cliprdr_server_read(CliprdrServerContext* context)
 			return CHANNEL_RC_NO_MEMORY;
 		}
 
-		Stream_SetPosition(s, position);
+		if (!Stream_SetPosition(s, position))
+			return ERROR_INVALID_DATA;
 
 		if (Stream_GetPosition(s) < (header.dataLen + CLIPRDR_HEADER_LENGTH))
 		{
@@ -1147,9 +1149,11 @@ static UINT cliprdr_server_read(CliprdrServerContext* context)
 
 		if (Stream_GetPosition(s) >= (header.dataLen + CLIPRDR_HEADER_LENGTH))
 		{
-			Stream_SetPosition(s, (header.dataLen + CLIPRDR_HEADER_LENGTH));
+			if (!Stream_SetPosition(s, (header.dataLen + CLIPRDR_HEADER_LENGTH)))
+				return ERROR_INVALID_DATA;
 			Stream_SealLength(s);
-			Stream_SetPosition(s, CLIPRDR_HEADER_LENGTH);
+			if (!Stream_SetPosition(s, CLIPRDR_HEADER_LENGTH))
+				return ERROR_INVALID_DATA;
 
 			if ((error = cliprdr_server_receive_pdu(context, s, &header)))
 			{

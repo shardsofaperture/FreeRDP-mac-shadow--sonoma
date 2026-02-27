@@ -147,10 +147,10 @@ static BOOL rdp_capability_set_finish(wStream* s, size_t header, UINT16 type)
 	const size_t length = footer - header;
 	if ((Stream_Capacity(s) < header + 4ULL) || (length > UINT16_MAX))
 		return FALSE;
-	Stream_SetPosition(s, header);
+	if (!Stream_SetPosition(s, header))
+		return FALSE;
 	rdp_write_capability_set_header(s, (UINT16)length, type);
-	Stream_SetPosition(s, footer);
-	return TRUE;
+	return Stream_SetPosition(s, footer);
 }
 
 static BOOL rdp_apply_general_capability_set(rdpSettings* settings, const rdpSettings* src)
@@ -3946,7 +3946,9 @@ BOOL rdp_print_capability_sets(wLog* log, wStream* s, size_t start, BOOL receivi
 
 	size_t pos = Stream_GetPosition(s);
 
-	Stream_SetPosition(s, start);
+	if (!Stream_SetPosition(s, start))
+		goto fail;
+
 	if (receiving)
 	{
 		if (!Stream_CheckAndLogRequiredLengthWLog(log, s, 4))
@@ -4170,7 +4172,9 @@ BOOL rdp_print_capability_sets(wLog* log, wStream* s, size_t start, BOOL receivi
 
 	rc = TRUE;
 fail:
-	Stream_SetPosition(s, pos);
+	if (!Stream_SetPosition(s, pos))
+		return FALSE;
+
 	return rc;
 }
 #endif
@@ -4692,18 +4696,21 @@ static BOOL rdp_write_demand_active(wLog* log, wStream* s, rdpSettings* settings
 	}
 
 	em = Stream_GetPosition(s);
-	Stream_SetPosition(s, lm); /* go back to lengthCombinedCapabilities */
+	if (!Stream_SetPosition(s, lm)) /* go back to lengthCombinedCapabilities */
+		return FALSE;
 	lengthCombinedCapabilities = (em - bm);
 	if (lengthCombinedCapabilities > UINT16_MAX)
 		return FALSE;
 	Stream_Write_UINT16(
 	    s, (UINT16)lengthCombinedCapabilities); /* lengthCombinedCapabilities (2 bytes) */
-	Stream_SetPosition(s, bm);                  /* go back to numberCapabilities */
+	if (!Stream_SetPosition(s, bm))             /* go back to numberCapabilities */
+		return FALSE;
 	Stream_Write_UINT16(s, numberCapabilities); /* numberCapabilities (2 bytes) */
 #ifdef WITH_DEBUG_CAPABILITIES
 	rdp_print_capability_sets(log, s, bm, FALSE);
 #endif
-	Stream_SetPosition(s, em);
+	if (!Stream_SetPosition(s, em))
+		return FALSE;
 	Stream_Write_UINT32(s, 0); /* sessionId */
 	return TRUE;
 }
@@ -4931,20 +4938,20 @@ static BOOL rdp_write_confirm_active(wLog* log, wStream* s, rdpSettings* setting
 	}
 
 	em = Stream_GetPosition(s);
-	Stream_SetPosition(s, lm); /* go back to lengthCombinedCapabilities */
+	if (!Stream_SetPosition(s, lm)) /* go back to lengthCombinedCapabilities */
+		return FALSE;
 	lengthCombinedCapabilities = (em - bm);
 	if (lengthCombinedCapabilities > UINT16_MAX)
 		return FALSE;
 	Stream_Write_UINT16(
 	    s, (UINT16)lengthCombinedCapabilities); /* lengthCombinedCapabilities (2 bytes) */
-	Stream_SetPosition(s, bm);                  /* go back to numberCapabilities */
+	if (!Stream_SetPosition(s, bm))             /* go back to numberCapabilities */
+		return FALSE;
 	Stream_Write_UINT16(s, numberCapabilities); /* numberCapabilities (2 bytes) */
 #ifdef WITH_DEBUG_CAPABILITIES
 	rdp_print_capability_sets(log, s, bm, FALSE);
 #endif
-	Stream_SetPosition(s, em);
-
-	return TRUE;
+	return Stream_SetPosition(s, em);
 }
 
 BOOL rdp_send_confirm_active(rdpRdp* rdp)

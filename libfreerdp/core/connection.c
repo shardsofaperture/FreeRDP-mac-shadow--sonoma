@@ -1191,14 +1191,17 @@ state_run_t rdp_handle_message_channel(rdpRdp* rdp, wStream* s, UINT16 channelId
 
 BOOL rdp_client_connect_auto_detect(rdpRdp* rdp, wStream* s, DWORD logLevel)
 {
+	BOOL res = TRUE;
 	WINPR_ASSERT(rdp);
 	WINPR_ASSERT(rdp->mcs);
 
-	const size_t pos = Stream_GetPosition(s);
+	size_t pos = Stream_GetPosition(s);
 	UINT16 length = 0;
 	UINT16 channelId = 0;
 
-	if (rdp_read_header(rdp, s, &length, &channelId))
+	if (!rdp_read_header(rdp, s, &length, &channelId))
+		res = FALSE;
+	else
 	{
 		const UINT16 messageChannelId = rdp->mcs->messageChannelId;
 		/* If the MCS message channel has been joined... */
@@ -1207,18 +1210,21 @@ BOOL rdp_client_connect_auto_detect(rdpRdp* rdp, wStream* s, DWORD logLevel)
 		if (rdp->mcs->messageChannelJoined && (channelId == messageChannelId))
 		{
 			const state_run_t rc = rdp_handle_message_channel(rdp, s, channelId, length);
-			return state_run_success(rc);
+			res = state_run_success(rc);
+			pos = Stream_GetPosition(s);
 		}
 		else
 		{
 			wLog* log = WLog_Get(TAG);
 			WLog_Print(log, logLevel, "expected messageChannelId=%" PRIu16 ", got %" PRIu16,
 			           messageChannelId, channelId);
+			res = FALSE;
 		}
 	}
 
-	Stream_SetPosition(s, pos);
-	return FALSE;
+	if (!Stream_SetPosition(s, pos))
+		res = FALSE;
+	return res;
 }
 
 state_run_t rdp_client_connect_license(rdpRdp* rdp, wStream* s)

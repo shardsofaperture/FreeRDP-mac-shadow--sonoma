@@ -71,11 +71,17 @@ static UINT rail_server_send_pdu(RailServerContext* context, wStream* s, UINT16 
 
 	orderLength = (UINT16)Stream_GetPosition(s);
 	Stream_ResetPosition(s);
-	rail_write_pdu_header(s, orderType, orderLength);
-	Stream_SetPosition(s, orderLength);
+	if (!rail_write_pdu_header(s, orderType, orderLength))
+		goto fail;
+	if (!Stream_SetPosition(s, orderLength))
+		goto fail;
 	WLog_DBG(TAG, "Sending %s PDU, length: %" PRIu16 "",
 	         rail_get_order_type_string_full(orderType, buffer, sizeof(buffer)), orderLength);
 	return rail_send(context, s, orderLength);
+
+fail:
+	Stream_Free(s, TRUE);
+	return ERROR_INVALID_DATA;
 }
 
 /**

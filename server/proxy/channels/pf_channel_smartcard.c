@@ -100,8 +100,7 @@ static BOOL pf_channel_client_write_iostatus(wStream* out, const SMARTCARD_OPERA
 	WINPR_ASSERT(cID == op->completionID);
 
 	Stream_Write_INT32(out, ioStatus);
-	Stream_SetPosition(out, pos);
-	return TRUE;
+	return Stream_SetPosition(out, pos);
 }
 
 struct thread_arg

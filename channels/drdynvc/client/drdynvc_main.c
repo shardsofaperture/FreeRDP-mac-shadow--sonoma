@@ -966,7 +966,6 @@ static UINT drdynvc_send(drdynvcPlugin* drdynvc, wStream* s)
 static UINT drdynvc_write_data(drdynvcPlugin* drdynvc, UINT32 ChannelId, const BYTE* data,
                                UINT32 dataSize, BOOL* close)
 {
-	wStream* data_out = nullptr;
 	size_t pos = 0;
 	UINT8 cbChId = 0;
 	UINT8 cbLen = 0;
@@ -981,7 +980,7 @@ static UINT drdynvc_write_data(drdynvcPlugin* drdynvc, UINT32 ChannelId, const B
 
 	WLog_Print(drdynvc->log, WLOG_TRACE, "write_data: ChannelId=%" PRIu32 " size=%" PRIu32 "",
 	           ChannelId, dataSize);
-	data_out = StreamPool_Take(dvcman->pool, CHANNEL_CHUNK_LENGTH);
+	wStream* data_out = StreamPool_Take(dvcman->pool, CHANNEL_CHUNK_LENGTH);
 
 	if (!data_out)
 	{
@@ -989,7 +988,11 @@ static UINT drdynvc_write_data(drdynvcPlugin* drdynvc, UINT32 ChannelId, const B
 		return CHANNEL_RC_NO_MEMORY;
 	}
 
-	Stream_SetPosition(data_out, 1);
+	if (!Stream_SetPosition(data_out, 1))
+	{
+		Stream_Release(data_out);
+		return ERROR_INVALID_DATA;
+	}
 	cbChId = drdynvc_write_variable_uint(data_out, ChannelId);
 	pos = Stream_GetPosition(data_out);
 
@@ -1003,7 +1006,11 @@ static UINT drdynvc_write_data(drdynvcPlugin* drdynvc, UINT32 ChannelId, const B
 	{
 		Stream_ResetPosition(data_out);
 		Stream_Write_UINT8(data_out, (DATA_PDU << 4) | cbChId);
-		Stream_SetPosition(data_out, pos);
+		if (!Stream_SetPosition(data_out, pos))
+		{
+			Stream_Release(data_out);
+			return ERROR_INVALID_DATA;
+		}
 		Stream_Write(data_out, data, dataSize);
 		status = drdynvc_send(drdynvc, data_out);
 	}
@@ -1016,7 +1023,11 @@ static UINT drdynvc_write_data(drdynvcPlugin* drdynvc, UINT32 ChannelId, const B
 
 		const INT32 pdu = (DATA_FIRST_PDU << 4) | cbChId | (cbLen << 2);
 		Stream_Write_UINT8(data_out, WINPR_ASSERTING_INT_CAST(UINT8, pdu));
-		Stream_SetPosition(data_out, pos);
+		if (!Stream_SetPosition(data_out, pos))
+		{
+			Stream_Release(data_out);
+			return ERROR_INVALID_DATA;
+		}
 
 		{
 			WINPR_ASSERT(pos <= CHANNEL_CHUNK_LENGTH);
@@ -1039,12 +1050,21 @@ static UINT drdynvc_write_data(drdynvcPlugin* drdynvc, UINT32 ChannelId, const B
 				return CHANNEL_RC_NO_MEMORY;
 			}
 
-			Stream_SetPosition(data_out, 1);
+			if (!Stream_SetPosition(data_out, 1))
+			{
+				Stream_Release(data_out);
+				return ERROR_INVALID_DATA;
+			}
+
 			cbChId = drdynvc_write_variable_uint(data_out, ChannelId);
 			pos = Stream_GetPosition(data_out);
 			Stream_ResetPosition(data_out);
 			Stream_Write_UINT8(data_out, (DATA_PDU << 4) | cbChId);
-			Stream_SetPosition(data_out, pos);
+			if (!Stream_SetPosition(data_out, pos))
+			{
+				Stream_Release(data_out);
+				return ERROR_INVALID_DATA;
+			}
 
 			uint32_t chunkLength = dataSize;
 
@@ -1246,7 +1266,8 @@ static UINT drdynvc_process_create_request(drdynvcPlugin* drdynvc, UINT8 Sp, UIN
 	}
 
 	Stream_Write_UINT8(data_out, (CREATE_REQUEST_PDU << 4) | cbChId);
-	Stream_SetPosition(s, 1);
+	if (!Stream_SetPosition(s, 1))
+		return ERROR_INVALID_DATA;
 	Stream_Copy(s, data_out, pos - 1);
 
 	channel =

@@ -89,9 +89,11 @@ static UINT rdpsnd_server_send_formats(RdpsndServerContext* context)
 			goto fail;
 
 		WINPR_ASSERT(pos >= 4);
-		Stream_SetPosition(s, 2);
+		if (!Stream_SetPosition(s, 2))
+			goto fail;
 		Stream_Write_UINT16(s, (UINT16)(pos - 4));
-		Stream_SetPosition(s, pos);
+		if (!Stream_SetPosition(s, pos))
+			goto fail;
 
 		WINPR_ASSERT(context->priv);
 
@@ -457,7 +459,8 @@ static UINT rdpsnd_server_training(RdpsndServerContext* context, UINT16 timestam
 	if ((end < 4) || (end > UINT16_MAX))
 		return ERROR_INTERNAL_ERROR;
 
-	Stream_SetPosition(s, 2);
+	if (!Stream_SetPosition(s, 2))
+		return ERROR_INTERNAL_ERROR;
 	Stream_Write_UINT16(s, (UINT16)(end - 4));
 
 	status = WTSVirtualChannelWrite(context->priv->ChannelHandle, Stream_BufferAs(s, char),
@@ -536,9 +539,11 @@ static UINT rdpsnd_server_send_wave_pdu(RdpsndServerContext* context, UINT16 wTi
 	const size_t pos = end - start + 8ULL;
 	if (pos > UINT16_MAX)
 		return ERROR_INTERNAL_ERROR;
-	Stream_SetPosition(s, 2);
+	if (!Stream_SetPosition(s, 2))
+		return ERROR_INTERNAL_ERROR;
 	Stream_Write_UINT16(s, (UINT16)pos);
-	Stream_SetPosition(s, end);
+	if (!Stream_SetPosition(s, end))
+		return ERROR_INTERNAL_ERROR;
 
 	if (!WTSVirtualChannelWrite(context->priv->ChannelHandle, Stream_BufferAs(s, char),
 	                            (UINT32)(start + 4), &written))
@@ -554,9 +559,17 @@ static UINT rdpsnd_server_send_wave_pdu(RdpsndServerContext* context, UINT16 wTi
 		goto out;
 	}
 
-	Stream_SetPosition(s, start);
+	if (!Stream_SetPosition(s, start))
+	{
+		error = ERROR_INTERNAL_ERROR;
+		goto out;
+	}
 	Stream_Write_UINT32(s, 0); /* bPad */
-	Stream_SetPosition(s, start);
+	if (!Stream_SetPosition(s, start))
+	{
+		error = ERROR_INTERNAL_ERROR;
+		goto out;
+	}
 
 	WINPR_ASSERT((end - start) <= UINT32_MAX);
 	if (!WTSVirtualChannelWrite(context->priv->ChannelHandle, Stream_Pointer(s),
@@ -643,7 +656,11 @@ static UINT rdpsnd_server_send_wave2_pdu(RdpsndServerContext* context, UINT16 fo
 			goto out;
 		}
 
-		Stream_SetPosition(s, 2);
+		if (!Stream_SetPosition(s, 2))
+		{
+			error = ERROR_INTERNAL_ERROR;
+			goto out;
+		}
 		Stream_Write_UINT16(s, (UINT16)(end - 4));
 
 		status = WTSVirtualChannelWrite(context->priv->ChannelHandle, Stream_BufferAs(s, char),
@@ -835,9 +852,11 @@ static UINT rdpsnd_server_close(RdpsndServerContext* context)
 	Stream_Seek_UINT16(s);
 	const size_t pos = Stream_GetPosition(s);
 	WINPR_ASSERT(pos >= 4);
-	Stream_SetPosition(s, 2);
+	if (!Stream_SetPosition(s, 2))
+		return ERROR_INVALID_DATA;
 	Stream_Write_UINT16(s, WINPR_ASSERTING_INT_CAST(uint16_t, pos - 4));
-	Stream_SetPosition(s, pos);
+	if (!Stream_SetPosition(s, pos))
+		return ERROR_INVALID_DATA;
 
 	const size_t len = Stream_GetPosition(s);
 	WINPR_ASSERT(len <= UINT32_MAX);
@@ -1099,7 +1118,7 @@ void rdpsnd_server_context_reset(RdpsndServerContext* context)
 
 	context->priv->expectedBytes = 4;
 	context->priv->waitingHeader = TRUE;
-	Stream_SetPosition(context->priv->input_stream, 0);
+	Stream_ResetPosition(context->priv->input_stream);
 }
 
 void rdpsnd_server_context_free(RdpsndServerContext* context)

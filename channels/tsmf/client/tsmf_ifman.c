@@ -81,7 +81,8 @@ UINT tsmf_ifman_exchange_capability_request(TSMF_IFMAN* ifman)
 
 	const size_t xpos = Stream_GetPosition(ifman->output);
 	Stream_Copy(ifman->input, ifman->output, ifman->input_size);
-	Stream_SetPosition(ifman->output, xpos);
+	if (!Stream_SetPosition(ifman->output, xpos))
+		return ERROR_INVALID_DATA;
 
 	if (!Stream_CheckAndLogRequiredLength(TAG, ifman->output, 4))
 		return ERROR_INVALID_DATA;
@@ -133,7 +134,8 @@ UINT tsmf_ifman_exchange_capability_request(TSMF_IFMAN* ifman)
 				break;
 		}
 
-		Stream_SetPosition(ifman->output, pos + cbCapabilityLength);
+		if (!Stream_SetPosition(ifman->output, pos + cbCapabilityLength))
+			return ERROR_INVALID_DATA;
 	}
 
 	Stream_Write_UINT32(ifman->output, 0); /* Result */
@@ -504,7 +506,8 @@ UINT tsmf_ifman_update_geometry_info(TSMF_IFMAN* ifman)
 	Stream_Read_UINT32(ifman->input, Height);
 	Stream_Read_UINT32(ifman->input, Left);
 	Stream_Read_UINT32(ifman->input, Top);
-	Stream_SetPosition(ifman->input, pos + numGeometryInfo);
+	if (!Stream_SetPosition(ifman->input, pos + numGeometryInfo))
+		return ERROR_INVALID_DATA;
 	Stream_Read_UINT32(ifman->input, cbVisibleRect);
 	const UINT32 num_rects = cbVisibleRect / 16;
 	DEBUG_TSMF("numGeometryInfo %" PRIu32 " Width %" PRIu32 " Height %" PRIu32 " Left %" PRIu32

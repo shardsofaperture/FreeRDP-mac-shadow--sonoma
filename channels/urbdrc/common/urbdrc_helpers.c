@@ -409,7 +409,8 @@ void urbdrc_dump_message(wLog* log, BOOL client, BOOL write, wStream* s)
 	Stream_Read_UINT32(s, InterfaceId);
 	Stream_Read_UINT32(s, MessageId);
 	Stream_Read_UINT32(s, FunctionId);
-	Stream_SetPosition(s, pos);
+	if (!Stream_SetPosition(s, pos))
+		WLog_Print(log, WLOG_ERROR, "Stream_SetPosition(%" PRIuz ") failed", pos);
 
 	WLog_Print(log, WLOG_DEBUG,
 	           "[%-5s] %s [%08" PRIx32 "] InterfaceId=%08" PRIx32 ", MessageId=%08" PRIx32

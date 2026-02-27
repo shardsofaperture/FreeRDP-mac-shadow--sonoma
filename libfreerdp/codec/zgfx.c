@@ -568,9 +568,11 @@ int zgfx_compress_to_stream(ZGFX_CONTEXT* WINPR_RESTRICT zgfx, wStream* WINPR_RE
 			const size_t DstSize = Stream_GetPosition(sDst) - posDataStart;
 			if (DstSize > UINT32_MAX)
 				return -1;
-			Stream_SetPosition(sDst, posDstSize);
+			if (!Stream_SetPosition(sDst, posDstSize))
+				return -1;
 			Stream_Write_UINT32(sDst, (UINT32)DstSize);
-			Stream_SetPosition(sDst, posDataStart + DstSize);
+			if (!Stream_SetPosition(sDst, posDataStart + DstSize))
+				return -1;
 		}
 
 		pSrcData += SrcSize;
@@ -581,9 +583,11 @@ int zgfx_compress_to_stream(ZGFX_CONTEXT* WINPR_RESTRICT zgfx, wStream* WINPR_RE
 	/* fill back segmentCount */
 	if (posSegmentCount)
 	{
-		Stream_SetPosition(sDst, posSegmentCount);
+		if (!Stream_SetPosition(sDst, posSegmentCount))
+			return -1;
 		Stream_Write_UINT16(sDst, WINPR_ASSERTING_INT_CAST(uint16_t, fragment));
-		Stream_SetPosition(sDst, Stream_Length(sDst));
+		if (!Stream_SetPosition(sDst, Stream_Length(sDst)))
+			return -1;
 	}
 
 	return status;

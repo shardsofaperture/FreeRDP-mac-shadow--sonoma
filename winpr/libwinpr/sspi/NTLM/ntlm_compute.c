@@ -306,12 +306,10 @@ static BOOL ntlm_fetch_ntlm_v2_hash(NTLM_CONTEXT* context, BYTE* hash)
 	WLog_VRB(TAG, "NTLM Hash:");
 	winpr_HexDump(TAG, WLOG_DEBUG, entry->NtHash, 16);
 #endif
-	NTOWFv2FromHashW(entry->NtHash, (LPWSTR)credentials->identity.User,
-	                 credentials->identity.UserLength * sizeof(WCHAR),
-	                 (LPWSTR)credentials->identity.Domain,
-	                 credentials->identity.DomainLength * sizeof(WCHAR), hash);
-
-	rc = TRUE;
+	rc = NTOWFv2FromHashW(entry->NtHash, (LPWSTR)credentials->identity.User,
+	                      credentials->identity.UserLength * sizeof(WCHAR),
+	                      (LPWSTR)credentials->identity.Domain,
+	                      credentials->identity.DomainLength * sizeof(WCHAR), hash);
 
 fail:
 	SamFreeEntry(sam, entry);

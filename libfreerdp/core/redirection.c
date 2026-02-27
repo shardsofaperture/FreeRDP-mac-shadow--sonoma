@@ -1081,9 +1081,11 @@ BOOL rdp_write_enhanced_security_redirection_packet(wStream* s, const rdpRedirec
 
 			/* Write length field */
 			const size_t lend = Stream_GetPosition(s);
-			Stream_SetPosition(s, lstart);
+			if (!Stream_SetPosition(s, lstart))
+				goto fail;
 			Stream_Write_UINT32(s, length);
-			Stream_SetPosition(s, lend);
+			if (!Stream_SetPosition(s, lend))
+				goto fail;
 		}
 
 		/* Padding 8 bytes */
@@ -1093,9 +1095,11 @@ BOOL rdp_write_enhanced_security_redirection_packet(wStream* s, const rdpRedirec
 
 		{
 			const size_t end = Stream_GetPosition(s);
-			Stream_SetPosition(s, lengthOffset);
+			if (!Stream_SetPosition(s, lengthOffset))
+				goto fail;
 			Stream_Write_UINT16(s, (UINT16)(end - start));
-			Stream_SetPosition(s, end);
+			if (!Stream_SetPosition(s, end))
+				goto fail;
 		}
 	}
 

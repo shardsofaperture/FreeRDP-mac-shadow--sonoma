@@ -1131,9 +1131,11 @@ BOOL fastpath_send_multiple_input_pdu(rdpFastPath* fastpath, wStream* s, size_t 
 		 * the data first and then store the header.
 		 */
 		WINPR_ASSERT(length < UINT16_MAX);
-		Stream_SetPosition(s, 1);
+		if (!Stream_SetPosition(s, 1))
+			goto fail;
 		Stream_Write_UINT16_BE(s, 0x8000 | (UINT16)length);
-		Stream_SetPosition(s, length);
+		if (!Stream_SetPosition(s, length))
+			goto fail;
 		Stream_SealLength(s);
 	}
 
