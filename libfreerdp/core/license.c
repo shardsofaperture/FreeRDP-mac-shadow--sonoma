@@ -224,8 +224,7 @@ WINPR_ATTR_NODISCARD
 static BOOL license_send_error_alert(rdpLicense* license, UINT32 dwErrorCode,
                                      UINT32 dwStateTransition, const LICENSE_BLOB* info);
 
-WINPR_ATTR_NODISCARD
-static BOOL license_set_state(rdpLicense* license, LICENSE_STATE state);
+static void license_set_state(rdpLicense* license, LICENSE_STATE state);
 
 WINPR_ATTR_NODISCARD
 static const char* license_get_state_string(LICENSE_STATE state);
@@ -1034,8 +1033,7 @@ state_run_t license_server_recv(rdpLicense* license, wStream* s)
 			if (!license_send_platform_challenge_packet(license))
 				goto fail;
 			license->update = FALSE;
-			if (!license_set_state(license, LICENSE_STATE_PLATFORM_CHALLENGE))
-				goto fail;
+			license_set_state(license, LICENSE_STATE_PLATFORM_CHALLENGE);
 			break;
 		case LICENSE_INFO:
 			if (!license_ensure_state(license, LICENSE_STATE_REQUEST, bMsgType))
@@ -1045,8 +1043,7 @@ state_run_t license_server_recv(rdpLicense* license, wStream* s)
 			// TODO: Validate license info
 			if (!license_send_platform_challenge_packet(license))
 				goto fail;
-			if (!license_set_state(license, LICENSE_STATE_PLATFORM_CHALLENGE))
-				goto fail;
+			license_set_state(license, LICENSE_STATE_PLATFORM_CHALLENGE);
 			license->update = TRUE;
 			break;
 
@@ -1095,7 +1092,12 @@ fail:
 	if (state_run_failed(rc))
 	{
 		if (flags & EXTENDED_ERROR_MSG_SUPPORTED)
-			license_send_error_alert(license, ERR_INVALID_CLIENT, ST_TOTAL_ABORT, nullptr);
+		{
+			if (!license_send_error_alert(license, ERR_INVALID_CLIENT, ST_TOTAL_ABORT, nullptr))
+			{
+				WLog_Print(license->log, WLOG_ERROR, "license_send_error_alert failed");
+			}
+		}
 		license_set_state(license, LICENSE_STATE_ABORTED);
 	}
 
@@ -1834,7 +1836,7 @@ void license_free_scope_list(SCOPE_LIST* scopeList)
 	if (!scopeList)
 		return;
 
-	license_scope_list_resize(scopeList, 0);
+	(void)license_scope_list_resize(scopeList, 0);
 	free(scopeList);
 }
 
@@ -2348,7 +2350,8 @@ BOOL license_read_new_or_upgrade_license_packet(rdpLicense* license, wStream* s)
 		goto fail;
 
 	license->type = LICENSE_TYPE_ISSUED;
-	ret = license_set_state(license, LICENSE_STATE_COMPLETED);
+	license_set_state(license, LICENSE_STATE_COMPLETED);
+	ret = TRUE;
 
 	if (!license->rdp->settings->OldLicenseBehaviour)
 		ret = saveCal(license->log, license->rdp->settings, Stream_Pointer(licenseStream),
@@ -2391,7 +2394,8 @@ BOOL license_read_error_alert_packet(rdpLicense* license, wStream* s)
 	if (dwErrorCode == STATUS_VALID_CLIENT)
 	{
 		license->type = LICENSE_TYPE_NONE;
-		return license_set_state(license, LICENSE_STATE_COMPLETED);
+		license_set_state(license, LICENSE_STATE_COMPLETED);
+		return TRUE;
 	}
 
 	switch (dwStateTransition)
@@ -2933,7 +2937,7 @@ LICENSE_TYPE license_get_type(const rdpLicense* license)
 	return license->type;
 }
 
-BOOL license_set_state(rdpLicense* license, LICENSE_STATE state)
+void license_set_state(rdpLicense* license, LICENSE_STATE state)
 {
 	WINPR_ASSERT(license);
 	license->state = state;
@@ -2946,8 +2950,6 @@ BOOL license_set_state(rdpLicense* license, LICENSE_STATE state)
 			license->type = LICENSE_TYPE_INVALID;
 			break;
 	}
-
-	return TRUE;
 }
 
 const char* license_get_state_string(LICENSE_STATE state)
@@ -2981,7 +2983,8 @@ BOOL license_server_send_request(rdpLicense* license)
 		return FALSE;
 	if (!license_send_license_request_packet(license))
 		return FALSE;
-	return license_set_state(license, LICENSE_STATE_REQUEST);
+	license_set_state(license, LICENSE_STATE_REQUEST);
+	return TRUE;
 }
 
 WINPR_ATTR_NODISCARD
@@ -3098,7 +3101,8 @@ BOOL license_server_configure(rdpLicense* license)
 			return FALSE;
 	}
 
-	return license_set_state(license, LICENSE_STATE_CONFIGURED);
+	license_set_state(license, LICENSE_STATE_CONFIGURED);
+	return TRUE;
 }
 
 rdpLicense* license_get(rdpContext* context)
