@@ -1743,7 +1743,11 @@ static void* stream_copy(const void* obj)
 	if (!dst)
 		return nullptr;
 	memcpy(Stream_Buffer(dst), Stream_ConstBuffer(src), Stream_Capacity(dst));
-	Stream_SetLength(dst, Stream_Length(src));
+	if (!Stream_SetLength(dst, Stream_Length(src)))
+	{
+		Stream_Free(dst, TRUE);
+		return nullptr;
+	}
 	Stream_SetPosition(dst, Stream_GetPosition(src));
 	return dst;
 }

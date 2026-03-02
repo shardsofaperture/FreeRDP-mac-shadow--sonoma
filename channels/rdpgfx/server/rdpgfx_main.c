@@ -1869,7 +1869,9 @@ UINT rdpgfx_server_handle_messages(RdpgfxServerContext* context)
 			return ERROR_INTERNAL_ERROR;
 		}
 
-		Stream_SetLength(s, BytesReturned);
+		if (!Stream_SetLength(s, BytesReturned))
+			return ERROR_INTERNAL_ERROR;
+
 		Stream_ResetPosition(s);
 
 		while (Stream_GetPosition(s) < Stream_Length(s))

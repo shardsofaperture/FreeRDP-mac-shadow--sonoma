@@ -430,30 +430,26 @@ static wStream* rdg_receive_packet(rdpRdg* rdg)
 		return nullptr;
 
 	if (!rdg_read_all(rdg->context, rdg->tlsOut, Stream_Buffer(s), header, &rdg->transferEncoding))
-	{
-		Stream_Free(s, TRUE);
-		return nullptr;
-	}
+		goto fail;
 
 	Stream_Seek(s, 4);
 	Stream_Read_UINT32(s, packetLength);
 
 	if ((packetLength > INT_MAX) || !Stream_EnsureCapacity(s, packetLength) ||
 	    (packetLength < header))
-	{
-		Stream_Free(s, TRUE);
-		return nullptr;
-	}
+		goto fail;
 
 	if (!rdg_read_all(rdg->context, rdg->tlsOut, Stream_Buffer(s) + header, packetLength - header,
 	                  &rdg->transferEncoding))
-	{
-		Stream_Free(s, TRUE);
-		return nullptr;
-	}
+		goto fail;
 
-	Stream_SetLength(s, packetLength);
+	if (!Stream_SetLength(s, packetLength))
+		goto fail;
 	return s;
+
+fail:
+	Stream_Free(s, TRUE);
+	return nullptr;
 }
 
 static BOOL rdg_send_handshake(rdpRdg* rdg)

@@ -504,7 +504,9 @@ static UINT device_process_message(device_server* device)
 		goto out;
 	}
 
-	Stream_SetLength(s, BytesReturned);
+	if (!Stream_SetLength(s, BytesReturned))
+		goto out;
+
 	if (!Stream_CheckAndLogRequiredLength(TAG, s, CAM_HEADER_SIZE))
 		return ERROR_NO_DATA;
 

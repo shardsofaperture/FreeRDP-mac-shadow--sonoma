@@ -2250,7 +2250,11 @@ static DWORD WINAPI rdpdr_server_thread(LPVOID arg)
 		if (BytesReturned >= RDPDR_HEADER_LENGTH)
 		{
 			Stream_ResetPosition(s);
-			Stream_SetLength(s, BytesReturned);
+			if (!Stream_SetLength(s, BytesReturned))
+			{
+				error = ERROR_INTERNAL_ERROR;
+				goto out_stream;
+			}
 
 			while (Stream_GetRemainingLength(s) >= RDPDR_HEADER_LENGTH)
 			{

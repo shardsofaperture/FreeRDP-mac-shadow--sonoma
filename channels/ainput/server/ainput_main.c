@@ -478,7 +478,9 @@ static UINT ainput_process_message(ainput_server* ainput)
 		goto out;
 	}
 
-	Stream_SetLength(s, ActualBytesReturned);
+	if (!Stream_SetLength(s, ActualBytesReturned))
+		goto out;
+
 	{
 		const UINT16 MessageId = Stream_Get_UINT16(s);
 
