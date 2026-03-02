@@ -2051,7 +2051,8 @@ BOOL smartcard_call_release_context(scard_call_context* ctx, SCARDCONTEXT hConte
 
 BOOL smartcard_call_cancel_all_context(scard_call_context* ctx)
 {
-	WINPR_ASSERT(ctx);
+	if (!ctx)
+		return FALSE;
 
 	smartcard_call_context_signal_stop(ctx, FALSE);
 	HashTable_Clear(ctx->rgSCardContextList);
@@ -2094,6 +2095,7 @@ BOOL smartcard_call_is_configured(scard_call_context* ctx)
 BOOL smartcard_call_context_signal_stop(scard_call_context* ctx, BOOL reset)
 {
 	WINPR_ASSERT(ctx);
+
 	if (!ctx->stopEvent)
 		return TRUE;
 

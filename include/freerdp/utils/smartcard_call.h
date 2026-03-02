@@ -44,6 +44,13 @@ extern "C"
 	WINPR_ATTR_NODISCARD
 	FREERDP_API scard_call_context* smartcard_call_context_new(const rdpSettings* settings);
 
+	/** @brief send a stop signal (or reset it if \b reset is \b TRUE) to a \ref scard_call_context
+	 *
+	 *  @param ctx The context to send the signal to. Must not be \b nullptr
+	 *  @param reset Set or reset the signal
+	 *
+	 *  @return \b TRUE for success, \b FALSE otherwise.
+	 */
 	FREERDP_API BOOL smartcard_call_context_signal_stop(scard_call_context* ctx, BOOL reset);
 
 	WINPR_ATTR_NODISCARD
