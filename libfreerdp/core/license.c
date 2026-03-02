@@ -782,7 +782,8 @@ static BOOL license_send(rdpLicense* license, wStream* s, BYTE type, UINT16 sec_
 	WINPR_ASSERT(length <= UINT16_MAX + license->PacketHeaderLength);
 
 	const UINT16 wMsgSize = (UINT16)(length - license->PacketHeaderLength);
-	Stream_SetPosition(s, license->PacketHeaderLength);
+	if (!Stream_SetPosition(s, license->PacketHeaderLength))
+		return FALSE;
 	BYTE flags = PREAMBLE_VERSION_3_0;
 
 	/**
@@ -805,7 +806,8 @@ static BOOL license_send(rdpLicense* license, wStream* s, BYTE type, UINT16 sec_
 	winpr_HexLogDump(license->log, WLOG_DEBUG, Stream_PointerAs(s, char) - LICENSE_PREAMBLE_LENGTH,
 	                 wMsgSize);
 #endif
-	Stream_SetPosition(s, length);
+	if (!Stream_SetPosition(s, length))
+		return FALSE;
 	const BOOL ret = rdp_send(rdp, s, MCS_GLOBAL_CHANNEL_ID, sec_flags);
 	return ret;
 }

@@ -233,7 +233,8 @@ int TestCryptoCipher(int argc, char* argv[])
 	WINPR_UNUSED(argc);
 	WINPR_UNUSED(argv);
 
-	winpr_InitializeSSL(WINPR_SSL_INIT_DEFAULT);
+	if (!winpr_InitializeSSL(WINPR_SSL_INIT_DEFAULT))
+		return -1;
 
 	if (!test_crypto_cipher_aes_128_cbc(TRUE))
 		return -1;

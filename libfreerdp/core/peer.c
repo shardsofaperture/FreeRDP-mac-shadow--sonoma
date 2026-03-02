@@ -1189,7 +1189,10 @@ static state_run_t peer_recv_callback(rdpTransport* transport, wStream* s, void*
 		const char* old = rdp_get_state_string(rdp);
 
 		if (rc == STATE_RUN_TRY_AGAIN)
-			Stream_SetPosition(s, start);
+		{
+			if (!Stream_SetPosition(s, start))
+				return STATE_RUN_FAILED;
+		}
 		rc = peer_recv_callback_internal(transport, s, extra);
 
 		const size_t len = Stream_GetRemainingLength(s);

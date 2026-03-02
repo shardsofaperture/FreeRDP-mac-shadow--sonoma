@@ -1058,9 +1058,11 @@ static BOOL s_update_end_paint(rdpContext* context)
 	update->us = nullptr;
 
 	Stream_SealLength(s);
-	Stream_SetPosition(s, update->offsetOrders);
+	if (!Stream_SetPosition(s, update->offsetOrders))
+		goto fail;
 	Stream_Write_UINT16(s, update->numberOrders); /* numberOrders (2 bytes) */
-	Stream_SetPosition(s, Stream_Length(s));
+	if (!Stream_SetPosition(s, Stream_Length(s)))
+		goto fail;
 
 	if (update->numberOrders > 0)
 	{
@@ -1245,7 +1247,9 @@ static int update_write_order_info(rdpContext* context, wStream* s, const ORDER_
 	const size_t position = Stream_GetPosition(s);
 	const UINT8 controlFlags = (UINT8)orderInfo->controlFlags;
 
-	Stream_SetPosition(s, offset);
+	if (!Stream_SetPosition(s, offset))
+		return -1;
+
 	Stream_Write_UINT8(s, controlFlags); /* controlFlags (1 byte) */
 
 	if (orderInfo->controlFlags & ORDER_TYPE_CHANGE)
@@ -1258,7 +1262,8 @@ static int update_write_order_info(rdpContext* context, wStream* s, const ORDER_
 		return -1;
 	if (!update_write_bounds(s, orderInfo))
 		return -1;
-	Stream_SetPosition(s, position);
+	if (!Stream_SetPosition(s, position))
+		return -1;
 	return 0;
 }
 
@@ -1854,14 +1859,14 @@ static BOOL update_send_cache_bitmap(rdpContext* context, const CACHE_BITMAP_ORD
 	const size_t orderLength = (em - bm) - 13;
 	WINPR_ASSERT(orderLength <= UINT16_MAX);
 
-	Stream_SetPosition(s, bm);
+	if (!Stream_SetPosition(s, bm))
+		return FALSE;
 	Stream_Write_UINT8(s, ORDER_STANDARD | ORDER_SECONDARY); /* controlFlags (1 byte) */
 	Stream_Write_UINT16(s, (UINT16)orderLength);             /* orderLength (2 bytes) */
 	Stream_Write_UINT16(s, extraFlags);                      /* extraFlags (2 bytes) */
 	Stream_Write_UINT8(s, orderType);                        /* orderType (1 byte) */
-	Stream_SetPosition(s, em);
 	update->numberOrders++;
-	return TRUE;
+	return Stream_SetPosition(s, em);
 }
 
 static BOOL update_send_cache_bitmap_v2(rdpContext* context, CACHE_BITMAP_V2_ORDER* cache_bitmap_v2)
@@ -1905,14 +1910,14 @@ static BOOL update_send_cache_bitmap_v2(rdpContext* context, CACHE_BITMAP_V2_ORD
 	const size_t orderLength = (em - bm) - 13;
 	WINPR_ASSERT(orderLength <= UINT16_MAX);
 
-	Stream_SetPosition(s, bm);
+	if (!Stream_SetPosition(s, bm))
+		return FALSE;
 	Stream_Write_UINT8(s, ORDER_STANDARD | ORDER_SECONDARY); /* controlFlags (1 byte) */
 	Stream_Write_UINT16(s, (UINT16)orderLength);             /* orderLength (2 bytes) */
 	Stream_Write_UINT16(s, extraFlags);                      /* extraFlags (2 bytes) */
 	Stream_Write_UINT8(s, orderType);                        /* orderType (1 byte) */
-	Stream_SetPosition(s, em);
 	update->numberOrders++;
-	return TRUE;
+	return Stream_SetPosition(s, em);
 }
 
 static BOOL update_send_cache_bitmap_v3(rdpContext* context, CACHE_BITMAP_V3_ORDER* cache_bitmap_v3)
@@ -1949,14 +1954,14 @@ static BOOL update_send_cache_bitmap_v3(rdpContext* context, CACHE_BITMAP_V3_ORD
 	const size_t orderLength = (em - bm) - 13;
 	WINPR_ASSERT(orderLength <= UINT16_MAX);
 
-	Stream_SetPosition(s, bm);
+	if (!Stream_SetPosition(s, bm))
+		return FALSE;
 	Stream_Write_UINT8(s, ORDER_STANDARD | ORDER_SECONDARY); /* controlFlags (1 byte) */
 	Stream_Write_UINT16(s, (UINT16)orderLength);             /* orderLength (2 bytes) */
 	Stream_Write_UINT16(s, extraFlags);                      /* extraFlags (2 bytes) */
 	Stream_Write_UINT8(s, orderType);                        /* orderType (1 byte) */
-	Stream_SetPosition(s, em);
 	update->numberOrders++;
-	return TRUE;
+	return Stream_SetPosition(s, em);
 }
 
 static BOOL update_send_cache_color_table(rdpContext* context,
@@ -1992,14 +1997,14 @@ static BOOL update_send_cache_color_table(rdpContext* context,
 	WINPR_ASSERT(em >= bm + 13);
 	const size_t orderLength = (em - bm) - 13;
 	WINPR_ASSERT(orderLength <= UINT16_MAX);
-	Stream_SetPosition(s, bm);
+	if (!Stream_SetPosition(s, bm))
+		return FALSE;
 	Stream_Write_UINT8(s, ORDER_STANDARD | ORDER_SECONDARY); /* controlFlags (1 byte) */
 	Stream_Write_UINT16(s, (UINT16)orderLength);             /* orderLength (2 bytes) */
 	Stream_Write_UINT16(s, flags);                           /* extraFlags (2 bytes) */
 	Stream_Write_UINT8(s, ORDER_TYPE_CACHE_COLOR_TABLE);     /* orderType (1 byte) */
-	Stream_SetPosition(s, em);
 	update->numberOrders++;
-	return TRUE;
+	return Stream_SetPosition(s, em);
 }
 
 static BOOL update_send_cache_glyph(rdpContext* context, const CACHE_GLYPH_ORDER* cache_glyph)
@@ -2034,14 +2039,14 @@ static BOOL update_send_cache_glyph(rdpContext* context, const CACHE_GLYPH_ORDER
 	WINPR_ASSERT(em >= bm + 13);
 	const size_t orderLength = (em - bm) - 13;
 	WINPR_ASSERT(orderLength <= UINT16_MAX);
-	Stream_SetPosition(s, bm);
+	if (!Stream_SetPosition(s, bm))
+		return FALSE;
 	Stream_Write_UINT8(s, ORDER_STANDARD | ORDER_SECONDARY); /* controlFlags (1 byte) */
 	Stream_Write_UINT16(s, (UINT16)orderLength);             /* orderLength (2 bytes) */
 	Stream_Write_UINT16(s, flags);                           /* extraFlags (2 bytes) */
 	Stream_Write_UINT8(s, ORDER_TYPE_CACHE_GLYPH);           /* orderType (1 byte) */
-	Stream_SetPosition(s, em);
 	update->numberOrders++;
-	return TRUE;
+	return Stream_SetPosition(s, em);
 }
 
 static BOOL update_send_cache_glyph_v2(rdpContext* context,
@@ -2077,14 +2082,14 @@ static BOOL update_send_cache_glyph_v2(rdpContext* context,
 	WINPR_ASSERT(em >= bm + 13);
 	const size_t orderLength = (em - bm) - 13;
 	WINPR_ASSERT(orderLength <= UINT16_MAX);
-	Stream_SetPosition(s, bm);
+	if (!Stream_SetPosition(s, bm))
+		return FALSE;
 	Stream_Write_UINT8(s, ORDER_STANDARD | ORDER_SECONDARY); /* controlFlags (1 byte) */
 	Stream_Write_UINT16(s, (UINT16)orderLength);             /* orderLength (2 bytes) */
 	Stream_Write_UINT16(s, flags);                           /* extraFlags (2 bytes) */
 	Stream_Write_UINT8(s, ORDER_TYPE_CACHE_GLYPH);           /* orderType (1 byte) */
-	Stream_SetPosition(s, em);
 	update->numberOrders++;
-	return TRUE;
+	return Stream_SetPosition(s, em);
 }
 
 static BOOL update_send_cache_brush(rdpContext* context, const CACHE_BRUSH_ORDER* cache_brush)
@@ -2121,14 +2126,14 @@ static BOOL update_send_cache_brush(rdpContext* context, const CACHE_BRUSH_ORDER
 
 	const size_t orderLength = (em - bm) - 13;
 	WINPR_ASSERT(orderLength <= UINT16_MAX);
-	Stream_SetPosition(s, bm);
+	if (!Stream_SetPosition(s, bm))
+		return FALSE;
 	Stream_Write_UINT8(s, ORDER_STANDARD | ORDER_SECONDARY); /* controlFlags (1 byte) */
 	Stream_Write_UINT16(s, (UINT16)orderLength);             /* orderLength (2 bytes) */
 	Stream_Write_UINT16(s, flags);                           /* extraFlags (2 bytes) */
 	Stream_Write_UINT8(s, ORDER_TYPE_CACHE_BRUSH);           /* orderType (1 byte) */
-	Stream_SetPosition(s, em);
 	update->numberOrders++;
-	return TRUE;
+	return Stream_SetPosition(s, em);
 }
 
 /**
@@ -2165,12 +2170,12 @@ static BOOL update_send_create_offscreen_bitmap_order(
 		return FALSE;
 
 	const size_t em = Stream_GetPosition(s);
-	Stream_SetPosition(s, bm);
+	if (!Stream_SetPosition(s, bm))
+		return FALSE;
 	Stream_Write_UINT8(s,
 	                   WINPR_ASSERTING_INT_CAST(uint8_t, controlFlags)); /* controlFlags (1 byte) */
-	Stream_SetPosition(s, em);
 	update->numberOrders++;
-	return TRUE;
+	return Stream_SetPosition(s, em);
 }
 
 static BOOL update_send_switch_surface_order(rdpContext* context,
@@ -2203,12 +2208,12 @@ static BOOL update_send_switch_surface_order(rdpContext* context,
 		return FALSE;
 
 	const size_t em = Stream_GetPosition(s);
-	Stream_SetPosition(s, bm);
+	if (!Stream_SetPosition(s, bm))
+		return FALSE;
 	Stream_Write_UINT8(s,
 	                   WINPR_ASSERTING_INT_CAST(uint8_t, controlFlags)); /* controlFlags (1 byte) */
-	Stream_SetPosition(s, em);
 	update->numberOrders++;
-	return TRUE;
+	return Stream_SetPosition(s, em);
 }
 
 static BOOL update_send_pointer_system(rdpContext* context,

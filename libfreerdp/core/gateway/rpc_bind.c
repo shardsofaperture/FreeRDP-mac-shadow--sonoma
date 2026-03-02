@@ -346,9 +346,11 @@ BOOL rpc_recv_bind_ack_pdu(rdpRpc* rpc, wStream* s)
 	/* Get the correct offset in the input data and pass that on as input buffer.
 	 * rts_read_pdu_header did already do consistency checks */
 	end = Stream_GetPosition(s);
-	Stream_SetPosition(s, pos + header.common.frag_length - header.common.auth_length);
+	if (!Stream_SetPosition(s, pos + header.common.frag_length - header.common.auth_length))
+		goto fail;
 	auth_data = Stream_ConstPointer(s);
-	Stream_SetPosition(s, end);
+	if (!Stream_SetPosition(s, end))
+		goto fail;
 
 	buffer.cbBuffer = header.common.auth_length;
 	buffer.pvBuffer = malloc(buffer.cbBuffer);

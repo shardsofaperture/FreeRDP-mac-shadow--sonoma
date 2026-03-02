@@ -972,7 +972,8 @@ static BOOL WINPR_init(void)
 static BOOL CALLBACK sspi_init(WINPR_ATTR_UNUSED PINIT_ONCE InitOnce,
                                WINPR_ATTR_UNUSED PVOID Parameter, WINPR_ATTR_UNUSED PVOID* Context)
 {
-	winpr_InitializeSSL(WINPR_SSL_INIT_DEFAULT);
+	if (!winpr_InitializeSSL(WINPR_SSL_INIT_DEFAULT))
+		return FALSE;
 	sspi_ContextBufferAllocTableNew();
 	if (!SCHANNEL_init())
 		return FALSE;

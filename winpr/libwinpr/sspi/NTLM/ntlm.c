@@ -1353,10 +1353,7 @@ static SECURITY_STATUS SEC_ENTRY ntlm_VerifySignature(PCtxtHandle phContext,
 	WINPR_HMAC_CTX* hmac = winpr_HMAC_New();
 
 	if (!winpr_HMAC_Init(hmac, WINPR_MD_MD5, context->RecvSigningKey, WINPR_MD5_DIGEST_LENGTH))
-	{
-		winpr_HMAC_Free(hmac);
-		return SEC_E_INTERNAL_ERROR;
-	}
+		goto fail;
 
 	winpr_Data_Write_UINT32(&seq_no, MessageSeqNo);
 	if (!winpr_HMAC_Update(hmac, (BYTE*)&seq_no, 4))
@@ -1366,7 +1363,8 @@ static SECURITY_STATUS SEC_ENTRY ntlm_VerifySignature(PCtxtHandle phContext,
 	if (!winpr_HMAC_Final(hmac, digest, WINPR_MD5_DIGEST_LENGTH))
 		goto fail;
 
-	winpr_RC4_Update(context->RecvRc4Seal, 8, digest, checksum);
+	if (!winpr_RC4_Update(context->RecvRc4Seal, 8, digest, checksum))
+		goto fail;
 
 	winpr_Data_Write_UINT32(signature, 1L);
 	CopyMemory(&signature[4], checksum, 8);

@@ -1834,14 +1834,15 @@ BOOL gcc_write_server_security_data(wStream* s, rdpMcs* mcs)
 	WINPR_ASSERT(end >= posHeader);
 	const size_t diff = end - posHeader;
 	WINPR_ASSERT(diff <= UINT16_MAX);
-	Stream_SetPosition(s, posHeader);
+	if (!Stream_SetPosition(s, posHeader))
+		return FALSE;
 	if (!gcc_write_user_data_header(s, SC_SECURITY, (UINT16)diff))
 		return FALSE;
-	Stream_SetPosition(s, posCertLen);
+	if (!Stream_SetPosition(s, posCertLen))
+		return FALSE;
 	WINPR_ASSERT(len <= UINT32_MAX);
 	Stream_Write_UINT32(s, (UINT32)len);
-	Stream_SetPosition(s, end);
-	return TRUE;
+	return Stream_SetPosition(s, end);
 }
 
 /**

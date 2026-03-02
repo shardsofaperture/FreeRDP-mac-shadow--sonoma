@@ -890,12 +890,14 @@ static BOOL mcs_send_connect_initial(rdpMcs* mcs)
 	length = (em - bm);
 	if (length > UINT16_MAX)
 		goto out;
-	Stream_SetPosition(s, bm);
+	if (!Stream_SetPosition(s, bm))
+		goto out;
 	if (!tpkt_write_header(s, (UINT16)length))
 		goto out;
 	if (!tpdu_write_data(s))
 		goto out;
-	Stream_SetPosition(s, em);
+	if (!Stream_SetPosition(s, em))
+		goto out;
 	Stream_SealLength(s);
 
 	{
@@ -1009,12 +1011,14 @@ BOOL mcs_send_connect_response(rdpMcs* mcs)
 	length = (em - bm);
 	if (length > UINT16_MAX)
 		goto out;
-	Stream_SetPosition(s, bm);
+	if (!Stream_SetPosition(s, bm))
+		goto out;
 	if (!tpkt_write_header(s, (UINT16)length))
 		goto out;
 	if (!tpdu_write_data(s))
 		goto out;
-	Stream_SetPosition(s, em);
+	if (!Stream_SetPosition(s, em))
+		goto out;
 	Stream_SealLength(s);
 
 	{

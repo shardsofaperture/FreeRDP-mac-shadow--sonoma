@@ -279,7 +279,8 @@ static UINT audin_process_formats(AUDIN_PLUGIN* audin, AUDIN_CHANNEL_CALLBACK* c
 	Stream_Write_UINT8(out, MSG_SNDIN_FORMATS);        /* Header (1 byte) */
 	Stream_Write_UINT32(out, callback->formats_count); /* NumFormats (4 bytes) */
 	Stream_Write_UINT32(out, cbSizeFormatsPacket);     /* cbSizeFormatsPacket (4 bytes) */
-	Stream_SetPosition(out, cbSizeFormatsPacket);
+	if (!Stream_SetPosition(out, cbSizeFormatsPacket))
+		goto out;
 	error = audin_channel_write_and_free(callback, out, FALSE);
 out:
 

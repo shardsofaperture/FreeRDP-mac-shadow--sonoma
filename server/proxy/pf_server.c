@@ -813,7 +813,8 @@ BOOL pf_server_start(proxyServer* server)
 	WINPR_ASSERT(server);
 
 	WTSRegisterWtsApiFunctionTable(FreeRDP_InitWtsApi());
-	winpr_InitializeSSL(WINPR_SSL_INIT_DEFAULT);
+	if (!winpr_InitializeSSL(WINPR_SSL_INIT_DEFAULT))
+		goto error;
 
 	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
 		goto error;
@@ -853,7 +854,8 @@ BOOL pf_server_start_from_socket(proxyServer* server, int socket)
 	WINPR_ASSERT(server);
 
 	WTSRegisterWtsApiFunctionTable(FreeRDP_InitWtsApi());
-	winpr_InitializeSSL(WINPR_SSL_INIT_DEFAULT);
+	if (!winpr_InitializeSSL(WINPR_SSL_INIT_DEFAULT))
+		goto error;
 
 	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
 		goto error;

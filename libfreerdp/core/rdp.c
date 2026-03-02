@@ -849,7 +849,8 @@ BOOL rdp_send(rdpRdp* rdp, wStream* s, UINT16 channelId, UINT16 sec_flags)
 			goto fail;
 
 		length += pad;
-		Stream_SetPosition(s, length);
+		if (!Stream_SetPosition(s, length))
+			goto fail;
 		Stream_SealLength(s);
 	}
 
@@ -894,13 +895,15 @@ BOOL rdp_send_pdu(rdpRdp* rdp, wStream* s, UINT16 type, UINT16 channel_id, UINT1
 		Stream_Seek(s, sec_bytes);
 		if (!rdp_write_share_control_header(rdp, s, length - sec_bytes, type, channel_id))
 			goto fail;
-		Stream_SetPosition(s, sec_hold);
+		if (!Stream_SetPosition(s, sec_hold))
+			goto fail;
 
 		if (!rdp_security_stream_out(rdp, s, length, sec_flags, &pad))
 			goto fail;
 
 		length += pad;
-		Stream_SetPosition(s, length);
+		if (!Stream_SetPosition(s, length))
+			goto fail;
 		Stream_SealLength(s);
 	}
 
@@ -946,13 +949,15 @@ BOOL rdp_send_data_pdu(rdpRdp* rdp, wStream* s, BYTE type, UINT16 channel_id, UI
 			goto fail;
 		if (!rdp_write_share_data_header(rdp, s, length - sec_bytes, type, rdp->settings->ShareId))
 			goto fail;
-		Stream_SetPosition(s, sec_hold);
+		if (!Stream_SetPosition(s, sec_hold))
+			goto fail;
 
 		if (!rdp_security_stream_out(rdp, s, length, sec_flags, &pad))
 			goto fail;
 
 		length += pad;
-		Stream_SetPosition(s, length);
+		if (!Stream_SetPosition(s, length))
+			goto fail;
 		Stream_SealLength(s);
 	}
 	WLog_Print(rdp->log, WLOG_DEBUG,
@@ -996,7 +1001,8 @@ BOOL rdp_send_message_channel_pdu(rdpRdp* rdp, wStream* s, UINT16 sec_flags)
 			goto fail;
 
 		length += pad;
-		Stream_SetPosition(s, length);
+		if (!Stream_SetPosition(s, length))
+			goto fail;
 	}
 	Stream_SealLength(s);
 
@@ -2203,7 +2209,10 @@ state_run_t rdp_recv_callback(rdpTransport* transport, wStream* s, void* extra)
 		WINPR_ASSERT(rdp);
 
 		if (rc == STATE_RUN_TRY_AGAIN)
-			Stream_SetPosition(s, start);
+		{
+			if (!Stream_SetPosition(s, start))
+				return STATE_RUN_FAILED;
+		}
 
 		const char* old = rdp_get_state_string(rdp);
 		const size_t orem = Stream_GetRemainingLength(s);

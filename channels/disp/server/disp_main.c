@@ -251,7 +251,8 @@ static UINT disp_server_receive_pdu(DispServerContext* context, wStream* s)
 	{
 		WLog_ERR(TAG, "Unexpected DISP pdu end: Actual: %" PRIuz ", Expected: %" PRIuz "", end,
 		         (beg + header.length));
-		Stream_SetPosition(s, (beg + header.length));
+		if (!Stream_SetPosition(s, (beg + header.length)))
+			return ERROR_INVALID_DATA;
 	}
 
 	return error;

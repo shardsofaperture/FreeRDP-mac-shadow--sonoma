@@ -42,7 +42,6 @@ static BOOL rail_is_feature_supported(const rdpContext* context, UINT32 featureM
 UINT rail_send_pdu(railPlugin* rail, wStream* s, UINT16 orderType)
 {
 	char buffer[128] = WINPR_C_ARRAY_INIT;
-	UINT16 orderLength = 0;
 
 	if (!rail || !s)
 	{
@@ -50,13 +49,19 @@ UINT rail_send_pdu(railPlugin* rail, wStream* s, UINT16 orderType)
 		return ERROR_INVALID_PARAMETER;
 	}
 
-	orderLength = (UINT16)Stream_GetPosition(s);
+	const UINT16 orderLength = (UINT16)Stream_GetPosition(s);
 	Stream_ResetPosition(s);
-	rail_write_pdu_header(s, orderType, orderLength);
-	Stream_SetPosition(s, orderLength);
+	if (!rail_write_pdu_header(s, orderType, orderLength))
+		goto fail;
+	if (!Stream_SetPosition(s, orderLength))
+		goto fail;
 	WLog_Print(rail->log, WLOG_DEBUG, "Sending %s PDU, length: %" PRIu16 "",
 	           rail_get_order_type_string_full(orderType, buffer, sizeof(buffer)), orderLength);
 	return rail_send_channel_data(rail, s);
+
+fail:
+	Stream_Free(s, TRUE);
+	return ERROR_INVALID_DATA;
 }
 
 /**

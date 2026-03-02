@@ -2001,7 +2001,8 @@ static UINT rdpgfx_recv_pdu(GENERIC_CHANNEL_CALLBACK* callback, wStream* s)
 	{
 		WLog_Print(gfx->log, WLOG_ERROR, "Error while processing GFX cmdId: %s (0x%04" PRIX16 ")",
 		           rdpgfx_get_cmd_id_string(header.cmdId), header.cmdId);
-		Stream_SetPosition(s, (beg + header.pduLength));
+		if (!Stream_SetPosition(s, (beg + header.pduLength)))
+			return ERROR_INVALID_DATA;
 		return error;
 	}
 
@@ -2012,7 +2013,8 @@ static UINT rdpgfx_recv_pdu(GENERIC_CHANNEL_CALLBACK* callback, wStream* s)
 		WLog_Print(gfx->log, WLOG_ERROR,
 		           "Unexpected gfx pdu end: Actual: %" PRIuz ", Expected: %" PRIuz, end,
 		           (beg + header.pduLength));
-		Stream_SetPosition(s, (beg + header.pduLength));
+		if (!Stream_SetPosition(s, (beg + header.pduLength)))
+			return ERROR_INVALID_DATA;
 	}
 
 	return error;

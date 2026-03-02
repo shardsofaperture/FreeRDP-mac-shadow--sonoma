@@ -584,7 +584,8 @@ static BOOL tf_peer_dump_rfx(freerdp_peer* client)
 		record.data = Stream_Buffer(s);
 		if (!pcap_get_next_record_content(pcap_rfx, &record))
 			break;
-		Stream_SetPosition(s, Stream_Capacity(s));
+		if (!Stream_SetPosition(s, Stream_Capacity(s)))
+			goto fail;
 
 		if (info->test_dump_rfx_realtime &&
 		    test_sleep_tsdiff(&prev_seconds, &prev_useconds, record.header.ts_sec,
@@ -671,7 +672,8 @@ static DWORD WINAPI tf_debug_channel_thread_func(LPVOID arg)
 			}
 		}
 
-		Stream_SetPosition(s, BytesReturned);
+		if (!Stream_SetPosition(s, BytesReturned))
+			goto fail;
 		WLog_DBG(TAG, "got %" PRIu32 " bytes", BytesReturned);
 	}
 fail:
@@ -1479,7 +1481,9 @@ int main(int argc, char* argv[])
 	}
 
 	WTSRegisterWtsApiFunctionTable(FreeRDP_InitWtsApi());
-	winpr_InitializeSSL(WINPR_SSL_INIT_DEFAULT);
+	if (!winpr_InitializeSSL(WINPR_SSL_INIT_DEFAULT))
+		return -1;
+
 	instance = freerdp_listener_new();
 
 	if (!instance)

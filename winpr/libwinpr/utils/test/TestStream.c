@@ -168,7 +168,8 @@ static BOOL TestStream_Create(size_t count, BOOL selfAlloc)
 
 		for (size_t pos = 0; pos < len; pos++)
 		{
-			Stream_SetPosition(s, pos);
+			if (!Stream_SetPosition(s, pos))
+				goto fail;
 			Stream_SealLength(s);
 
 			if (!TestStream_Verify(s, cap, pos, pos))
@@ -228,7 +229,8 @@ static BOOL TestStream_Extent(UINT32 maxSize)
 				goto fail;
 		}
 
-		Stream_SetPosition(s, i);
+		if (!Stream_SetPosition(s, i))
+			goto fail;
 		Stream_SealLength(s);
 
 		if (!TestStream_Verify(s, i, i, i))

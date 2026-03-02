@@ -367,7 +367,8 @@ static BOOL ntlm_read_message_fields_buffer(wStream* s, NTLM_MESSAGE_FIELDS* fie
 			return FALSE;
 		}
 
-		Stream_SetPosition(s, fields->BufferOffset);
+		if (!Stream_SetPosition(s, fields->BufferOffset))
+			return FALSE;
 		Stream_Read(s, fields->Buffer, fields->Len);
 	}
 
@@ -381,7 +382,8 @@ static BOOL ntlm_write_message_fields_buffer(wStream* s, const NTLM_MESSAGE_FIEL
 
 	if (fields->Len > 0)
 	{
-		Stream_SetPosition(s, fields->BufferOffset);
+		if (!Stream_SetPosition(s, fields->BufferOffset))
+			return FALSE;
 		if (!NTLM_CheckAndLogRequiredCapacity(TAG, (s), fields->Len, "NTLM_MESSAGE_FIELDS::Len"))
 			return FALSE;
 
@@ -480,13 +482,13 @@ static BOOL ntlm_write_message_integrity_check(wStream* s, size_t offset, const 
 	if (!NTLM_CheckAndLogRequiredCapacity(TAG, s, offset, "MessageIntegrityCheck::offset"))
 		return FALSE;
 
-	Stream_SetPosition(s, offset);
+	if (!Stream_SetPosition(s, offset))
+		return FALSE;
 	if (!NTLM_CheckAndLogRequiredCapacity(TAG, s, size, "MessageIntegrityCheck::size"))
 		return FALSE;
 
 	Stream_Write(s, data, size);
-	Stream_SetPosition(s, pos);
-	return TRUE;
+	return Stream_SetPosition(s, pos);
 }
 
 SECURITY_STATUS ntlm_read_NegotiateMessage(NTLM_CONTEXT* context, PSecBuffer buffer)
@@ -1078,7 +1080,8 @@ SECURITY_STATUS ntlm_read_AuthenticateMessage(NTLM_CONTEXT* context, PSecBuffer 
 
 	CopyMemory(context->AuthenticateMessage.pvBuffer, Stream_Buffer(s), length);
 	buffer->cbBuffer = (ULONG)length;
-	Stream_SetPosition(s, PayloadBufferOffset);
+	if (!Stream_SetPosition(s, PayloadBufferOffset))
+		goto fail;
 
 	if (flags & MSV_AV_FLAGS_MESSAGE_INTEGRITY_CHECK)
 	{

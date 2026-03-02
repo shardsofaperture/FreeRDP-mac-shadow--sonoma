@@ -956,7 +956,8 @@ static BOOL nego_read_request_token_or_cookie(rdpNego* nego, wStream* s)
 
 	if (!result)
 	{
-		Stream_SetPosition(s, pos);
+		if (!Stream_SetPosition(s, pos))
+			return FALSE;
 		WLog_Print(nego->log, WLOG_ERROR, "invalid %s received",
 		           isToken ? "routing token" : "cookie");
 	}
@@ -1154,12 +1155,14 @@ BOOL nego_send_negotiation_request(rdpNego* nego)
 		goto fail;
 
 	em = Stream_GetPosition(s);
-	Stream_SetPosition(s, bm);
+	if (!Stream_SetPosition(s, bm))
+		goto fail;
 	if (!tpkt_write_header(s, (UINT16)length))
 		goto fail;
 	if (!tpdu_write_connection_request(s, (UINT16)length - 5))
 		goto fail;
-	Stream_SetPosition(s, em);
+	if (!Stream_SetPosition(s, em))
+		goto fail;
 	Stream_SealLength(s);
 	rc = (transport_write(nego->transport, s) >= 0);
 fail:
@@ -1489,11 +1492,7 @@ BOOL nego_process_negotiation_failure(rdpNego* nego, wStream* s)
 
 BOOL nego_send_negotiation_response(rdpNego* nego)
 {
-	UINT16 length = 0;
-	size_t bm = 0;
-	size_t em = 0;
-	BOOL status = 0;
-	wStream* s = nullptr;
+	BOOL status = FALSE;
 	BYTE flags = 0;
 	rdpContext* context = nullptr;
 	rdpSettings* settings = nullptr;
@@ -1505,7 +1504,7 @@ BOOL nego_send_negotiation_response(rdpNego* nego)
 	settings = context->settings;
 	WINPR_ASSERT(settings);
 
-	s = Stream_New(nullptr, 512);
+	wStream* s = Stream_New(nullptr, 512);
 
 	if (!s)
 	{
@@ -1513,9 +1512,10 @@ BOOL nego_send_negotiation_response(rdpNego* nego)
 		return FALSE;
 	}
 
-	length = TPDU_CONNECTION_CONFIRM_LENGTH;
-	bm = Stream_GetPosition(s);
-	Stream_Seek(s, length);
+	UINT16 length = TPDU_CONNECTION_CONFIRM_LENGTH;
+	const size_t bm = Stream_GetPosition(s);
+	if (!Stream_SafeSeek(s, length))
+		goto fail;
 
 	if (nego->SelectedProtocol & PROTOCOL_FAILED_NEGO)
 	{
@@ -1548,19 +1548,22 @@ BOOL nego_send_negotiation_response(rdpNego* nego)
 		length += 8;
 	}
 
-	em = Stream_GetPosition(s);
-	Stream_SetPosition(s, bm);
-	status = tpkt_write_header(s, length);
-	if (status)
-		status = tpdu_write_connection_confirm(s, length - 5);
+	const size_t em = Stream_GetPosition(s);
+	if (!Stream_SetPosition(s, bm))
+		goto fail;
+	if (!tpkt_write_header(s, length))
+		goto fail;
 
-	if (status)
-	{
-		Stream_SetPosition(s, em);
-		Stream_SealLength(s);
+	if (!tpdu_write_connection_confirm(s, length - 5))
+		goto fail;
 
-		status = (transport_write(nego->transport, s) >= 0);
-	}
+	if (!Stream_SetPosition(s, em))
+		goto fail;
+	Stream_SealLength(s);
+
+	status = (transport_write(nego->transport, s) >= 0);
+
+fail:
 	Stream_Free(s, TRUE);
 
 	if (status)

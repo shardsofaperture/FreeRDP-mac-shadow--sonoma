@@ -60,7 +60,7 @@ CliprdrClientContext* cliprdr_get_client_interface(cliprdrPlugin* cliprdr)
  */
 static UINT cliprdr_packet_send(cliprdrPlugin* cliprdr, wStream* s)
 {
-	UINT status = CHANNEL_RC_OK;
+	UINT status = ERROR_INVALID_DATA;
 
 	WINPR_ASSERT(cliprdr);
 	WINPR_ASSERT(s);
@@ -71,16 +71,16 @@ static UINT cliprdr_packet_send(cliprdrPlugin* cliprdr, wStream* s)
 
 	const uint32_t dataLen = WINPR_ASSERTING_INT_CAST(uint32_t, pos - 8UL);
 
-	Stream_SetPosition(s, 4);
+	if (!Stream_SetPosition(s, 4))
+		goto fail;
 	Stream_Write_UINT32(s, dataLen);
-	Stream_SetPosition(s, pos);
+	if (!Stream_SetPosition(s, pos))
+		goto fail;
 
 	WLog_Print(cliprdr->log, WLOG_DEBUG, "Cliprdr Sending (%" PRIuz " bytes)", pos);
 
 	if (!cliprdr)
-	{
 		status = CHANNEL_RC_BAD_INIT_HANDLE;
-	}
 	else
 	{
 		WINPR_ASSERT(cliprdr->channelEntryPoints.pVirtualChannelWriteEx);
@@ -89,6 +89,7 @@ static UINT cliprdr_packet_send(cliprdrPlugin* cliprdr, wStream* s)
 		    (UINT32)Stream_GetPosition(s), s);
 	}
 
+fail:
 	if (status != CHANNEL_RC_OK)
 	{
 		Stream_Free(s, TRUE);

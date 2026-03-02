@@ -102,10 +102,10 @@ static inline BOOL rdpgfx_server_packet_complete_header(wStream* s, size_t start
 	if ((start > UINT32_MAX) || (current < start))
 		return FALSE;
 	/* Fill actual length */
-	Stream_SetPosition(s, start + RDPGFX_HEADER_SIZE - sizeof(UINT32));
+	if (!Stream_SetPosition(s, start + RDPGFX_HEADER_SIZE - sizeof(UINT32)))
+		return FALSE;
 	Stream_Write_UINT32(s, (UINT32)(current - start)); /* pduLength (4 bytes) */
-	Stream_SetPosition(s, current);
-	return TRUE;
+	return Stream_SetPosition(s, current);
 }
 
 /**
@@ -312,7 +312,11 @@ static UINT rdpgfx_send_reset_graphics_pdu(RdpgfxServerContext* context,
 	}
 
 	/* pad (total size must be 340 bytes) */
-	Stream_SetPosition(s, RDPGFX_RESET_GRAPHICS_PDU_SIZE);
+	if (!Stream_SetPosition(s, RDPGFX_RESET_GRAPHICS_PDU_SIZE))
+	{
+		Stream_Free(s, TRUE);
+		return ERROR_INVALID_DATA;
+	}
 	return rdpgfx_server_single_packet_send(context, s);
 }
 
@@ -764,7 +768,8 @@ static UINT rdpgfx_write_surface_command(wLog* log, wStream* s, const RDPGFX_SUR
 		if (bitmapDataLength > UINT32_MAX)
 			return ERROR_INTERNAL_ERROR;
 
-		Stream_SetPosition(s, bitmapDataStart - sizeof(UINT32));
+		if (!Stream_SetPosition(s, bitmapDataStart - sizeof(UINT32)))
+			return ERROR_INVALID_DATA;
 		if (!Stream_EnsureRemainingCapacity(s, 4))
 			return ERROR_INTERNAL_ERROR;
 		Stream_Write_UINT32(s, (UINT32)bitmapDataLength); /* bitmapDataLength (4 bytes) */
@@ -1481,7 +1486,8 @@ static UINT rdpgfx_server_receive_pdu(RdpgfxServerContext* context, wStream* s)
 		WLog_Print(context->priv->log, WLOG_ERROR,
 		           "Unexpected gfx pdu end: Actual: %" PRIuz ", Expected: %" PRIuz "", end,
 		           (beg + header.pduLength));
-		Stream_SetPosition(s, (beg + header.pduLength));
+		if (!Stream_SetPosition(s, (beg + header.pduLength)))
+			return ERROR_INVALID_DATA;
 	}
 
 	return error;

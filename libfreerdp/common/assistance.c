@@ -1397,7 +1397,9 @@ static BOOL setup_string(wArrayList* list)
 
 rdpAssistanceFile* freerdp_assistance_file_new(void)
 {
-	winpr_InitializeSSL(WINPR_SSL_INIT_DEFAULT);
+	if (!winpr_InitializeSSL(WINPR_SSL_INIT_DEFAULT))
+		return nullptr;
+
 	rdpAssistanceFile* file = calloc(1, sizeof(rdpAssistanceFile));
 	if (!file)
 		return nullptr;

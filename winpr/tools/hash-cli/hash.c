@@ -153,7 +153,11 @@ int main(int argc, char* argv[])
 		printf("missing username or password\n\n");
 		return usage_and_exit();
 	}
-	winpr_InitializeSSL(WINPR_SSL_INIT_DEFAULT);
+	if (!winpr_InitializeSSL(WINPR_SSL_INIT_DEFAULT))
+	{
+		printf("winpr_InitializeSSL failed\n\n");
+		return usage_and_exit();
+	}
 
 	UserLength = strlen(User);
 	PasswordLength = strlen(Password);

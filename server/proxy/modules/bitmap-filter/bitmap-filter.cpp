@@ -319,7 +319,8 @@ class DynChannelState
 {
 	WINPR_ASSERT(data);
 
-	Stream_SetPosition(data->data, startPosition);
+	if (!Stream_SetPosition(data->data, startPosition))
+		return FALSE;
 	if (!drdynvc_write_header(data->data, channelId))
 		return FALSE;
 
@@ -384,7 +385,8 @@ class DynChannelState
 					default:
 						break;
 				}
-				Stream_SetPosition(data->data, pos);
+				if (!Stream_SetPosition(data->data, pos))
+					return FALSE;
 			}
 		}
 

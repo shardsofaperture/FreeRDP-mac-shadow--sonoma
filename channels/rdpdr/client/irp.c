@@ -68,14 +68,18 @@ static UINT irp_complete(IRP* irp)
 	rdpdrPlugin* rdpdr = (rdpdrPlugin*)irp->devman->plugin;
 	WINPR_ASSERT(rdpdr);
 
+	UINT error = ERROR_INVALID_DATA;
+
 	const size_t pos = Stream_GetPosition(irp->output);
-	Stream_SetPosition(irp->output, RDPDR_DEVICE_IO_RESPONSE_LENGTH - 4);
+	if (!Stream_SetPosition(irp->output, RDPDR_DEVICE_IO_RESPONSE_LENGTH - 4))
+		goto fail;
 	Stream_Write_INT32(irp->output, irp->IoStatus); /* IoStatus (4 bytes) */
-	Stream_SetPosition(irp->output, pos);
+	if (!Stream_SetPosition(irp->output, pos))
+		goto fail;
 
-	const UINT error = rdpdr_send(rdpdr, irp->output);
+	error = rdpdr_send(rdpdr, irp->output);
 	irp->output = nullptr;
-
+fail:
 	irp_free(irp);
 	return error;
 }
