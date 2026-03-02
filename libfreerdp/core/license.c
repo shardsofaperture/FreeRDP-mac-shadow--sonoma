@@ -220,11 +220,16 @@ struct rdp_license
 	wLog* log;
 };
 
+WINPR_ATTR_NODISCARD
 static BOOL license_send_error_alert(rdpLicense* license, UINT32 dwErrorCode,
                                      UINT32 dwStateTransition, const LICENSE_BLOB* info);
-static BOOL license_set_state(rdpLicense* license, LICENSE_STATE state);
+
+static void license_set_state(rdpLicense* license, LICENSE_STATE state);
+
+WINPR_ATTR_NODISCARD
 static const char* license_get_state_string(LICENSE_STATE state);
 
+WINPR_ATTR_NODISCARD
 static const char* license_preferred_key_exchange_alg_string(UINT32 alg, char* buffer, size_t size)
 {
 	const char* name = nullptr;
@@ -243,6 +248,7 @@ static const char* license_preferred_key_exchange_alg_string(UINT32 alg, char* b
 	return buffer;
 }
 
+WINPR_ATTR_NODISCARD
 static const char* license_request_type_string(UINT32 type)
 {
 	switch (type)
@@ -268,6 +274,7 @@ static const char* license_request_type_string(UINT32 type)
 	}
 }
 
+WINPR_ATTR_NODISCARD
 static const char* licencse_blob_type_string(UINT16 type)
 {
 	switch (type)
@@ -296,54 +303,112 @@ static const char* licencse_blob_type_string(UINT16 type)
 			return "BB_UNKNOWN";
 	}
 }
+
+WINPR_ATTR_NODISCARD
 static wStream* license_send_stream_init(rdpLicense* license, UINT16* sec_flags);
 
+WINPR_ATTR_NODISCARD
 static BOOL license_generate_randoms(rdpLicense* license);
+
+WINPR_ATTR_NODISCARD
 static BOOL license_generate_keys(rdpLicense* license);
+
+WINPR_ATTR_NODISCARD
 static BOOL license_generate_hwid(rdpLicense* license);
+
+WINPR_ATTR_NODISCARD
 static BOOL license_encrypt_premaster_secret(rdpLicense* license);
 
-static LICENSE_PRODUCT_INFO* license_new_product_info(void);
 static void license_free_product_info(LICENSE_PRODUCT_INFO* productInfo);
+
+WINPR_ATTR_MALLOC(license_free_product_info, 1)
+static LICENSE_PRODUCT_INFO* license_new_product_info(void);
+
+WINPR_ATTR_NODISCARD
 static BOOL license_read_product_info(wLog* log, wStream* s, LICENSE_PRODUCT_INFO* productInfo);
 
-static LICENSE_BLOB* license_new_binary_blob(UINT16 type);
 static void license_free_binary_blob(LICENSE_BLOB* blob);
+
+WINPR_ATTR_MALLOC(license_free_binary_blob, 1)
+static LICENSE_BLOB* license_new_binary_blob(UINT16 type);
+
+WINPR_ATTR_NODISCARD
 static BOOL license_read_binary_blob_data(wLog* log, LICENSE_BLOB* blob, UINT16 type,
                                           const void* data, size_t length);
+
+WINPR_ATTR_NODISCARD
 static BOOL license_read_binary_blob(wLog* log, wStream* s, LICENSE_BLOB* blob);
+
+WINPR_ATTR_NODISCARD
 static BOOL license_write_binary_blob(wStream* s, const LICENSE_BLOB* blob);
 
-static SCOPE_LIST* license_new_scope_list(void);
-static BOOL license_scope_list_resize(SCOPE_LIST* scopeList, UINT32 count);
 static void license_free_scope_list(SCOPE_LIST* scopeList);
+
+WINPR_ATTR_MALLOC(license_free_scope_list, 1)
+static SCOPE_LIST* license_new_scope_list(void);
+
+WINPR_ATTR_NODISCARD
+static BOOL license_scope_list_resize(SCOPE_LIST* scopeList, UINT32 count);
+
+WINPR_ATTR_NODISCARD
 static BOOL license_read_scope_list(wLog* log, wStream* s, SCOPE_LIST* scopeList);
+
+WINPR_ATTR_NODISCARD
 static BOOL license_write_scope_list(wLog* log, wStream* s, const SCOPE_LIST* scopeList);
 
+WINPR_ATTR_NODISCARD
 static BOOL license_read_license_request_packet(rdpLicense* license, wStream* s);
+
+WINPR_ATTR_NODISCARD
 static BOOL license_write_license_request_packet(const rdpLicense* license, wStream* s);
 
+WINPR_ATTR_NODISCARD
 static BOOL license_read_platform_challenge_packet(rdpLicense* license, wStream* s);
+
+WINPR_ATTR_NODISCARD
 static BOOL license_send_platform_challenge_packet(rdpLicense* license);
+
+WINPR_ATTR_NODISCARD
 static BOOL license_read_new_or_upgrade_license_packet(rdpLicense* license, wStream* s);
+
+WINPR_ATTR_NODISCARD
 static BOOL license_read_error_alert_packet(rdpLicense* license, wStream* s);
 
+WINPR_ATTR_NODISCARD
 static BOOL license_write_new_license_request_packet(const rdpLicense* license, wStream* s);
+
+WINPR_ATTR_NODISCARD
 static BOOL license_read_new_license_request_packet(rdpLicense* license, wStream* s);
+
+WINPR_ATTR_NODISCARD
 static BOOL license_answer_license_request(rdpLicense* license);
 
+WINPR_ATTR_NODISCARD
 static BOOL license_send_platform_challenge_response(rdpLicense* license);
+
+WINPR_ATTR_NODISCARD
 static BOOL license_read_platform_challenge_response(rdpLicense* license);
 
+WINPR_ATTR_NODISCARD
 static BOOL license_read_client_platform_challenge_response(rdpLicense* license, wStream* s);
+
+WINPR_ATTR_NODISCARD
 static BOOL license_write_client_platform_challenge_response(rdpLicense* license, wStream* s);
 
+WINPR_ATTR_NODISCARD
 static BOOL license_write_server_upgrade_license(const rdpLicense* license, wStream* s);
 
+WINPR_ATTR_NODISCARD
 static BOOL license_send_license_info(rdpLicense* license, const LICENSE_BLOB* calBlob,
                                       const BYTE* signature, size_t signature_length);
+
+WINPR_ATTR_NODISCARD
 static BOOL license_read_license_info(rdpLicense* license, wStream* s);
+
+WINPR_ATTR_NODISCARD
 static state_run_t license_client_recv(rdpLicense* license, wStream* s);
+
+WINPR_ATTR_NODISCARD
 static state_run_t license_server_recv(rdpLicense* license, wStream* s);
 
 #define PLATFORMID (CLIENT_OS_ID_WINNT_POST_52 | CLIENT_IMAGE_ID_MICROSOFT)
@@ -409,6 +474,7 @@ static void license_print_scope_list(wLog* log, const SCOPE_LIST* scopeList)
 
 static const char licenseStore[] = "licenses";
 
+WINPR_ATTR_NODISCARD
 static BOOL license_ensure_state(rdpLicense* license, LICENSE_STATE state, UINT32 msg)
 {
 	const LICENSE_STATE cstate = license_get_state(license);
@@ -441,6 +507,7 @@ state_run_t license_recv(rdpLicense* license, wStream* s)
 		return license_client_recv(license, s);
 }
 
+WINPR_ATTR_NODISCARD
 static BOOL license_check_stream_length(wLog* log, wStream* s, SSIZE_T expect, const char* where)
 {
 	const size_t remain = Stream_GetRemainingLength(s);
@@ -461,6 +528,7 @@ static BOOL license_check_stream_length(wLog* log, wStream* s, SSIZE_T expect, c
 	return TRUE;
 }
 
+WINPR_ATTR_NODISCARD
 static BOOL license_check_stream_capacity(wLog* log, wStream* s, size_t expect, const char* where)
 {
 	WINPR_ASSERT(where);
@@ -470,6 +538,7 @@ static BOOL license_check_stream_capacity(wLog* log, wStream* s, size_t expect, 
 	                                                 (size_t)__LINE__, where));
 }
 
+WINPR_ATTR_NODISCARD
 static BOOL computeCalHash(wLog* log, const char* hostname, char* hashStr, size_t len)
 {
 	WINPR_DIGEST_CTX* sha1 = nullptr;
@@ -502,6 +571,7 @@ out:
 	return ret;
 }
 
+WINPR_ATTR_NODISCARD
 static BOOL saveCal(wLog* log, const rdpSettings* settings, const BYTE* data, size_t length,
                     const char* hostname)
 {
@@ -596,6 +666,7 @@ out:
 	return ret;
 }
 
+WINPR_ATTR_MALLOC(free, 1)
 static BYTE* loadCalFile(wLog* log, const rdpSettings* settings, const char* hostname,
                          size_t* dataLen)
 {
@@ -674,7 +745,7 @@ error_path:
  * @param wMsgSize message size
  * @return if the operation completed successfully
  */
-
+WINPR_ATTR_NODISCARD
 static BOOL license_read_preamble(wLog* log, wStream* s, BYTE* bMsgType, BYTE* flags,
                                   UINT16* wMsgSize)
 {
@@ -701,7 +772,7 @@ static BOOL license_read_preamble(wLog* log, wStream* s, BYTE* bMsgType, BYTE* f
  * @param wMsgSize message size
  * @return if the operation completed successfully
  */
-
+WINPR_ATTR_NODISCARD
 static BOOL license_write_preamble(wStream* s, BYTE bMsgType, BYTE flags, UINT16 wMsgSize)
 {
 	if (!Stream_EnsureRemainingCapacity(s, 4))
@@ -767,7 +838,7 @@ fail:
  * @param license license module
  * @param s stream
  */
-
+WINPR_ATTR_NODISCARD
 static BOOL license_send(rdpLicense* license, wStream* s, BYTE type, UINT16 sec_flags)
 {
 	WINPR_ASSERT(license);
@@ -825,6 +896,7 @@ BOOL license_write_server_upgrade_license(const rdpLicense* license, wStream* s)
 	return TRUE;
 }
 
+WINPR_ATTR_NODISCARD
 static BOOL license_server_send_new_or_upgrade_license(rdpLicense* license, BOOL upgrade)
 {
 	UINT16 sec_flags = 0;
@@ -851,7 +923,7 @@ fail:
  * @param s stream
  * @return if the operation completed successfully
  */
-
+WINPR_ATTR_NODISCARD
 static state_run_t license_client_recv_int(rdpLicense* license, wStream* s)
 {
 	BYTE flags = 0;
@@ -961,8 +1033,7 @@ state_run_t license_server_recv(rdpLicense* license, wStream* s)
 			if (!license_send_platform_challenge_packet(license))
 				goto fail;
 			license->update = FALSE;
-			if (!license_set_state(license, LICENSE_STATE_PLATFORM_CHALLENGE))
-				goto fail;
+			license_set_state(license, LICENSE_STATE_PLATFORM_CHALLENGE);
 			break;
 		case LICENSE_INFO:
 			if (!license_ensure_state(license, LICENSE_STATE_REQUEST, bMsgType))
@@ -972,8 +1043,7 @@ state_run_t license_server_recv(rdpLicense* license, wStream* s)
 			// TODO: Validate license info
 			if (!license_send_platform_challenge_packet(license))
 				goto fail;
-			if (!license_set_state(license, LICENSE_STATE_PLATFORM_CHALLENGE))
-				goto fail;
+			license_set_state(license, LICENSE_STATE_PLATFORM_CHALLENGE);
 			license->update = TRUE;
 			break;
 
@@ -1022,7 +1092,12 @@ fail:
 	if (state_run_failed(rc))
 	{
 		if (flags & EXTENDED_ERROR_MSG_SUPPORTED)
-			license_send_error_alert(license, ERR_INVALID_CLIENT, ST_TOTAL_ABORT, nullptr);
+		{
+			if (!license_send_error_alert(license, ERR_INVALID_CLIENT, ST_TOTAL_ABORT, nullptr))
+			{
+				WLog_Print(license->log, WLOG_ERROR, "license_send_error_alert failed");
+			}
+		}
 		license_set_state(license, LICENSE_STATE_ABORTED);
 	}
 
@@ -1057,7 +1132,7 @@ BOOL license_generate_randoms(rdpLicense* license)
  * Generate License Cryptographic Keys.
  * @param license license module
  */
-
+WINPR_ATTR_NODISCARD
 static BOOL license_generate_keys(rdpLicense* license)
 {
 	WINPR_ASSERT(license);
@@ -1157,6 +1232,7 @@ BOOL license_generate_hwid(rdpLicense* license)
 	                               WINPR_MD5_DIGEST_LENGTH);
 }
 
+WINPR_ATTR_NODISCARD
 static BOOL license_get_server_rsa_public_key(rdpLicense* license)
 {
 	rdpSettings* settings = nullptr;
@@ -1232,6 +1308,7 @@ BOOL license_encrypt_premaster_secret(rdpLicense* license)
 	return TRUE;
 }
 
+WINPR_ATTR_NODISCARD
 static BOOL license_rc4_with_licenseKey(const rdpLicense* license, const BYTE* input, size_t len,
                                         LICENSE_BLOB* target)
 {
@@ -1280,6 +1357,8 @@ error_buffer:
  * @param mac the signature buffer (16 bytes)
  * @return if the operation completed successfully
  */
+
+WINPR_ATTR_NODISCARD
 static BOOL license_encrypt_and_MAC(rdpLicense* license, const BYTE* input, size_t len,
                                     LICENSE_BLOB* target, BYTE* mac, size_t mac_length)
 {
@@ -1300,6 +1379,7 @@ static BOOL license_encrypt_and_MAC(rdpLicense* license, const BYTE* input, size
  *
  * @return if the operation completed successfully
  */
+WINPR_ATTR_NODISCARD
 static BOOL license_decrypt_and_check_MAC(rdpLicense* license, const BYTE* input, size_t len,
                                           LICENSE_BLOB* target, const BYTE* packetMac)
 {
@@ -1394,6 +1474,7 @@ out_fail:
 	return FALSE;
 }
 
+WINPR_ATTR_NODISCARD
 static BOOL license_write_product_info(wLog* log, wStream* s,
                                        const LICENSE_PRODUCT_INFO* productInfo)
 {
@@ -1565,6 +1646,7 @@ BOOL license_write_binary_blob(wStream* s, const LICENSE_BLOB* blob)
 	return TRUE;
 }
 
+WINPR_ATTR_NODISCARD
 static BOOL license_write_encrypted_premaster_secret_blob(wLog* log, wStream* s,
                                                           const LICENSE_BLOB* blob,
                                                           UINT32 ModulusLength)
@@ -1592,6 +1674,7 @@ static BOOL license_write_encrypted_premaster_secret_blob(wLog* log, wStream* s,
 	return TRUE;
 }
 
+WINPR_ATTR_NODISCARD
 static BOOL license_read_encrypted_premaster_secret_blob(wLog* log, wStream* s, LICENSE_BLOB* blob,
                                                          UINT32* ModulusLength)
 {
@@ -1753,7 +1836,7 @@ void license_free_scope_list(SCOPE_LIST* scopeList)
 	if (!scopeList)
 		return;
 
-	license_scope_list_resize(scopeList, 0);
+	(void)license_scope_list_resize(scopeList, 0);
 	free(scopeList);
 }
 
@@ -1809,6 +1892,7 @@ error:
 	return FALSE;
 }
 
+WINPR_ATTR_NODISCARD
 static BOOL license_check_preferred_alg(rdpLicense* license, UINT32 PreferredKeyExchangeAlg,
                                         const char* where)
 {
@@ -1975,6 +2059,7 @@ BOOL license_write_license_request_packet(const rdpLicense* license, wStream* s)
 	return TRUE;
 }
 
+WINPR_ATTR_NODISCARD
 static BOOL license_send_license_request_packet(rdpLicense* license)
 {
 	UINT16 sec_flags = 0;
@@ -2104,6 +2189,7 @@ fail:
 	return FALSE;
 }
 
+WINPR_ATTR_NODISCARD
 static BOOL license_read_encrypted_blob(const rdpLicense* license, wStream* s, LICENSE_BLOB* target)
 {
 	UINT16 wBlobType = 0;
@@ -2264,7 +2350,8 @@ BOOL license_read_new_or_upgrade_license_packet(rdpLicense* license, wStream* s)
 		goto fail;
 
 	license->type = LICENSE_TYPE_ISSUED;
-	ret = license_set_state(license, LICENSE_STATE_COMPLETED);
+	license_set_state(license, LICENSE_STATE_COMPLETED);
+	ret = TRUE;
 
 	if (!license->rdp->settings->OldLicenseBehaviour)
 		ret = saveCal(license->log, license->rdp->settings, Stream_Pointer(licenseStream),
@@ -2307,7 +2394,8 @@ BOOL license_read_error_alert_packet(rdpLicense* license, wStream* s)
 	if (dwErrorCode == STATUS_VALID_CLIENT)
 	{
 		license->type = LICENSE_TYPE_NONE;
-		return license_set_state(license, LICENSE_STATE_COMPLETED);
+		license_set_state(license, LICENSE_STATE_COMPLETED);
+		return TRUE;
 	}
 
 	switch (dwStateTransition)
@@ -2849,7 +2937,7 @@ LICENSE_TYPE license_get_type(const rdpLicense* license)
 	return license->type;
 }
 
-BOOL license_set_state(rdpLicense* license, LICENSE_STATE state)
+void license_set_state(rdpLicense* license, LICENSE_STATE state)
 {
 	WINPR_ASSERT(license);
 	license->state = state;
@@ -2862,8 +2950,6 @@ BOOL license_set_state(rdpLicense* license, LICENSE_STATE state)
 			license->type = LICENSE_TYPE_INVALID;
 			break;
 	}
-
-	return TRUE;
 }
 
 const char* license_get_state_string(LICENSE_STATE state)
@@ -2897,9 +2983,11 @@ BOOL license_server_send_request(rdpLicense* license)
 		return FALSE;
 	if (!license_send_license_request_packet(license))
 		return FALSE;
-	return license_set_state(license, LICENSE_STATE_REQUEST);
+	license_set_state(license, LICENSE_STATE_REQUEST);
+	return TRUE;
 }
 
+WINPR_ATTR_NODISCARD
 static BOOL license_set_string(wLog* log, const char* what, const char* value, BYTE** bdst,
                                UINT32* dstLen)
 {
@@ -3013,7 +3101,8 @@ BOOL license_server_configure(rdpLicense* license)
 			return FALSE;
 	}
 
-	return license_set_state(license, LICENSE_STATE_CONFIGURED);
+	license_set_state(license, LICENSE_STATE_CONFIGURED);
+	return TRUE;
 }
 
 rdpLicense* license_get(rdpContext* context)
