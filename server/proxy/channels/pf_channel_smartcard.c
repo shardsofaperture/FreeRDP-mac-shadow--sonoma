@@ -274,12 +274,15 @@ static void channel_stop_and_wait(pf_channel_client_context* scard, BOOL reset)
 	if (scard->callctx)
 		smartcard_call_context_signal_stop(scard->callctx, FALSE);
 
-	while (ArrayList_Count(scard->workObjects) > 0)
+	if (scard->workObjects)
 	{
-		PTP_WORK work = ArrayList_GetItem(scard->workObjects, 0);
-		if (!work)
-			continue;
-		WaitForThreadpoolWorkCallbacks(work, TRUE);
+		while (ArrayList_Count(scard->workObjects) > 0)
+		{
+			PTP_WORK work = ArrayList_GetItem(scard->workObjects, 0);
+			if (!work)
+				continue;
+			WaitForThreadpoolWorkCallbacks(work, TRUE);
+		}
 	}
 
 	if (scard->callctx)
@@ -343,13 +346,10 @@ static void work_object_free(void* arg)
 
 BOOL pf_channel_smartcard_client_new(pClientContext* pc)
 {
-	pf_channel_client_context* scard = nullptr;
-	wObject* obj = nullptr;
-
 	WINPR_ASSERT(pc);
 	WINPR_ASSERT(pc->interceptContextMap);
 
-	scard = calloc(1, sizeof(pf_channel_client_context));
+	pf_channel_client_context* scard = calloc(1, sizeof(pf_channel_client_context));
 	if (!scard)
 		return FALSE;
 	scard->base.free = pf_channel_scard_client_context_free;
@@ -360,11 +360,18 @@ BOOL pf_channel_smartcard_client_new(pClientContext* pc)
 	scard->workObjects = ArrayList_New(TRUE);
 	if (!scard->workObjects)
 		goto fail;
-	obj = ArrayList_Object(scard->workObjects);
-	WINPR_ASSERT(obj);
-	obj->fnObjectFree = work_object_free;
 
-	return HashTable_Insert(pc->interceptContextMap, SCARD_SVC_CHANNEL_NAME, scard);
+	{
+		wObject* obj = ArrayList_Object(scard->workObjects);
+		WINPR_ASSERT(obj);
+		obj->fnObjectFree = work_object_free;
+	}
+
+	if (!HashTable_Insert(pc->interceptContextMap, SCARD_SVC_CHANNEL_NAME, scard))
+		goto fail;
+
+	// NOLINTNEXTLINE(clang-analyzer-unix.Malloc): HashTable_Insert takes ownership of rdpdr
+	return TRUE;
 fail:
 	pf_channel_scard_client_context_free(&scard->base);
 	return FALSE;
