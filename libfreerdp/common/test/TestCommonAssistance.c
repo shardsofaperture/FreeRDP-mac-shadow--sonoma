@@ -286,11 +286,11 @@ static BOOL test_msrsc_incident_file_type2(wLog* log)
 
 int TestCommonAssistance(int argc, char* argv[])
 {
-	wLog* log = nullptr;
 	WINPR_UNUSED(argc);
 	WINPR_UNUSED(argv);
-	log = WLog_Get(__func__);
-	winpr_InitializeSSL(WINPR_SSL_INIT_DEFAULT);
+	wLog* log = WLog_Get(__func__);
+	if (!winpr_InitializeSSL(WINPR_SSL_INIT_DEFAULT))
+		return -1;
 
 	for (size_t x = 0; x < ARRAYSIZE(fail_tests); x++)
 	{

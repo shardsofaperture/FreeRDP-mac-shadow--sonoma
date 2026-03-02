@@ -1479,7 +1479,9 @@ int main(int argc, char* argv[])
 	}
 
 	WTSRegisterWtsApiFunctionTable(FreeRDP_InitWtsApi());
-	winpr_InitializeSSL(WINPR_SSL_INIT_DEFAULT);
+	if (!winpr_InitializeSSL(WINPR_SSL_INIT_DEFAULT))
+		return -1;
+
 	instance = freerdp_listener_new();
 
 	if (!instance)
