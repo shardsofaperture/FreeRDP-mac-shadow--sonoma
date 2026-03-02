@@ -348,7 +348,9 @@ static UINT location_process_message(location_server* location)
 		goto out;
 	}
 
-	Stream_SetLength(s, BytesReturned);
+	if (!Stream_SetLength(s, BytesReturned))
+		goto out;
+
 	if (!Stream_CheckAndLogRequiredLength(TAG, s, LOCATION_HEADER_SIZE))
 		return ERROR_NO_DATA;
 

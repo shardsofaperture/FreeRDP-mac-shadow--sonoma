@@ -1551,7 +1551,9 @@ BOOL rdp_decrypt(rdpRdp* rdp, wStream* s, UINT16* pLength, UINT16 securityFlags)
 		if (!security_fips_check_signature(Stream_ConstPointer(s), (size_t)padLength, sig, 8, rdp))
 			goto unlock;
 
-		Stream_SetLength(s, Stream_Length(s) - pad);
+		if (!Stream_SetLength(s, Stream_Length(s) - pad))
+			goto unlock;
+
 		*pLength = (UINT16)padLength;
 	}
 	else

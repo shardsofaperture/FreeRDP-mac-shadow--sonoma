@@ -400,7 +400,12 @@ static DWORD WINAPI audin_server_thread_func(LPVOID arg)
 			break;
 		}
 
-		Stream_SetLength(s, BytesReturned);
+		if (!Stream_SetLength(s, BytesReturned))
+		{
+			error = ERROR_INTERNAL_ERROR;
+			break;
+		}
+
 		if (!Stream_CheckAndLogRequiredLengthWLog(audin->log, s, SNDIN_HEADER_SIZE))
 		{
 			error = ERROR_INTERNAL_ERROR;

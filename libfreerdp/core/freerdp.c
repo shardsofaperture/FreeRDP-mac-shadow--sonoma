@@ -268,7 +268,11 @@ BOOL freerdp_connect(freerdp* instance)
 			record.data = Stream_Buffer(s);
 			if (!pcap_get_next_record_content(update->pcap_rfx, &record))
 				break;
-			Stream_SetLength(s, record.length);
+			if (!Stream_SetLength(s, record.length))
+			{
+				status = FALSE;
+				continue;
+			}
 			Stream_ResetPosition(s);
 
 			if (!update_begin_paint(&update->common))

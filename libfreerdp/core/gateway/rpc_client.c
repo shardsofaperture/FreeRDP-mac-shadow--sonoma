@@ -88,33 +88,15 @@ static const char* rpc_client_state_str(RPC_CLIENT_STATE state)
 	return str;
 }
 
-static void rpc_pdu_reset(RPC_PDU* pdu)
+WINPR_ATTR_NODISCARD
+static BOOL rpc_pdu_reset(RPC_PDU* pdu)
 {
+	WINPR_ASSERT(pdu);
 	pdu->Type = 0;
 	pdu->Flags = 0;
 	pdu->CallId = 0;
 	Stream_ResetPosition(pdu->s);
-	Stream_SetLength(pdu->s, 0);
-}
-
-static RPC_PDU* rpc_pdu_new(void)
-{
-	RPC_PDU* pdu = nullptr;
-	pdu = (RPC_PDU*)malloc(sizeof(RPC_PDU));
-
-	if (!pdu)
-		return nullptr;
-
-	pdu->s = Stream_New(nullptr, 4096);
-
-	if (!pdu->s)
-	{
-		free(pdu);
-		return nullptr;
-	}
-
-	rpc_pdu_reset(pdu);
-	return pdu;
+	return Stream_SetLength(pdu->s, 0);
 }
 
 static void rpc_pdu_free(RPC_PDU* pdu)
@@ -124,6 +106,29 @@ static void rpc_pdu_free(RPC_PDU* pdu)
 
 	Stream_Free(pdu->s, TRUE);
 	free(pdu);
+}
+
+WINPR_ATTR_MALLOC(rpc_pdu_free, 1)
+static RPC_PDU* rpc_pdu_new(void)
+{
+	RPC_PDU* pdu = (RPC_PDU*)calloc(1, sizeof(RPC_PDU));
+
+	if (!pdu)
+		return nullptr;
+
+	pdu->s = Stream_New(nullptr, 4096);
+
+	if (!pdu->s)
+		goto fail;
+
+	if (!rpc_pdu_reset(pdu))
+		goto fail;
+
+	return pdu;
+
+fail:
+	rpc_pdu_free(pdu);
+	return nullptr;
 }
 
 static int rpc_client_receive_pipe_write(RpcClient* client, const BYTE* buffer, size_t length)
@@ -477,7 +482,8 @@ static int rpc_client_recv_fragment(rdpRpc* rpc, wStream* fragment)
 
 				if (rpc_client_recv_pdu(rpc, pdu) < 0)
 					goto fail;
-				rpc_pdu_reset(pdu);
+				if (!rpc_pdu_reset(pdu))
+					goto fail;
 				rpc->StubFragCount = 0;
 				rpc->StubCallId = 0;
 			}
@@ -517,7 +523,8 @@ static int rpc_client_recv_fragment(rdpRpc* rpc, wStream* fragment)
 			if (rpc_client_recv_pdu(rpc, pdu) < 0)
 				goto fail;
 
-			rpc_pdu_reset(pdu);
+			if (!rpc_pdu_reset(pdu))
+				goto fail;
 		}
 		else
 		{
@@ -543,7 +550,8 @@ static int rpc_client_recv_fragment(rdpRpc* rpc, wStream* fragment)
 		if (rpc_client_recv_pdu(rpc, pdu) < 0)
 			goto fail;
 
-		rpc_pdu_reset(pdu);
+		if (!rpc_pdu_reset(pdu))
+			goto fail;
 		goto success;
 	}
 	else if (header.common.ptype == PTYPE_FAULT)

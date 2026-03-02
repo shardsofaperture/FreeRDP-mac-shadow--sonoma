@@ -271,7 +271,9 @@ static UINT mouse_cursor_process_message(mouse_cursor_server* mouse_cursor)
 		goto out;
 	}
 
-	Stream_SetLength(s, BytesReturned);
+	if (!Stream_SetLength(s, BytesReturned))
+		goto out;
+
 	if (!Stream_CheckAndLogRequiredLength(TAG, s, RDPEMSC_HEADER_SIZE))
 		return ERROR_NO_DATA;
 

@@ -298,7 +298,9 @@ static UINT enumerator_process_message(enumerator_server* enumerator)
 		goto out;
 	}
 
-	Stream_SetLength(s, BytesReturned);
+	if (!Stream_SetLength(s, BytesReturned))
+		return ERROR_INTERNAL_ERROR;
+
 	if (!Stream_CheckAndLogRequiredLength(TAG, s, CAM_HEADER_SIZE))
 		return ERROR_NO_DATA;
 

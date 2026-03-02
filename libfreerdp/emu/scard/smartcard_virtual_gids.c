@@ -279,7 +279,8 @@ static vgidsEF* vgids_ef_new(vgidsContext* ctx, USHORT id)
 		WLog_ERR(TAG, "Failed to create file data stream");
 		goto create_failed;
 	}
-	Stream_SetLength(ef->data, 0);
+	if (!Stream_SetLength(ef->data, 0))
+		goto create_failed;
 
 	if (!ArrayList_Append(ctx->files, ef))
 	{
@@ -1129,7 +1130,9 @@ static BOOL vgids_perform_digital_signature(vgidsContext* context)
 				goto sign_failed;
 			}
 
-			Stream_SetLength(context->responseData, sigSize);
+			if (!Stream_SetLength(context->responseData, sigSize))
+				goto sign_failed;
+
 			EVP_PKEY_CTX_free(ctx);
 			break;
 		}
@@ -1204,9 +1207,8 @@ static BOOL vgids_perform_decrypt(vgidsContext* context)
 			goto decrypt_failed;
 		}
 
-		Stream_SetLength(context->responseData, outlen);
+		rc = Stream_SetLength(context->responseData, outlen);
 	}
-	rc = TRUE;
 
 decrypt_failed:
 	EVP_PKEY_CTX_free(ctx);

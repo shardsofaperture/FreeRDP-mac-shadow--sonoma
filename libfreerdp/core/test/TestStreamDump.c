@@ -48,7 +48,8 @@ static BOOL test_entry_read_write(void)
 	if (winpr_RAND(Stream_Buffer(sw), Stream_Capacity(sw)) < 0)
 		goto fail;
 	entrysize += Stream_Capacity(sw);
-	Stream_SetLength(sw, Stream_Capacity(sw));
+	if (!Stream_SetLength(sw, Stream_Capacity(sw)))
+		goto fail;
 
 	fp = fopen(name, "wb");
 	if (!fp)
