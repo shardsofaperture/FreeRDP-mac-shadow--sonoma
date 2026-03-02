@@ -271,7 +271,8 @@ BOOL pf_channel_smartcard_server_handle(WINPR_ATTR_UNUSED pServerContext* ps,
 static void channel_stop_and_wait(pf_channel_client_context* scard, BOOL reset)
 {
 	WINPR_ASSERT(scard);
-	smartcard_call_context_signal_stop(scard->callctx, FALSE);
+	if (scard->callctx)
+		smartcard_call_context_signal_stop(scard->callctx, FALSE);
 
 	while (ArrayList_Count(scard->workObjects) > 0)
 	{
@@ -281,7 +282,8 @@ static void channel_stop_and_wait(pf_channel_client_context* scard, BOOL reset)
 		WaitForThreadpoolWorkCallbacks(work, TRUE);
 	}
 
-	smartcard_call_context_signal_stop(scard->callctx, reset);
+	if (scard->callctx)
+		smartcard_call_context_signal_stop(scard->callctx, reset);
 }
 
 static void pf_channel_scard_client_context_free(InterceptContextMapEntry* base)
