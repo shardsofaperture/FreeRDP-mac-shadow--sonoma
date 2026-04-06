@@ -49,6 +49,20 @@ set(SRCS
     sdl_context.cpp
 )
 
+if(WITH_WIN_CONSOLE)
+  if(MSVC)
+    list(APPEND SRCS ../common/sdl-freerdp.manifest)
+  else()
+    # TODO: Remove when upstream issue is fixed
+    # https://gitlab.kitware.com/cmake/cmake/-/issues/23244
+    file(CONFIGURE
+      OUTPUT sdl-freerdp.rc
+      CONTENT "1 24 \"${CMAKE_CURRENT_SOURCE_DIR}/../common/sdl-freerdp.manifest\""
+    )
+    list(APPEND SRCS sdl-freerdp.rc)
+  endif()
+endif()
+
 list(
   APPEND
   LIBS

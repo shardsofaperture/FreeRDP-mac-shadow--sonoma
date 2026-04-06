@@ -22,6 +22,20 @@ include_directories(..)
 
 set(${MODULE_PREFIX}_SRCS wfreerdp.c wfreerdp.h ../resource/wfreerdp.rc)
 
+if(WITH_WIN_CONSOLE)
+  if(MSVC)
+    list(APPEND ${MODULE_PREFIX}_SRCS wfreerdp.manifest)
+  else()
+    # TODO: Remove when upstream issue is fixed
+    # https://gitlab.kitware.com/cmake/cmake/-/issues/23244
+    file(CONFIGURE
+      OUTPUT wfreerdp-cli.rc
+      CONTENT "1 24 \"${CMAKE_CURRENT_SOURCE_DIR}/../resource/wfreerdp.manifest\""
+    )
+    list(APPEND ${MODULE_PREFIX}_SRCS wfreerdp-cli.rc)
+  endif()
+endif()
+
 addtargetwithresourcefile(${MODULE_NAME} "${WIN32_GUI_FLAG}" "${FREERDP_VERSION}" ${MODULE_PREFIX}_SRCS)
 
 set(${MODULE_PREFIX}_LIBS ${${MODULE_PREFIX}_LIBS} wfreerdp-client)

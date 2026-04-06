@@ -74,6 +74,7 @@
 #include "sdl_monitor.hpp"
 #include "sdl_pointer.hpp"
 #include "sdl_prefs.hpp"
+#include "sdl_win32_console.hpp"
 #include "sdl_utils.hpp"
 
 #if defined(_WIN32)
@@ -589,6 +590,8 @@ static void SDLCALL rdp_file_cb(void* userdata, const char* const* filelist,
 
 int main(int argc, char* argv[])
 {
+	sdl::win32::release_transient_console();
+
 	int rc = -1;
 	RDP_CLIENT_ENTRY_POINTS clientEntryPoints = {};
 

@@ -60,6 +60,7 @@
 #include "sdl_prefs.hpp"
 #include "dialogs/sdl_dialogs.hpp"
 #include "scoped_guard.hpp"
+#include "sdl_win32_console.hpp"
 
 #include <sdl_config.hpp>
 
@@ -1657,6 +1658,8 @@ static void SDLCALL winpr_LogOutputFunction(void* userdata, int category, SDL_Lo
 
 int main(int argc, char* argv[])
 {
+	sdl::win32::release_transient_console();
+
 	int rc = -1;
 	int status = 0;
 	RDP_CLIENT_ENTRY_POINTS clientEntryPoints = {};
