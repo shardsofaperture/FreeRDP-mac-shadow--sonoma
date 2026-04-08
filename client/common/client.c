@@ -113,9 +113,6 @@ static BOOL freerdp_client_common_new(freerdp* instance, rdpContext* context)
 	pEntryPoints = instance->pClientEntryPoints;
 	WINPR_ASSERT(pEntryPoints);
 
-	if (context->pubSub)
-		PubSub_SubscribeUserNotification(context->pubSub, client_cli_user_notification);
-
 	return IFCALLRESULT(TRUE, pEntryPoints->ClientNew, instance, context);
 }
 
@@ -209,7 +206,16 @@ int freerdp_client_start(rdpContext* context)
 		return ERROR_BAD_ARGUMENTS;
 
 	if (freerdp_settings_get_bool(context->settings, FreeRDP_UseCommonStdioCallbacks))
+	{
 		set_default_callbacks(context->instance);
+		if (context->pubSub)
+		{
+			const int rc =
+			    PubSub_SubscribeUserNotification(context->pubSub, client_cli_user_notification);
+			if (rc < 0)
+				return FALSE;
+		}
+	}
 
 #ifdef WITH_SSO_MIB
 	rdpClientContext* client_context = (rdpClientContext*)context;
@@ -231,6 +237,9 @@ int freerdp_client_stop(rdpContext* context)
 
 	pEntryPoints = context->instance->pClientEntryPoints;
 	const int rc = IFCALLRESULT(CHANNEL_RC_OK, pEntryPoints->ClientStop, context);
+
+	if (freerdp_settings_get_bool(context->settings, FreeRDP_UseCommonStdioCallbacks))
+		PubSub_UnsubscribeUserNotification(context->pubSub, client_cli_user_notification);
 
 #ifdef WITH_SSO_MIB
 	rdpClientContext* client_context = (rdpClientContext*)context;
