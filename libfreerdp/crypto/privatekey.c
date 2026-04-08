@@ -119,7 +119,7 @@ fail:
 }
 #endif
 
-static int pem_pwd_cb(char* buf, int size, int rwflag, void* userdata)
+static int pem_pwd_cb(char* buf, int size, WINPR_ATTR_UNUSED int rwflag, void* userdata)
 {
 	const char* pwd = userdata;
 	if (!pwd || (size < 0))
