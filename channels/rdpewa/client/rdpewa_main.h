@@ -1,8 +1,6 @@
 /**
  * FreeRDP: A Remote Desktop Protocol Implementation
- * SDL Client Channels
- *
- * Copyright 2022 Armin Novak <armin.novak@thincast.com>
+ * WebAuthn Virtual Channel Extension [MS-RDPEWA]
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,15 +15,31 @@
  * limitations under the License.
  */
 
-#pragma once
+#ifndef FREERDP_CHANNEL_RDPEWA_CLIENT_MAIN_H
+#define FREERDP_CHANNEL_RDPEWA_CLIENT_MAIN_H
 
+#include <freerdp/config.h>
+
+#include <freerdp/dvc.h>
+#include <freerdp/types.h>
+#include <freerdp/addin.h>
 #include <freerdp/freerdp.h>
+#include <freerdp/channels/log.h>
 #include <freerdp/client/channels.h>
-#include <freerdp/event.h>
 
-int sdl_on_channel_connected(freerdp* instance, const char* name, void* pInterface);
-int sdl_on_channel_disconnected(freerdp* instance, const char* name, void* pInterface);
+#define TAG CHANNELS_TAG("rdpewa.client")
 
-void sdl_OnChannelConnectedEventHandler(void* context, const ChannelConnectedEventArgs* e);
-void sdl_OnChannelDisconnectedEventHandler(void* context, const ChannelDisconnectedEventArgs* e);
-void sdl_OnUserNotificationEventHandler(void* context, const UserNotificationEventArgs* e);
+typedef struct
+{
+	GENERIC_DYNVC_PLUGIN base;
+	rdpContext* rdp_context;
+} RDPEWA_PLUGIN;
+
+/** @brief Per-channel callback with async work tracking */
+typedef struct
+{
+	GENERIC_CHANNEL_CALLBACK base;
+	HANDLE workerThread;
+} RDPEWA_CHANNEL_CALLBACK;
+
+#endif /* FREERDP_CHANNEL_RDPEWA_CLIENT_MAIN_H */
