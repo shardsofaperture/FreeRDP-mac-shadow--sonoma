@@ -1048,7 +1048,7 @@ bool SdlContext::handleEvent(const SDL_MouseMotionEvent& ev)
 	SDL_Event copy{};
 	copy.motion = ev;
 	if (!eventToPixelCoordinates(ev.windowID, copy))
-		return false;
+		return true;
 	removeLocalScaling(copy.motion.x, copy.motion.y);
 	removeLocalScaling(copy.motion.xrel, copy.motion.yrel);
 	applyMonitorOffset(copy.motion.windowID, copy.motion.x, copy.motion.y);
@@ -1061,7 +1061,7 @@ bool SdlContext::handleEvent(const SDL_MouseWheelEvent& ev)
 	SDL_Event copy{};
 	copy.wheel = ev;
 	if (!eventToPixelCoordinates(ev.windowID, copy))
-		return false;
+		return true;
 	removeLocalScaling(copy.wheel.mouse_x, copy.wheel.mouse_y);
 	return SdlTouch::handleEvent(this, copy.wheel);
 }
@@ -1168,7 +1168,7 @@ bool SdlContext::handleEvent(const SDL_MouseButtonEvent& ev)
 	SDL_Event copy = {};
 	copy.button = ev;
 	if (!eventToPixelCoordinates(ev.windowID, copy))
-		return false;
+		return true;
 	removeLocalScaling(copy.button.x, copy.button.y);
 	applyMonitorOffset(copy.button.windowID, copy.button.x, copy.button.y);
 	return SdlTouch::handleEvent(this, copy.button);
@@ -1179,7 +1179,7 @@ bool SdlContext::handleEvent(const SDL_TouchFingerEvent& ev)
 	SDL_Event copy{};
 	copy.tfinger = ev;
 	if (!eventToPixelCoordinates(ev.windowID, copy))
-		return false;
+		return true;
 	removeLocalScaling(copy.tfinger.dx, copy.tfinger.dy);
 	removeLocalScaling(copy.tfinger.x, copy.tfinger.y);
 	applyMonitorOffset(copy.tfinger.windowID, copy.tfinger.x, copy.tfinger.y);
@@ -1248,7 +1248,7 @@ bool SdlContext::eventToPixelCoordinates(SDL_WindowID id, SDL_Event& ev)
 	/* Ignore errors here, sometimes SDL has no renderer */
 	auto renderer = SDL_GetRenderer(w->window());
 	if (!renderer)
-		return true;
+		return false;
 	return SDL_ConvertEventToRenderCoordinates(renderer, &ev);
 }
 
