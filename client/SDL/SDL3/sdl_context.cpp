@@ -1045,6 +1045,8 @@ bool SdlContext::moveMouseTo(const SDL_FPoint& pos)
 
 bool SdlContext::handleEvent(const SDL_MouseMotionEvent& ev)
 {
+	if (!getWindowForId(ev.windowID))
+		return true; /* Event for an untracked window (e.g. closed dialog) */
 	SDL_Event copy{};
 	copy.motion = ev;
 	if (!eventToPixelCoordinates(ev.windowID, copy))
@@ -1058,6 +1060,8 @@ bool SdlContext::handleEvent(const SDL_MouseMotionEvent& ev)
 
 bool SdlContext::handleEvent(const SDL_MouseWheelEvent& ev)
 {
+	if (!getWindowForId(ev.windowID))
+		return true;
 	SDL_Event copy{};
 	copy.wheel = ev;
 	if (!eventToPixelCoordinates(ev.windowID, copy))
@@ -1165,6 +1169,8 @@ bool SdlContext::handleEvent(const SDL_DisplayEvent& ev)
 
 bool SdlContext::handleEvent(const SDL_MouseButtonEvent& ev)
 {
+	if (!getWindowForId(ev.windowID))
+		return true;
 	SDL_Event copy = {};
 	copy.button = ev;
 	if (!eventToPixelCoordinates(ev.windowID, copy))
@@ -1176,6 +1182,8 @@ bool SdlContext::handleEvent(const SDL_MouseButtonEvent& ev)
 
 bool SdlContext::handleEvent(const SDL_TouchFingerEvent& ev)
 {
+	if (!getWindowForId(ev.windowID))
+		return true;
 	SDL_Event copy{};
 	copy.tfinger = ev;
 	if (!eventToPixelCoordinates(ev.windowID, copy))
