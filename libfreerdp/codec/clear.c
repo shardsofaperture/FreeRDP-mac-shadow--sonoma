@@ -59,9 +59,8 @@ struct S_CLEAR_CONTEXT
 	UINT32 seqNumber;
 	BYTE* TempBuffer;
 	size_t TempSize;
-	UINT32 nTempStep;
-	UINT32 TempFormat;
 	UINT32 format;
+	BOOL formatSet;
 	CLEAR_GLYPH_ENTRY GlyphCache[4000];
 	UINT32 VBarStorageCursor;
 	CLEAR_VBAR_ENTRY VBarStorage[CLEARCODEC_VBAR_SIZE];
@@ -1050,11 +1049,28 @@ static BOOL clear_decompress_glyph_data(CLEAR_CONTEXT* WINPR_RESTRICT clear,
 	return TRUE;
 }
 
-static inline BOOL updateContextFormat(CLEAR_CONTEXT* WINPR_RESTRICT clear, UINT32 DstFormat)
+static inline BOOL updateContextFormat(CLEAR_CONTEXT* WINPR_RESTRICT clear, UINT32 DstFormat,
+                                       BOOL fromNew)
 {
 	if (!clear || !clear->nsc)
 		return FALSE;
 
+	if (!fromNew)
+	{
+		if (clear->formatSet)
+		{
+			if (clear->format != DstFormat)
+			{
+				WLog_Print(
+				    clear->log, WLOG_ERROR,
+				    "Color format changed from %s to %s during decompression calls, usage error!",
+				    FreeRDPGetColorFormatName(clear->format), FreeRDPGetColorFormatName(DstFormat));
+				return FALSE;
+			}
+		}
+		else
+			clear->formatSet = TRUE;
+	}
 	clear->format = DstFormat;
 	return nsc_context_set_parameters(clear->nsc, NSC_COLOR_FORMAT, DstFormat);
 }
@@ -1072,7 +1088,6 @@ INT32 clear_decompress(CLEAR_CONTEXT* WINPR_RESTRICT clear, const BYTE* WINPR_RE
 	UINT32 bandsByteCount = 0;
 	UINT32 subcodecByteCount = 0;
 	wStream sbuffer = WINPR_C_ARRAY_INIT;
-	wStream* s = nullptr;
 	BYTE* glyphData = nullptr;
 
 	if (!pDstData)
@@ -1098,7 +1113,7 @@ INT32 clear_decompress(CLEAR_CONTEXT* WINPR_RESTRICT clear, const BYTE* WINPR_RE
 		return -1006;
 	}
 
-	s = Stream_StaticConstInit(&sbuffer, pSrcData, SrcSize);
+	wStream* s = Stream_StaticConstInit(&sbuffer, pSrcData, SrcSize);
 
 	if (!s)
 		return -2005;
@@ -1106,7 +1121,7 @@ INT32 clear_decompress(CLEAR_CONTEXT* WINPR_RESTRICT clear, const BYTE* WINPR_RE
 	if (!Stream_CheckAndLogRequiredLengthWLog(clear->log, s, 2))
 		goto fail;
 
-	if (!updateContextFormat(clear, DstFormat))
+	if (!updateContextFormat(clear, DstFormat, FALSE))
 		goto fail;
 
 	Stream_Read_UINT8(s, glyphFlags);
@@ -1254,6 +1269,7 @@ fail:
 	return rc;
 }
 
+#if !defined(WITHOUT_FREERDP_3x_DEPRECATED)
 int clear_compress(WINPR_ATTR_UNUSED CLEAR_CONTEXT* WINPR_RESTRICT clear,
                    WINPR_ATTR_UNUSED const BYTE* WINPR_RESTRICT pSrcData,
                    WINPR_ATTR_UNUSED UINT32 SrcSize,
@@ -1263,6 +1279,7 @@ int clear_compress(WINPR_ATTR_UNUSED CLEAR_CONTEXT* WINPR_RESTRICT clear,
 	WLog_Print(clear->log, WLOG_ERROR, "TODO: not implemented!");
 	return 1;
 }
+#endif
 
 BOOL clear_context_reset(CLEAR_CONTEXT* WINPR_RESTRICT clear)
 {
@@ -1290,7 +1307,7 @@ CLEAR_CONTEXT* clear_context_new(BOOL Compressor)
 	if (!clear->nsc)
 		goto error_nsc;
 
-	if (!updateContextFormat(clear, PIXEL_FORMAT_BGRX32))
+	if (!updateContextFormat(clear, PIXEL_FORMAT_BGRX32, TRUE))
 		goto error_nsc;
 
 	if (!clear_resize_buffer(clear, 512, 512))

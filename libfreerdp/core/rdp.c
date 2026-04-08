@@ -1107,22 +1107,40 @@ static BOOL rdp_recv_server_status_info_pdu(rdpRdp* rdp, wStream* s)
 	return TRUE;
 }
 
+static void log_monitor(size_t idx, const MONITOR_DEF* monitor, wLog* log, DWORD level)
+{
+	WINPR_ASSERT(monitor);
+
+	WLog_Print(log, level, "[%" PRIuz "] {%dx%d-%dx%d} [0x%08" PRIx32 "]", idx, monitor->left,
+	           monitor->top, monitor->right, monitor->bottom, monitor->flags);
+}
+
+static void log_monitor_configuration(wLog* log, const MONITOR_DEF* monitors, size_t count)
+{
+	const DWORD level = WLOG_DEBUG;
+	WLog_Print(log, level, "[BEGIN] RemoteMonitors[%" PRIuz "]", count);
+	for (size_t x = 0; x < count; x++)
+	{
+		const MONITOR_DEF* monitor = &monitors[x];
+		log_monitor(x, monitor, log, level);
+	}
+	WLog_Print(log, level, "[END] RemoteMonitors[%" PRIuz "]", count);
+}
+
 static BOOL rdp_recv_monitor_layout_pdu(rdpRdp* rdp, wStream* s)
 {
-	UINT32 monitorCount = 0;
-	MONITOR_DEF* monitorDefArray = nullptr;
 	BOOL ret = TRUE;
 
 	WINPR_ASSERT(rdp);
 	if (!Stream_CheckAndLogRequiredLengthWLog(rdp->log, s, 4))
 		return FALSE;
 
-	Stream_Read_UINT32(s, monitorCount); /* monitorCount (4 bytes) */
+	const UINT32 monitorCount = Stream_Get_UINT32(s); /* monitorCount (4 bytes) */
 
 	if (!Stream_CheckAndLogRequiredLengthOfSizeWLog(rdp->log, s, monitorCount, 20ull))
 		return FALSE;
 
-	monitorDefArray = (MONITOR_DEF*)calloc(monitorCount, sizeof(MONITOR_DEF));
+	MONITOR_DEF* monitorDefArray = (MONITOR_DEF*)calloc(monitorCount, sizeof(MONITOR_DEF));
 
 	if (!monitorDefArray)
 		return FALSE;
@@ -1137,6 +1155,7 @@ static BOOL rdp_recv_monitor_layout_pdu(rdpRdp* rdp, wStream* s)
 		Stream_Read_UINT32(s, monitor->flags); /* flags (4 bytes) */
 	}
 
+	log_monitor_configuration(rdp->log, monitorDefArray, monitorCount);
 	IFCALLRET(rdp->update->RemoteMonitors, ret, rdp->context, monitorCount, monitorDefArray);
 	free(monitorDefArray);
 	if (!ret)
