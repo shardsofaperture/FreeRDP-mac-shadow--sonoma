@@ -48,8 +48,8 @@ int SdlSelectList::run()
 				throw;
 
 			SDL_Event event = {};
-			if (!SDL_WaitEvent(&event))
-				throw;
+			if (!SDL_WaitEventTimeout(&event, 30))
+				continue;
 			do
 			{
 				switch (event.type)
@@ -92,6 +92,11 @@ int SdlSelectList::run()
 								running = false;
 								res = static_cast<int>(CurrentActiveTextInput);
 								break;
+							case SDL_EVENT_WINDOW_OCCLUDED:
+							case SDL_EVENT_WINDOW_MINIMIZED:
+							case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+							case SDL_EVENT_TERMINATING:
+							case SDL_EVENT_WINDOW_DESTROYED:
 							case SDLK_ESCAPE:
 								running = false;
 								res = INPUT_BUTTON_CANCEL;
@@ -138,7 +143,8 @@ int SdlSelectList::run()
 					default:
 						break;
 				}
-			} while (SDL_PollEvent(&event));
+			} while (running && SDL_PollEvent(&event));
+
 			reset_highlight();
 			if (CurrentActiveTextInput >= 0)
 			{
@@ -146,10 +152,10 @@ int SdlSelectList::run()
 				if (!cur.highlight(true))
 					throw;
 			}
-
-			if (!update())
-				throw;
 		}
+
+		SDL_PumpEvents();
+		SDL_FlushEvents(SDL_EVENT_FIRST, SDL_EVENT_USER);
 	}
 	catch (...)
 	{

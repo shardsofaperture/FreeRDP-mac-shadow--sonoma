@@ -571,6 +571,10 @@ BOOL sdl_auth_dialog_show(const SDL_UserAuthArg* args)
 
 	std::vector<std::string> result;
 
+	auto parent = SDL_GetMouseFocus();
+	if (!parent)
+		parent = SDL_GetKeyboardFocus();
+
 	if (!prompt.empty())
 	{
 		std::vector<std::string> initial{ args->user ? args->user : "Smartcard", "" };
@@ -612,6 +616,7 @@ BOOL sdl_auth_dialog_show(const SDL_UserAuthArg* args)
 				break;
 		}
 		SdlInputWidgetPairList ilist(args->title, prompt, initial, flags, selected);
+		ilist.parent(parent);
 		rc = ilist.run(result);
 	}
 
