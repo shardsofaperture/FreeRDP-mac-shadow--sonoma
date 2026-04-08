@@ -450,16 +450,19 @@ static void smartcard_msz_dump(wLog* log, DWORD level, const char* prefix, const
 	if (!WLog_IsLevelActive(log, level))
 		return;
 
-	char* msz = WINPR_CXX_COMPAT_CAST(char*, data);
+	char* tmp = nullptr;
+	const char* msz = WINPR_CXX_COMPAT_CAST(const char*, data);
 	size_t mszlen = len;
 	if (wchar)
-		msz = ConvertMszWCharNToUtf8Alloc(data, len, &mszlen);
+	{
+		tmp = ConvertMszWCharNToUtf8Alloc(data, len, &mszlen);
+		msz = tmp;
+	}
 
 	char* array = smartcard_create_msz_dump(msz, mszlen);
 	WLog_Print(log, level, "%s%s", prefix, array);
 	free(array);
-	if (wchar)
-		free(msz);
+	free(tmp);
 }
 
 WINPR_ATTR_MALLOC(free, 1)
