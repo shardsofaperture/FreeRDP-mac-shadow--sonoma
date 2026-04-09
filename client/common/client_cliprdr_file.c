@@ -1683,11 +1683,11 @@ static bool clear_all_selections(CliprdrFileContext* file_context)
 
 BOOL cliprdr_file_context_uninit(CliprdrFileContext* file, CliprdrClientContext* cliprdr)
 {
-	WINPR_ASSERT(file);
-	WINPR_ASSERT(cliprdr);
 
 	// Clear all data before the channel is closed
 	// the cleanup handlers are dependent on a working channel.
+	if (file)
+	{
 #if defined(WITH_FUSE)
 	if (file->inode_table)
 	{
@@ -1701,10 +1701,14 @@ BOOL cliprdr_file_context_uninit(CliprdrFileContext* file, CliprdrClientContext*
 	HashTable_Clear(file->local_streams);
 
 	file->context = nullptr;
+	}
 
+	if (cliprdr)
+	{
 #if defined(WITH_FUSE)
 	cliprdr->ServerFileContentsResponse = nullptr;
 #endif
+	}
 
 	return TRUE;
 }
