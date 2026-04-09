@@ -22,6 +22,7 @@
 
 #include <winpr/cast.h>
 
+#include "../sdl_utils.hpp"
 #include "sdl_widget_list.hpp"
 #include "sdl_input_widget_pair_list.hpp"
 
@@ -164,8 +165,8 @@ int SdlInputWidgetPairList::run(std::vector<std::string>& result)
 				throw;
 
 			SDL_Event event = {};
-			if (!SDL_WaitEvent(&event))
-				throw;
+			if (!SDL_WaitEventTimeout(&event, 30))
+				continue;
 			do
 			{
 				switch (event.type)
@@ -265,6 +266,11 @@ int SdlInputWidgetPairList::run(std::vector<std::string>& result)
 						}
 					}
 					break;
+					case SDL_EVENT_WINDOW_OCCLUDED:
+					case SDL_EVENT_WINDOW_MINIMIZED:
+					case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+					case SDL_EVENT_TERMINATING:
+					case SDL_EVENT_WINDOW_DESTROYED:
 					case SDL_EVENT_QUIT:
 						res = INPUT_BUTTON_CANCEL;
 						running = false;
@@ -272,7 +278,7 @@ int SdlInputWidgetPairList::run(std::vector<std::string>& result)
 					default:
 						break;
 				}
-			} while (SDL_PollEvent(&event));
+			} while (running && SDL_PollEvent(&event));
 
 			if (LastActiveTextInput != m_currentActiveTextInput)
 			{
@@ -306,8 +312,20 @@ int SdlInputWidgetPairList::run(std::vector<std::string>& result)
 	{
 		res = -2;
 	}
+
+	SDL_PumpEvents();
+	SDL_FlushEvents(SDL_EVENT_FIRST, SDL_EVENT_USER);
+
 	if (!SDL_StopTextInput(_window.get()))
 		return -4;
 
 	return res;
+}
+
+void SdlInputWidgetPairList::parent(SDL_Window* parent)
+{
+	if (!parent)
+		return;
+	SDL_SetWindowParent(_window.get(), parent);
+	SDL_SetWindowModal(_window.get(), true);
 }
