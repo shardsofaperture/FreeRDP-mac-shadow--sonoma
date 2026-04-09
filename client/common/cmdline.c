@@ -3290,8 +3290,16 @@ static int parse_audio_mode_options(rdpSettings* settings, const COMMAND_LINE_AR
 	WINPR_ASSERT(arg);
 
 	LONGLONG val = 0;
+	if (!arg->Value)
+		return COMMAND_LINE_ERROR_UNEXPECTED_VALUE;
 
-	if (!value_to_int(arg->Value, &val, 0, UINT32_MAX))
+	if (strcmp(arg->Value, "none") == 0)
+		val = AUDIO_MODE_NONE;
+	else if (strcmp(arg->Value, "redirect") == 0)
+		val = AUDIO_MODE_REDIRECT;
+	else if (strcmp(arg->Value, "server") == 0)
+		val = AUDIO_MODE_PLAY_ON_SERVER;
+	else if (!value_to_int(arg->Value, &val, 0, UINT32_MAX))
 		return COMMAND_LINE_ERROR_UNEXPECTED_VALUE;
 
 	switch (val)
