@@ -43,6 +43,7 @@ option(WITH_WIN_CONSOLE "Build ${PROJECT_NAME} with console support" ON)
 option(WITH_SDL_LINK_SHARED "link SDL dynamic or static" ON)
 
 if(WITH_WIN_CONSOLE)
+  add_compile_definitions("WITH_WIN_CONSOLE")
   set(WIN32_GUI_FLAG "TRUE")
 else()
   set(WIN32_GUI_FLAG "WIN32")
