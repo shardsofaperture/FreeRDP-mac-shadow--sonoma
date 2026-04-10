@@ -872,7 +872,6 @@ typedef struct
 static const char file_search_magic[] = "file_srch_magic";
 
 WINPR_ATTR_MALLOC(FindClose, 1)
-WINPR_ATTR_NODISCARD
 static WIN32_FILE_SEARCH* file_search_new(const char* name, size_t namelen, const char* pattern,
                                           size_t patternlen)
 {
@@ -913,6 +912,14 @@ static WIN32_FILE_SEARCH* file_search_new(const char* name, size_t namelen, cons
 					}
 				}
 			}
+		}
+		else
+		{
+			char buffer[128] = WINPR_C_ARRAY_INIT;
+			const DWORD err = map_posix_err(errno);
+			WLog_DBG(TAG, "stat failed with %s [%d] -> %s",
+			         winpr_strerror(errno, buffer, sizeof(buffer)), errno, Win32ErrorCode2Tag(err));
+			SetLastError(err);
 		}
 	}
 	if (!pFileSearch->pDir)
@@ -1015,10 +1022,7 @@ HANDLE FindFirstFileA(LPCSTR lpFileName, LPWIN32_FIND_DATAA lpFindFileData)
 	pFileSearch = file_search_new(lpFileName, flen - patternlen, ptr + 1, patternlen);
 
 	if (!pFileSearch)
-	{
-		SetLastError(ERROR_NOT_ENOUGH_MEMORY);
 		return INVALID_HANDLE_VALUE;
-	}
 
 	if (FindNextFileA((HANDLE)pFileSearch, lpFindFileData))
 		return (HANDLE)pFileSearch;

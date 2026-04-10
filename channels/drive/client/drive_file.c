@@ -113,6 +113,8 @@ static BOOL contains_dotdot(const WCHAR* path, size_t base_length, size_t path_l
 				if ((tst[2] == '/') || (tst[2] == '\\'))
 					return TRUE;
 			}
+			else
+				return TRUE;
 		}
 		tst += 2;
 	} while (TRUE);
@@ -147,11 +149,10 @@ static WCHAR* drive_file_combine_fullpath(const WCHAR* base_path, const WCHAR* p
 		/* Ensure the path does not contain sequences like '..' */
 		if (contains_dotdot(&fullpath[base_path_length], base_path_length, PathWCharLength))
 		{
-			char abuffer[MAX_PATH] = WINPR_C_ARRAY_INIT;
-			(void)ConvertWCharToUtf8(&fullpath[base_path_length], abuffer, ARRAYSIZE(abuffer));
-
+			char* abuffer = ConvertWCharToUtf8Alloc(&fullpath[base_path_length], nullptr);
 			WLog_WARN(TAG, "[rdpdr] received invalid file path '%s' from server, aborting!",
-			          &abuffer[base_path_length]);
+			          abuffer);
+			free(abuffer);
 			goto fail;
 		}
 	}
