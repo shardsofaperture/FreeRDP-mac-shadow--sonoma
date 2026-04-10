@@ -73,7 +73,7 @@ static BOOL wf_has_console(void)
 #ifdef WITH_WIN_CONSOLE
 	int file = _fileno(stdin);
 	int tty = _isatty(file);
-	DWORD processes[2] = { 0 };
+	DWORD processes[2] = WINPR_C_ARRAY_INIT;
 	const DWORD count = GetConsoleProcessList(processes, ARRAYSIZE(processes));
 	const BOOL inherited = (count > 1);
 #else
