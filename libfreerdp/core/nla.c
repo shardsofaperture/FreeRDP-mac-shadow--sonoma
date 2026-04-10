@@ -236,8 +236,8 @@ static BOOL nla_adjust_settings_from_smartcard(rdpNla* nla)
 	{
 		/* Use KSP instead of legacy CSP — the CSP does not support ECC keys,
 		 * which are common on modern PIV smartcards. The KSP supports both RSA and ECC. */
-		if (!freerdp_settings_set_string(settings, FreeRDP_CspName,
-		                                 "Microsoft Smart Card Key Storage Provider"))
+		if (!freerdp_settings_set_string_from_utf16(settings, FreeRDP_CspName,
+		                                            MS_SMART_CARD_KEY_STORAGE_PROVIDER))
 		{
 			WLog_ERR(TAG, "unable to set CSP name");
 			goto out;
