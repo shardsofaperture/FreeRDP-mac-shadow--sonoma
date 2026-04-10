@@ -21,9 +21,9 @@
 
 namespace sdl
 {
-namespace win32
-{
-[[nodiscard]] bool has_inherited_console();
-void release_transient_console();
-} // namespace win32
+	namespace win32
+	{
+		[[nodiscard]] bool has_inherited_console();
+		void release_transient_console();
+	} // namespace win32
 } // namespace sdl

@@ -31,32 +31,32 @@
 
 namespace sdl
 {
-namespace win32
-{
-bool has_inherited_console()
-{
+	namespace win32
+	{
+		bool has_inherited_console()
+		{
 #if defined(_WIN32) && defined(WITH_WIN_CONSOLE)
-	const int file = _fileno(stdin);
-	const int tty = _isatty(file);
-	DWORD processes[2] = { 0 };
-	const DWORD count = GetConsoleProcessList(processes, ARRAYSIZE(processes));
+			const int file = _fileno(stdin);
+			const int tty = _isatty(file);
+			DWORD processes[2] = { 0 };
+			const DWORD count = GetConsoleProcessList(processes, ARRAYSIZE(processes));
 
-	return (tty != 0) && (count > 1);
+			return (tty != 0) && (count > 1);
 #else
-	return false;
+			return false;
 #endif
-}
+		}
 
-void release_transient_console()
-{
+		void release_transient_console()
+		{
 #if defined(_WIN32) && defined(WITH_WIN_CONSOLE)
-	if (has_inherited_console())
-		return;
+			if (has_inherited_console())
+				return;
 
-	if (const HWND hwndConsole = GetConsoleWindow())
-		ShowWindow(hwndConsole, SW_HIDE);
-	(void)FreeConsole();
+			if (const HWND hwndConsole = GetConsoleWindow())
+				ShowWindow(hwndConsole, SW_HIDE);
+			(void)FreeConsole();
 #endif
-}
-} // namespace win32
+		}
+	} // namespace win32
 } // namespace sdl
