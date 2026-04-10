@@ -3,8 +3,7 @@ set(add_resource_macro_internal_dir ${CMAKE_CURRENT_LIST_DIR} CACHE INTERNAL "")
 include(CleaningConfigureFile)
 
 get_filename_component(
-  add_resource_macro_manifest
-  "${add_resource_macro_internal_dir}/../resources/freerdp.manifest" ABSOLUTE
+  add_resource_macro_manifest "${add_resource_macro_internal_dir}/../resources/freerdp.manifest" ABSOLUTE
 )
 set(add_resource_macro_manifest ${add_resource_macro_manifest} CACHE INTERNAL "")
 
