@@ -120,7 +120,7 @@ SECURITY_STATUS NCryptEnumStorageProviders(DWORD* wProviderCount,
 
 #ifdef WITH_PKCS11
 	*wProviderCount += 1;
-	stringAllocSize += (_wcslen(MS_SCARD_PROV) + 1) * sizeof(WCHAR);
+	stringAllocSize += (_wcslen(MS_SMART_CARD_KEY_STORAGE_PROVIDER) + 1) * sizeof(WCHAR);
 	stringAllocSize += sizeof(emptyComment);
 #endif
 
@@ -135,8 +135,8 @@ SECURITY_STATUS NCryptEnumStorageProviders(DWORD* wProviderCount,
 	strPtr = (LPWSTR)(ret + *wProviderCount);
 
 	ret->pszName = strPtr;
-	copyAmount = (_wcslen(MS_SCARD_PROV) + 1) * sizeof(WCHAR);
-	memcpy(strPtr, MS_SCARD_PROV, copyAmount);
+	copyAmount = (_wcslen(MS_SMART_CARD_KEY_STORAGE_PROVIDER) + 1) * sizeof(WCHAR);
+	memcpy(strPtr, MS_SMART_CARD_KEY_STORAGE_PROVIDER, copyAmount);
 	strPtr += copyAmount / 2;
 
 	ret->pszComment = strPtr;
@@ -164,9 +164,9 @@ SECURITY_STATUS winpr_NCryptOpenStorageProviderEx(NCRYPT_PROV_HANDLE* phProvider
 	                        (_wcscmp(pszProviderName, MS_SCARD_PROV) == 0)))
 		return NCryptOpenP11StorageProviderEx(phProvider, pszProviderName, dwFlags, modulePaths);
 
-	char buffer[128] = WINPR_C_ARRAY_INIT;
-	(void)ConvertWCharToUtf8(pszProviderName, buffer, sizeof(buffer));
+	char* buffer = ConvertWCharToUtf8Alloc(pszProviderName, nullptr);
 	WLog_WARN(TAG, "provider '%s' not supported", buffer);
+	free(buffer);
 	return ERROR_NOT_SUPPORTED;
 #else
 	WLog_WARN(TAG, "rebuild with -DWITH_PKCS11=ON to enable smartcard logon support");
