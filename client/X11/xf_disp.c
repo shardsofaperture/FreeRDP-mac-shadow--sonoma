@@ -580,10 +580,8 @@ BOOL xf_disp_init(xfDispContext* xfDisp, DispClientContext* disp)
 
 BOOL xf_disp_uninit(xfDispContext* xfDisp, DispClientContext* disp)
 {
-	if (!xfDisp || !disp)
-		return FALSE;
-
 	WLog_DBG(TAG, "Channel %s closed", DISP_CHANNEL_NAME);
-	xfDisp->disp = nullptr;
+	if (xfDisp)
+		xfDisp->disp = nullptr;
 	return TRUE;
 }

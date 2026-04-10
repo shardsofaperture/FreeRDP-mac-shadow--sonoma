@@ -2703,7 +2703,6 @@ void xf_cliprdr_init(xfContext* xfc, CliprdrClientContext* cliprdr)
 void xf_cliprdr_uninit(xfContext* xfc, CliprdrClientContext* cliprdr)
 {
 	WINPR_ASSERT(xfc);
-	WINPR_ASSERT(cliprdr);
 
 	xfc->cliprdr = nullptr;
 

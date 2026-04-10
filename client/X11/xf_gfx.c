@@ -531,10 +531,8 @@ void xf_graphics_pipeline_init(xfContext* xfc, RdpgfxClientContext* gfx)
 
 void xf_graphics_pipeline_uninit(xfContext* xfc, RdpgfxClientContext* gfx)
 {
-	rdpGdi* gdi = nullptr;
-
 	WINPR_ASSERT(xfc);
 
-	gdi = xfc->common.context.gdi;
+	rdpGdi* gdi = xfc->common.context.gdi;
 	gdi_graphics_pipeline_uninit(gdi, gfx);
 }

@@ -467,8 +467,9 @@ static void func_select_all_interface_for_msconfig(URBDRC_PLUGIN* urbdrc, IUDEVI
 		const int rc = pdev->select_interface(pdev, InterfaceNumber, AlternateSetting);
 		if (rc < 0)
 		{
-			WLog_Print(urbdrc->log, WLOG_WARN, "select_interface %" PRIu8 " [%" PRIu8 "] failed",
-			           InterfaceNumber, AlternateSetting);
+			WLog_Print(urbdrc->log, WLOG_WARN,
+			           "select_interface %" PRIu8 " [%" PRIu8 "] failed [%d]", InterfaceNumber,
+			           AlternateSetting, rc);
 		}
 	}
 }

@@ -537,47 +537,17 @@ static LIBUSB_DEVICE_DESCRIPTOR* udev_new_descript(URBDRC_PLUGIN* urbdrc, LIBUSB
 
 static int libusb_udev_select_interface(IUDEVICE* idev, BYTE InterfaceNumber, BYTE AlternateSetting)
 {
-	int error = 0;
-	int diff = 0;
 	UDEVICE* pdev = (UDEVICE*)idev;
 
 	if (!pdev || !pdev->urbdrc)
 		return -1;
 
 	URBDRC_PLUGIN* urbdrc = pdev->urbdrc;
-	MSUSB_CONFIG_DESCRIPTOR* MsConfig = pdev->MsConfig;
 
-	if (MsConfig)
-	{
-		if (InterfaceNumber >= MsConfig->NumInterfaces)
-			return -2;
+	const int error =
+	    libusb_set_interface_alt_setting(pdev->libusb_handle, InterfaceNumber, AlternateSetting);
 
-		MSUSB_INTERFACE_DESCRIPTOR** MsInterfaces = MsConfig->MsInterfaces;
-		if (MsInterfaces)
-		{
-			const MSUSB_INTERFACE_DESCRIPTOR* ifc = MsInterfaces[InterfaceNumber];
-			if (!ifc)
-				return -3;
-
-			WLog_Print(urbdrc->log, WLOG_INFO,
-			           "select Interface(%" PRIu8 ") curr AlternateSetting(%" PRIu8
-			           ") new AlternateSetting(%" PRIu8 ")",
-			           InterfaceNumber, ifc->AlternateSetting, AlternateSetting);
-
-			if (ifc->AlternateSetting != AlternateSetting)
-			{
-				diff = 1;
-			}
-		}
-
-		if (diff)
-		{
-			error = libusb_set_interface_alt_setting(pdev->libusb_handle, InterfaceNumber,
-			                                         AlternateSetting);
-
-			log_libusb_result(urbdrc->log, WLOG_ERROR, "libusb_set_interface_alt_setting", error);
-		}
-	}
+	log_libusb_result(urbdrc->log, WLOG_ERROR, "libusb_set_interface_alt_setting", error);
 
 	return error;
 }
