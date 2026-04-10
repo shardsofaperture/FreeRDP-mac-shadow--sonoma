@@ -594,13 +594,13 @@ static BOOL smartcard_hw_enumerateCerts(const rdpSettings* settings, LPCWSTR csp
 
 	if (reader)
 	{
-		size_t readerSz = strlen(reader);
-		char* scopeStr = malloc(4 + readerSz + 1 + 1);
+		char* scopeStr = nullptr;
+		size_t scopeStrLen = 0;
+		winpr_asprintf(&scopeStr, &scopeStrLen, "\\\\.\\%s\\", reader);
 		if (!scopeStr)
 			goto out;
 
-		(void)_snprintf(scopeStr, readerSz + 6, "\\\\.\\%s\\", reader);
-		scope = ConvertUtf8NToWCharAlloc(scopeStr, readerSz + 6, nullptr);
+		scope = ConvertUtf8NToWCharAlloc(scopeStr, scopeStrLen, nullptr);
 		free(scopeStr);
 
 		if (!scope)

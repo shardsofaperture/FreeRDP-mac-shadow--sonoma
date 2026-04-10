@@ -510,8 +510,9 @@ fail:
 	return start;
 }
 
-static void smartcard_dump_array(wLog* log, DWORD level, const char* prefix, const char* postfix,
-                                 const void* data, size_t len, ...)
+WINPR_ATTR_FORMAT_ARG(3, 7)
+static void smartcard_dump_array(wLog* log, DWORD level, WINPR_FORMAT_ARG const char* prefix,
+                                 const char* postfix, const void* data, size_t len, ...)
 {
 	if (!WLog_IsLevelActive(log, level))
 		return;
@@ -538,7 +539,7 @@ static void smartcard_log_redir_handle(wLog* log, const REDIR_SCARDHANDLE* pHand
 static void smartcard_log_context(wLog* log, const REDIR_SCARDCONTEXT* phContext)
 {
 	WINPR_ASSERT(phContext);
-	smartcard_dump_array(log, g_LogLevel, "hContext: %s", "", phContext->pbContext,
+	smartcard_dump_array(log, g_LogLevel, "hContext: ", "", phContext->pbContext,
 	                     phContext->cbContext);
 }
 
@@ -560,18 +561,19 @@ static void smartcard_trace_context_and_string_call_w(wLog* log, const char* nam
                                                       const REDIR_SCARDCONTEXT* phContext,
                                                       const WCHAR* sz)
 {
-	char tmp[1024] = WINPR_C_ARRAY_INIT;
+	char* tmp = nullptr;
 
 	if (!WLog_IsLevelActive(log, g_LogLevel))
 		return;
 
 	if (sz)
-		(void)ConvertWCharToUtf8(sz, tmp, ARRAYSIZE(tmp));
+		tmp = ConvertWCharToUtf8Alloc(sz, nullptr);
 
 	WLog_Print(log, g_LogLevel, "%s {", name);
 	smartcard_log_context(log, phContext);
 	WLog_Print(log, g_LogLevel, "  sz=%s", tmp);
 	WLog_Print(log, g_LogLevel, "}");
+	free(tmp);
 }
 
 static void smartcard_trace_context_call(wLog* log, const Context_Call* call, const char* name)
