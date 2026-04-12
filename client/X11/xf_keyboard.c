@@ -967,6 +967,18 @@ static BOOL xf_keyboard_key_pressed(xfContext* xfc, KeySym keysym)
 	return xfc->KeyboardState[keycode];
 }
 
+static int xk_keyboard_get_modifier_keys(xfContext* xfc, XF_MODIFIER_KEYS* mod);
+
+static BOOL xf_keyboard_has_system_modifier(xfContext* xfc)
+{
+	XF_MODIFIER_KEYS mod = WINPR_C_ARRAY_INIT;
+
+	WINPR_ASSERT(xfc);
+
+	(void)xk_keyboard_get_modifier_keys(xfc, &mod);
+	return mod.Ctrl || mod.Alt || mod.Super;
+}
+
 void xf_keyboard_send_key(xfContext* xfc, BOOL down, BOOL repeat, const XKeyEvent* event)
 {
 	WINPR_ASSERT(xfc);
@@ -990,7 +1002,8 @@ void xf_keyboard_send_key(xfContext* xfc, BOOL down, BOOL repeat, const XKeyEven
 	}
 	else
 	{
-		if (freerdp_settings_get_bool(xfc->common.context.settings, FreeRDP_UnicodeInput))
+		if (freerdp_settings_get_bool(xfc->common.context.settings, FreeRDP_UnicodeInput) &&
+		    !xf_keyboard_has_system_modifier(xfc))
 		{
 			wchar_t buffer[32] = WINPR_C_ARRAY_INIT;
 			int xwc = -1;
