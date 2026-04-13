@@ -44,7 +44,7 @@
 #include <freerdp/codec/yuv.h>
 #include <freerdp/timer.h>
 
-#define TAG CHANNELS_TAG("video")
+#define TAG CHANNELS_TAG("video.client")
 
 #include "video_main.h"
 
@@ -69,29 +69,31 @@ static const BYTE MFVideoFormat_H264[] = { 'H',  '2',  '6',  '4',  0x00, 0x00, 0
 
 typedef struct
 {
-	VideoClientContext* video;
 	BYTE PresentationId;
-	UINT32 ScaledWidth, ScaledHeight;
-	MAPPED_GEOMETRY* geometry;
+	UINT32 ScaledWidth;
+	UINT32 ScaledHeight;
 
 	UINT64 startTimeStamp;
 	UINT64 publishOffset;
-	H264_CONTEXT* h264;
 	wStream* currentSample;
-	UINT64 lastPublishTime, nextPublishTime;
+	UINT64 lastPublishTime;
+	UINT64 nextPublishTime;
 	volatile LONG refCounter;
+	H264_CONTEXT* h264;
 	VideoSurface* surface;
+	MAPPED_GEOMETRY* geometry;
+	VideoClientContext* video;
 } PresentationContext;
 
 typedef struct
 {
+	BYTE PresentationId;
 	UINT64 publishTime;
 	UINT64 hnsDuration;
 	MAPPED_GEOMETRY* geometry;
 	UINT32 w, h;
 	UINT32 scanline;
 	BYTE* surfaceData;
-	PresentationContext* presentation;
 } VideoFrame;
 
 /** @brief private data for the channel */
@@ -183,11 +185,31 @@ static BOOL PresentationContext_ref(PresentationContext* presentation)
 {
 	WINPR_ASSERT(presentation);
 
-	InterlockedIncrement(&presentation->refCounter);
-	return TRUE;
+	const LONG val = InterlockedIncrement(&presentation->refCounter);
+	return val > 0;
 }
 
-WINPR_ATTR_NODISCARD
+static void PresentationContext_free(PresentationContext* presentation)
+{
+	if (!presentation)
+		return;
+
+	MAPPED_GEOMETRY* geometry = presentation->geometry;
+	if (geometry)
+	{
+		geometry->MappedGeometryUpdate = nullptr;
+		geometry->MappedGeometryClear = nullptr;
+		geometry->custom = nullptr;
+		mappedGeometryUnref(geometry);
+	}
+
+	h264_context_free(presentation->h264);
+	Stream_Free(presentation->currentSample, TRUE);
+	presentation->video->deleteSurface(presentation->video, presentation->surface);
+	free(presentation);
+}
+
+WINPR_ATTR_MALLOC(PresentationContext_free, 1)
 static PresentationContext* PresentationContext_new(VideoClientContext* video, BYTE PresentationId,
                                                     UINT32 x, UINT32 y, UINT32 width, UINT32 height)
 {
@@ -235,7 +257,7 @@ static PresentationContext* PresentationContext_new(VideoClientContext* video, B
 	return ret;
 
 fail:
-	PresentationContext_unref(&ret);
+	PresentationContext_free(ret);
 	return nullptr;
 }
 
@@ -249,35 +271,20 @@ static void PresentationContext_unref(PresentationContext** ppresentation)
 
 	if (InterlockedDecrement(&presentation->refCounter) > 0)
 		return;
-
-	MAPPED_GEOMETRY* geometry = presentation->geometry;
-	if (geometry)
-	{
-		geometry->MappedGeometryUpdate = nullptr;
-		geometry->MappedGeometryClear = nullptr;
-		geometry->custom = nullptr;
-		mappedGeometryUnref(geometry);
-	}
-
-	h264_context_free(presentation->h264);
-	Stream_Free(presentation->currentSample, TRUE);
-	presentation->video->deleteSurface(presentation->video, presentation->surface);
-	free(presentation);
 	*ppresentation = nullptr;
+
+	PresentationContext_free(presentation);
 }
 
-static void VideoFrame_free(VideoFrame* frame)
+static void VideoFrame_free(VideoClientContextPriv* priv, VideoFrame* frame)
 {
+	WINPR_ASSERT(priv);
 	if (!frame)
 		return;
 
 	mappedGeometryUnref(frame->geometry);
 
-	WINPR_ASSERT(frame->presentation);
-	WINPR_ASSERT(frame->presentation->video);
-	WINPR_ASSERT(frame->presentation->video->priv);
-	BufferPool_Return(frame->presentation->video->priv->surfacePool, frame->surfaceData);
-	PresentationContext_unref(&frame->presentation);
+	BufferPool_Return(priv->surfacePool, frame->surfaceData);
 	free(frame);
 }
 
@@ -295,6 +302,7 @@ static VideoFrame* VideoFrame_new(VideoClientContextPriv* priv, PresentationCont
 	VideoFrame* frame = calloc(1, sizeof(VideoFrame));
 	if (!frame)
 		goto fail;
+	frame->PresentationId = presentation->PresentationId;
 
 	mappedGeometryRef(geom);
 
@@ -308,14 +316,10 @@ static VideoFrame* VideoFrame_new(VideoClientContextPriv* priv, PresentationCont
 	if (!frame->surfaceData)
 		goto fail;
 
-	frame->presentation = presentation;
-	if (!PresentationContext_ref(frame->presentation))
-		goto fail;
-
 	return frame;
 
 fail:
-	VideoFrame_free(frame);
+	VideoFrame_free(priv, frame);
 	return nullptr;
 }
 
@@ -332,7 +336,7 @@ void VideoClientContextPriv_free(VideoClientContextPriv* priv)
 		{
 			VideoFrame* frame = Queue_Dequeue(priv->frames);
 			if (frame)
-				VideoFrame_free(frame);
+				VideoFrame_free(priv, frame);
 		}
 	}
 
@@ -673,6 +677,7 @@ static void video_timer(VideoClientContext* video, UINT64 now)
 	WINPR_ASSERT(priv);
 
 	EnterCriticalSection(&priv->framesLock);
+	PresentationContext* presentation = video->priv->currentPresentation;
 	do
 	{
 		const VideoFrame* peekFrame = (VideoFrame*)Queue_Peek(priv->frames);
@@ -686,25 +691,25 @@ static void video_timer(VideoClientContext* video, UINT64 now)
 		{
 			WLog_DBG(TAG, "dropping frame @%" PRIu64, frame->publishTime);
 			priv->droppedFrames++;
-			VideoFrame_free(frame);
+			VideoFrame_free(priv, frame);
 		}
 		frame = Queue_Dequeue(priv->frames);
 	} while (1);
-	LeaveCriticalSection(&priv->framesLock);
 
 	if (frame)
 	{
-		PresentationContext* presentation = frame->presentation;
+		if (presentation && (presentation->PresentationId == frame->PresentationId))
+		{
+			priv->publishedFrames++;
+			memcpy(presentation->surface->data, frame->surfaceData,
+			       1ull * frame->scanline * frame->h);
 
-		priv->publishedFrames++;
-		memcpy(presentation->surface->data, frame->surfaceData, 1ull * frame->scanline * frame->h);
-
-		WINPR_ASSERT(video->showSurface);
-		if (!video->showSurface(video, presentation->surface, presentation->ScaledWidth,
-		                        presentation->ScaledHeight))
-			WLog_WARN(TAG, "showSurface failed");
-
-		VideoFrame_free(frame);
+			WINPR_ASSERT(video->showSurface);
+			if (!video->showSurface(video, presentation->surface, presentation->ScaledWidth,
+			                        presentation->ScaledHeight))
+				WLog_WARN(TAG, "showSurface failed");
+		}
+		VideoFrame_free(priv, frame);
 	}
 
 	if (priv->nextFeedbackTime < now)
@@ -785,12 +790,14 @@ static void video_timer(VideoClientContext* video, UINT64 now)
 		priv->publishedFrames = 0;
 		priv->nextFeedbackTime = now + 1000;
 	}
+	LeaveCriticalSection(&priv->framesLock);
 }
 
 WINPR_ATTR_NODISCARD
 static UINT video_VideoData(VideoClientContext* context, const TSMM_VIDEO_DATA* data)
 {
 	int status = 0;
+	UINT res = CHANNEL_RC_OK;
 
 	WINPR_ASSERT(context);
 	WINPR_ASSERT(data);
@@ -805,17 +812,22 @@ static UINT video_VideoData(VideoClientContext* context, const TSMM_VIDEO_DATA* 
 		return CHANNEL_RC_OK;
 	}
 
+	if (!PresentationContext_ref(presentation))
+		return ERROR_INTERNAL_ERROR;
+
+	EnterCriticalSection(&priv->framesLock);
 	if (presentation->PresentationId != data->PresentationId)
 	{
 		WLog_ERR(TAG, "current presentation id=%" PRIu8 " doesn't match data id=%" PRIu8,
 		         presentation->PresentationId, data->PresentationId);
-		return CHANNEL_RC_OK;
+		goto out;
 	}
 
 	if (!Stream_EnsureRemainingCapacity(presentation->currentSample, data->cbSample))
 	{
 		WLog_ERR(TAG, "unable to expand the current packet");
-		return CHANNEL_RC_NO_MEMORY;
+		res = CHANNEL_RC_NO_MEMORY;
+		goto out;
 	}
 
 	Stream_Write(presentation->currentSample, data->pSample, data->cbSample);
@@ -839,88 +851,46 @@ static UINT video_VideoData(VideoClientContext* context, const TSMM_VIDEO_DATA* 
 		}
 
 		presentation->lastPublishTime += 100ull * data->hnsDuration;
-		if (presentation->lastPublishTime <= (10000000ull + timeAfterH264))
+		const size_t len = Stream_Length(presentation->currentSample);
+		if (len > UINT32_MAX)
+			goto out;
+
+		BOOL enqueueResult = 0;
+		VideoFrame* frame = VideoFrame_new(priv, presentation, geom);
+		if (!frame)
 		{
-			int dropped = 0;
-
-			const size_t len = Stream_Length(presentation->currentSample);
-			if (len > UINT32_MAX)
-				return CHANNEL_RC_OK;
-
-			/* if the frame is to be published in less than 10 ms, let's consider it's now */
-			status =
-			    avc420_decompress(h264, Stream_Pointer(presentation->currentSample), (UINT32)len,
-			                      surface->data, surface->format, surface->scanline,
-			                      surface->alignedWidth, surface->alignedHeight, &rect, 1);
-
-			if (status < 0)
-				return CHANNEL_RC_OK;
-
-			WINPR_ASSERT(context->showSurface);
-			if (!context->showSurface(context, presentation->surface, presentation->ScaledWidth,
-			                          presentation->ScaledHeight))
-				return CHANNEL_RC_NOT_INITIALIZED;
-
-			priv->publishedFrames++;
-
-			/* cleanup previously scheduled frames */
-			EnterCriticalSection(&priv->framesLock);
-			while (Queue_Count(priv->frames) > 0)
-			{
-				VideoFrame* frame = Queue_Dequeue(priv->frames);
-				if (frame)
-				{
-					priv->droppedFrames++;
-					VideoFrame_free(frame);
-					dropped++;
-				}
-			}
-			LeaveCriticalSection(&priv->framesLock);
-
-			if (dropped)
-				WLog_DBG(TAG, "showing frame (%d dropped)", dropped);
+			WLog_ERR(TAG, "unable to create frame");
+			res = CHANNEL_RC_NO_MEMORY;
+			goto out;
 		}
-		else
+
+		status = avc420_decompress(h264, Stream_Pointer(presentation->currentSample), (UINT32)len,
+		                           frame->surfaceData, surface->format, surface->scanline,
+		                           surface->alignedWidth, surface->alignedHeight, &rect, 1);
+		if (status < 0)
 		{
-			const size_t len = Stream_Length(presentation->currentSample);
-			if (len > UINT32_MAX)
-				return CHANNEL_RC_OK;
-
-			BOOL enqueueResult = 0;
-			VideoFrame* frame = VideoFrame_new(priv, presentation, geom);
-			if (!frame)
-			{
-				WLog_ERR(TAG, "unable to create frame");
-				return CHANNEL_RC_NO_MEMORY;
-			}
-
-			status =
-			    avc420_decompress(h264, Stream_Pointer(presentation->currentSample), (UINT32)len,
-			                      frame->surfaceData, surface->format, surface->scanline,
-			                      surface->alignedWidth, surface->alignedHeight, &rect, 1);
-			if (status < 0)
-			{
-				VideoFrame_free(frame);
-				return CHANNEL_RC_OK;
-			}
-
-			EnterCriticalSection(&priv->framesLock);
-			enqueueResult = Queue_Enqueue(priv->frames, frame);
-			LeaveCriticalSection(&priv->framesLock);
-
-			if (!enqueueResult)
-			{
-				WLog_ERR(TAG, "unable to enqueue frame");
-				VideoFrame_free(frame);
-				return CHANNEL_RC_NO_MEMORY;
-			}
-
-			// NOLINTNEXTLINE(clang-analyzer-unix.Malloc): Queue_Enqueue owns frame
-			WLog_DBG(TAG, "scheduling frame in %" PRIu64 " ms", (frame->publishTime - startTime));
+			VideoFrame_free(priv, frame);
+			goto out;
 		}
+
+		enqueueResult = Queue_Enqueue(priv->frames, frame);
+
+		if (!enqueueResult)
+		{
+			WLog_ERR(TAG, "unable to enqueue frame");
+			VideoFrame_free(priv, frame);
+			res = CHANNEL_RC_NO_MEMORY;
+			goto out;
+		}
+
+		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc): Queue_Enqueue owns frame
+		WLog_DBG(TAG, "scheduling frame in %" PRIu64 " ns", (frame->publishTime - startTime));
 	}
 
-	return CHANNEL_RC_OK;
+out:
+	LeaveCriticalSection(&priv->framesLock);
+	PresentationContext_unref(&priv->currentPresentation);
+	return res;
 }
 
 WINPR_ATTR_NODISCARD
