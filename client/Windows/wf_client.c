@@ -1156,6 +1156,10 @@ static DWORD WINAPI wf_client_thread(LPVOID lpParam)
 				case WM_FREERDP_SHOWWINDOW:
 				{
 					ShowWindow(wfc->hwnd, SW_NORMAL);
+					if (wfc->floatbar)
+					{
+						wf_floatbar_reset_position(wfc->floatbar);
+					}
 					break;
 				}
 				default:

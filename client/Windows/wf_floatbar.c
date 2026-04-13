@@ -731,3 +731,30 @@ BOOL wf_floatbar_toggle_fullscreen(wfFloatBar* floatbar, BOOL fullscreen)
 
 	return TRUE;
 }
+
+BOOL wf_floatbar_reset_position(wfFloatBar* floatbar)
+{
+	RECT rect = WINPR_C_ARRAY_INIT;
+
+	if (!floatbar || !floatbar->parent || !floatbar->hwnd)
+		return FALSE;
+
+	const int y = -WINPR_ASSERTING_INT_CAST(int, floatbar->offset);
+
+	if (!GetWindowRect(floatbar->parent, &rect))
+		return FALSE;
+
+	floatbar->rect.left = ((rect.right - rect.left) - floatbar->width) / 2;
+	if (floatbar->rect.left < 0)
+		floatbar->rect.left = 0;
+
+	if (!MoveWindow(floatbar->hwnd, floatbar->rect.left, y, floatbar->width, floatbar->height,
+	                TRUE))
+	{
+		DWORD err = GetLastError();
+		WLog_ERR(TAG, "MoveWindow failed with %08" PRIx32, err);
+		return FALSE;
+	}
+
+	return TRUE;
+}
