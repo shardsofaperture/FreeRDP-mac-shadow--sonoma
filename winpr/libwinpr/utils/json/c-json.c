@@ -293,12 +293,22 @@ WINPR_JSON* WINPR_JSON_AddArrayToObject(WINPR_JSON* object, const char* name)
 	return cJSON_AddArrayToObject((cJSON*)object, name);
 }
 
+WINPR_ATTR_MALLOC(free, 1)
+static char* returnCopy(char* str)
+{
+	if (!str)
+		return nullptr;
+	char* copy = _strdup(str);
+	cJSON_free(str);
+	return copy;
+}
+
 char* WINPR_JSON_Print(WINPR_JSON* item)
 {
-	return cJSON_Print((const cJSON*)item);
+	return returnCopy(cJSON_Print((const cJSON*)item));
 }
 
 char* WINPR_JSON_PrintUnformatted(WINPR_JSON* item)
 {
-	return cJSON_PrintUnformatted((const cJSON*)item);
+	return returnCopy(cJSON_PrintUnformatted((const cJSON*)item));
 }
