@@ -144,7 +144,7 @@ static inline BOOL progressive_rfx_quant_sub(const RFX_COMPONENT_CODEC_QUANT* WI
                                              const RFX_COMPONENT_CODEC_QUANT* WINPR_RESTRICT q2,
                                              RFX_COMPONENT_CODEC_QUANT* dst)
 {
-	if (q1->HH1 < q2->HL1)
+	if (q1->HL1 < q2->HL1)
 		return FALSE;
 	dst->HL1 = q1->HL1 - q2->HL1; /* HL1 */
 
