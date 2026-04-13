@@ -735,10 +735,11 @@ BOOL wf_floatbar_toggle_fullscreen(wfFloatBar* floatbar, BOOL fullscreen)
 BOOL wf_floatbar_reset_position(wfFloatBar* floatbar)
 {
 	RECT rect = WINPR_C_ARRAY_INIT;
-	const int y = -(int)floatbar->offset;
 
 	if (!floatbar || !floatbar->parent || !floatbar->hwnd)
 		return FALSE;
+
+	const int y = -WINPR_ASSERTING_INT_CAST(int, floatbar->offset);
 
 	if (!GetWindowRect(floatbar->parent, &rect))
 		return FALSE;
