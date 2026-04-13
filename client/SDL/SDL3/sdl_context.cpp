@@ -36,6 +36,12 @@
 #include <aad/sdl_webview.hpp>
 #endif
 
+static void sdl_PointerFreeCopyAll(rdpPointer* pointer)
+{
+	sdl_Pointer_FreeCopy(pointer);
+	free(pointer);
+}
+
 SdlContext::SdlContext(rdpContext* context)
     : _context(context), _log(WLog_Get(CLIENT_TAG("SDL"))), _cursor(nullptr, sdl_Pointer_FreeCopy),
       _rdpThreadRunning(false), _primary(nullptr, SDL_DestroySurface), _disp(this), _input(this),
@@ -1508,7 +1514,7 @@ bool SdlContext::setCursor(CursorType type)
 
 bool SdlContext::setCursor(const rdpPointer* cursor)
 {
-	_cursor = { sdl_Pointer_Copy(cursor), sdl_Pointer_FreeCopy };
+	_cursor = { sdl_Pointer_Copy(cursor), sdl_PointerFreeCopyAll };
 	return setCursor(CURSOR_IMAGE);
 }
 
