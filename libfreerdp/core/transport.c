@@ -1706,7 +1706,7 @@ rdpTransport* transport_new(rdpContext* context)
 	if (!transport)
 		return nullptr;
 
-	transport->log = WLog_Get(TAG);
+	transport->log = WLog_Create(TAG, WLog_GetRoot());
 
 	if (!transport->log)
 		goto fail;
@@ -1809,6 +1809,7 @@ void transport_free(rdpTransport* transport)
 	if (transport->haveWriteLock)
 		LeaveCriticalSection(&(transport->WriteLock));
 	DeleteCriticalSection(&(transport->WriteLock));
+	WLog_Discard(transport->log);
 	free(transport);
 }
 
