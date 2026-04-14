@@ -802,7 +802,7 @@ static void transport_bio_error_log(rdpTransport* transport, LPCSTR biofunc,
 	saveerrno = errno;
 	level = WLOG_ERROR;
 
-	if (level < WLog_GetLogLevel(transport->log))
+	if (!WLog_IsLevelActive(transport->log, level))
 		return;
 
 	if (ERR_peek_error() == 0)
