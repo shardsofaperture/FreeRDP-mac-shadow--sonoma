@@ -38,6 +38,7 @@
 #endif
 
 #include "wlog.h"
+#include "../log.h"
 
 #define WLOG_MAX_STRING_SIZE 16384
 
@@ -1117,4 +1118,27 @@ BOOL WLog_SetGlobalContext(const char* globalprefix)
 const char* WLog_GetGlobalPrefix(void)
 {
 	return g_GlobalPrefix;
+}
+
+wLog* WLog_Create(LPCSTR name, wLog* root)
+{
+	wLog* log = WLog_New(name, root);
+	if (!log)
+		return nullptr;
+	log->independent = TRUE;
+	return log;
+}
+
+void WLog_Discard(wLog* log)
+{
+	if (!log)
+		return;
+	if (!log->independent)
+	{
+		const char tag[] = WINPR_TAG("wlog");
+		WLog_ERR(tag, "Passed invalid wLog* instance");
+		winpr_log_backtrace(tag, WLOG_ERROR, 20);
+		return;
+	}
+	WLog_Free(log);
 }
