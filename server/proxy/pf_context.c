@@ -329,11 +329,8 @@ error:
 
 proxyData* proxy_data_new(void)
 {
-	BYTE temp[16];
-	char* hex = nullptr;
-	proxyData* pdata = nullptr;
-
-	pdata = calloc(1, sizeof(proxyData));
+	BYTE temp[16] = WINPR_C_ARRAY_INIT;
+	proxyData* pdata = calloc(1, sizeof(proxyData));
 	if (!pdata)
 		return nullptr;
 
@@ -343,15 +340,18 @@ proxyData* proxy_data_new(void)
 	if (!(pdata->gfx_server_ready = CreateEvent(nullptr, TRUE, FALSE, nullptr)))
 		goto error;
 
-	if (winpr_RAND(&temp, 16) < 0)
-		goto error;
-	hex = winpr_BinToHexString(temp, 16, FALSE);
-	if (!hex)
+	if (winpr_RAND(&temp, sizeof(temp)) < 0)
 		goto error;
 
-	CopyMemory(pdata->session_id, hex, PROXY_SESSION_ID_LENGTH);
-	pdata->session_id[PROXY_SESSION_ID_LENGTH] = '\0';
-	free(hex);
+	{
+		char* hex = winpr_BinToHexString(temp, sizeof(temp), FALSE);
+		if (!hex)
+			goto error;
+
+		CopyMemory(pdata->session_id, hex, PROXY_SESSION_ID_LENGTH);
+		pdata->session_id[PROXY_SESSION_ID_LENGTH] = '\0';
+		free(hex);
+	}
 
 	if (!(pdata->modules_info = HashTable_New(FALSE)))
 		goto error;
