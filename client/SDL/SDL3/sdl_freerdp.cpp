@@ -181,10 +181,8 @@ static void sdl_term_handler([[maybe_unused]] int signum, [[maybe_unused]] const
 						continue;
 				}
 
-#if defined(WITH_DEBUG_SDL_EVENTS)
-				SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "got event %s [0x%08" PRIx32 "]",
-				             sdl::utils::toString(windowEvent.type).c_str(), windowEvent.type);
-#endif
+				WLog_Print(sdl->getWLog(), WLOG_TRACE, "got event %s [0x%08" PRIx32 "]",
+				           sdl::utils::toString(windowEvent.type).c_str(), windowEvent.type);
 				if (sdl->shallAbort(true))
 					continue;
 
