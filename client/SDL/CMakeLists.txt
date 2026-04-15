@@ -35,7 +35,6 @@ include(CommonConfigOptions)
 include(ConfigureFreeRDP)
 include(CXXCompilerFlags)
 
-option(WITH_DEBUG_SDL_EVENTS "[dangerous, not for release builds!] Debug SDL events" ${DEFAULT_DEBUG_OPTION})
 option(WITH_DEBUG_SDL_KBD_EVENTS "[dangerous, not for release builds!] Debug SDL keyboard events"
        ${DEFAULT_DEBUG_OPTION}
 )
@@ -49,9 +48,6 @@ else()
   set(WIN32_GUI_FLAG "WIN32")
 endif()
 
-if(WITH_DEBUG_SDL_EVENTS)
-  add_compile_definitions(WITH_DEBUG_SDL_EVENTS)
-endif()
 if(WITH_DEBUG_SDL_KBD_EVENTS)
   add_compile_definitions(WITH_DEBUG_SDL_KBD_EVENTS)
 endif()

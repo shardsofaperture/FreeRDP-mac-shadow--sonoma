@@ -876,10 +876,8 @@ static int sdl_run(SdlContext* sdl)
 					continue;
 			}
 
-#if defined(WITH_DEBUG_SDL_EVENTS)
-			SDL_Log("got event %s [0x%08" PRIx32 "]", sdl_event_type_str(windowEvent.type),
-			        windowEvent.type);
-#endif
+			WLog_Print(sdl->log, WLOG_TRACE, "got event %s [0x%08" PRIx32 "]",
+			           sdl_event_type_str(windowEvent.type), windowEvent.type);
 			std::scoped_lock lock(sdl->critical);
 			/* The session might have been disconnected while we were waiting for a new SDL event.
 			 * In that case ignore the SDL event and terminate. */

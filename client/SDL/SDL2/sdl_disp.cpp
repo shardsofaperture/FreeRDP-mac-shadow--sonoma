@@ -338,10 +338,8 @@ BOOL sdlDispContext::handle_display_event(const SDL_DisplayEvent* ev)
 BOOL sdlDispContext::handle_window_event(const SDL_WindowEvent* ev)
 {
 	WINPR_ASSERT(ev);
-#if defined(WITH_DEBUG_SDL_EVENTS)
-	SDL_Log("got windowEvent %s [0x%08" PRIx32 "]", sdl_window_event_str(ev->event).c_str(),
-	        ev->event);
-#endif
+	WLog_Print(_sdl->log, WLOG_TRACE, "got windowEvent %s [0x%08" PRIx32 "]",
+	           sdl_window_event_str(ev->event).c_str(), ev->event);
 	auto bordered = freerdp_settings_get_bool(_sdl->context()->settings, FreeRDP_Decorations)
 	                    ? SDL_TRUE
 	                    : SDL_FALSE;
