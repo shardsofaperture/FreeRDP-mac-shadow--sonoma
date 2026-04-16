@@ -1262,7 +1262,7 @@ bool SdlContext::eventToPixelCoordinates(SDL_WindowID id, SDL_Event& ev)
 	/* Ignore errors here, sometimes SDL has no renderer */
 	auto renderer = w->renderer();
 	if (!renderer)
-		return false;
+		return true;
 	return SDL_ConvertEventToRenderCoordinates(renderer, &ev);
 }
 
