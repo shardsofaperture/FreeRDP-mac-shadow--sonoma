@@ -583,5 +583,7 @@ BOOL xf_disp_uninit(xfDispContext* xfDisp, DispClientContext* disp)
 	WLog_DBG(TAG, "Channel %s closed", DISP_CHANNEL_NAME);
 	if (xfDisp)
 		xfDisp->disp = nullptr;
+	if (disp)
+		disp->custom = nullptr;
 	return TRUE;
 }

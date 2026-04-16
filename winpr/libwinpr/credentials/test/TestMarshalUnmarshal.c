@@ -65,7 +65,7 @@ static int TestMarshal(WINPR_ATTR_UNUSED int argc, WINPR_ATTR_UNUSED char** argv
 
 	for (size_t i = 0; i < ARRAYSIZE(testValues); i++)
 	{
-		CERT_CREDENTIAL_INFO certInfo = { sizeof(certInfo), { 0 } };
+		CERT_CREDENTIAL_INFO certInfo = { sizeof(certInfo), WINPR_C_ARRAY_INIT };
 		const TestItem* const val = &testValues[i];
 
 		memcpy(certInfo.rgbHashOfCert, val->source, sizeof(certInfo.rgbHashOfCert));

@@ -60,13 +60,13 @@ static BOOL CALLBACK init_module(PINIT_ONCE once, PVOID param, PVOID* context)
 #endif
 
 static TP_CALLBACK_ENVIRON DEFAULT_CALLBACK_ENVIRONMENT = {
-	1,       /* Version */
-	nullptr, /* Pool */
-	nullptr, /* CleanupGroup */
-	nullptr, /* CleanupGroupCancelCallback */
-	nullptr, /* RaceDll */
-	nullptr, /* FinalizationCallback */
-	{ 0 }    /* Flags */
+	1,                 /* Version */
+	nullptr,           /* Pool */
+	nullptr,           /* CleanupGroup */
+	nullptr,           /* CleanupGroupCancelCallback */
+	nullptr,           /* RaceDll */
+	nullptr,           /* FinalizationCallback */
+	WINPR_C_ARRAY_INIT /* Flags */
 };
 
 PTP_WORK winpr_CreateThreadpoolWork(PTP_WORK_CALLBACK pfnwk, PVOID pv, PTP_CALLBACK_ENVIRON pcbe)

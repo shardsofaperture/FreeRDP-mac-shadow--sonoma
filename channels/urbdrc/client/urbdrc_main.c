@@ -337,9 +337,9 @@ fail:
  */
 static UINT urdbrc_send_usb_device_add(GENERIC_CHANNEL_CALLBACK* callback, IUDEVICE* pdev)
 {
-	char HardwareIds[2][DEVICE_HARDWARE_ID_SIZE] = { { 0 } };
+	char HardwareIds[2][DEVICE_HARDWARE_ID_SIZE] = { WINPR_C_ARRAY_INIT };
 	const char* CHardwareIds[2] = { HardwareIds[0], HardwareIds[1] };
-	char CompatibilityIds[4][DEVICE_COMPATIBILITY_ID_SIZE] = { { 0 } };
+	char CompatibilityIds[4][DEVICE_COMPATIBILITY_ID_SIZE] = { WINPR_C_ARRAY_INIT };
 	const char* CCompatibilityIds[4] = { CompatibilityIds[0], CompatibilityIds[1],
 		                                 CompatibilityIds[2], CompatibilityIds[3] };
 	char strContainerId[DEVICE_CONTAINER_STR_SIZE] = WINPR_C_ARRAY_INIT;

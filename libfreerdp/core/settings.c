@@ -1694,7 +1694,7 @@ BOOL identity_set_from_smartcard_hash(SEC_WINNT_AUTH_IDENTITY_W* identity,
                                       WINPR_ATTR_UNUSED size_t sha1len)
 {
 #ifdef _WIN32
-	CERT_CREDENTIAL_INFO certInfo = { sizeof(CERT_CREDENTIAL_INFO), { 0 } };
+	CERT_CREDENTIAL_INFO certInfo = { sizeof(CERT_CREDENTIAL_INFO), WINPR_C_ARRAY_INIT };
 	LPWSTR marshalledCredentials = nullptr;
 
 	memcpy(certInfo.rgbHashOfCert, certSha1, MIN(sha1len, sizeof(certInfo.rgbHashOfCert)));

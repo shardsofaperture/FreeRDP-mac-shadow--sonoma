@@ -62,7 +62,7 @@ static inline char* error_string(char* errbuf, size_t errbuf_size, int errnum)
 	return errbuf;
 }
 
-#define av_err2str(errnum) error_string((char[64]){ 0 }, 64, errnum)
+#define av_err2str(errnum) error_string((char[64])WINPR_C_ARRAY_INIT, 64, errnum)
 #endif
 
 #if defined(WITH_VAAPI) || defined(WITH_VAAPI_H264_ENCODING)
