@@ -899,14 +899,15 @@ static SECURITY_STATUS NCryptP11EnumKeys(NCRYPT_PROV_HANDLE hProvider, LPCWSTR p
 	return NTE_NO_MORE_ITEMS;
 }
 
-static BOOL piv_check_sw(DWORD buf_len, const BYTE* buf, BYTE expected_sw1)
+static BOOL piv_check_sw(DWORD buf_len, const BYTE* buf, size_t bufsize, BYTE expected_sw1)
 {
-	return (buf_len >= 2) && (buf[buf_len - 2] == expected_sw1);
+	return (buf_len >= 2) && (buf_len <= bufsize) && (buf[buf_len - 2] == expected_sw1);
 }
 
-static BOOL piv_check_sw_success(DWORD buf_len, const BYTE* buf)
+static BOOL piv_check_sw_success(DWORD buf_len, const BYTE* buf, size_t bufsize)
 {
-	return (buf_len >= 2) && (buf[buf_len - 2] == 0x90) && (buf[buf_len - 1] == 0x00);
+	return (buf_len >= 2) && (buf_len <= bufsize) && (buf[buf_len - 2] == 0x90) &&
+	       (buf[buf_len - 1] == 0x00);
 }
 
 static SECURITY_STATUS get_piv_container_name_from_mscmap(SCARDHANDLE card,
@@ -923,36 +924,39 @@ static SECURITY_STATUS get_piv_container_name_from_mscmap(SCARDHANDLE card,
 	                  &buf_len) != SCARD_S_SUCCESS)
 		return NTE_NOT_FOUND;
 
-	if (piv_check_sw_success(buf_len, buf))
+	if (piv_check_sw_success(buf_len, buf, sizeof(buf)))
 	{
 		mscmap_total = buf_len - 2;
 		if (mscmap_total > sizeof(mscmap_buf))
 			return NTE_NOT_FOUND;
 		memcpy(mscmap_buf, buf, mscmap_total);
 	}
-	else if (piv_check_sw(buf_len, buf, 0x61))
+	else if (piv_check_sw(buf_len, buf, sizeof(buf), 0x61))
 	{
 		mscmap_total = buf_len - 2;
 		if (mscmap_total <= sizeof(mscmap_buf))
 			memcpy(mscmap_buf, buf, mscmap_total);
 
-		while (piv_check_sw(buf_len, buf, 0x61) && mscmap_total < sizeof(mscmap_buf))
+		while (piv_check_sw(buf_len, buf, sizeof(buf), 0x61) && mscmap_total < sizeof(mscmap_buf))
 		{
-			BYTE get_resp[5] = { 0x00, 0xC0, 0x00, 0x00, 0x00 };
-			get_resp[4] = buf[buf_len - 1];
+			BYTE get_resp[5] = { 0x00, 0xC0, 0x00, 0x00, buf[buf_len - 1] };
 			buf_len = sizeof(buf);
-			if (SCardTransmit(card, pci, get_resp, sizeof(get_resp), nullptr, buf, &buf_len) !=
-			    SCARD_S_SUCCESS)
-				break;
-			DWORD chunk = piv_check_sw_success(buf_len, buf) ? (buf_len - 2)
-			              : piv_check_sw(buf_len, buf, 0x61) ? (buf_len - 2)
-			                                                 : 0;
+
+			const SECURITY_STATUS status =
+			    SCardTransmit(card, pci, get_resp, sizeof(get_resp), nullptr, buf, &buf_len);
+			if (status != SCARD_S_SUCCESS)
+				return NTE_NOT_FOUND;
+
+			DWORD chunk = 0;
+			if (piv_check_sw_success(buf_len, buf, sizeof(buf)) ||
+			    piv_check_sw(buf_len, buf, sizeof(buf), 0x61))
+				chunk = buf_len - 2;
 			if (chunk == 0 || mscmap_total + chunk > sizeof(mscmap_buf))
 				break;
 			memcpy(mscmap_buf + mscmap_total, buf, chunk);
 			mscmap_total += chunk;
 		}
-		if (!piv_check_sw_success(buf_len, buf))
+		if (!piv_check_sw_success(buf_len, buf, sizeof(buf)))
 			return NTE_NOT_FOUND;
 	}
 	else
@@ -1020,7 +1024,8 @@ static SECURITY_STATUS get_piv_container_name_from_chuid(SCARDHANDLE card,
 	if (SCardTransmit(card, pci, APDU_PIV_GET_CHUID, sizeof(APDU_PIV_GET_CHUID), nullptr, buf,
 	                  &buf_len) != SCARD_S_SUCCESS)
 		return NTE_BAD_KEY;
-	if (!piv_check_sw_success(buf_len, buf) && !piv_check_sw(buf_len, buf, 0x61))
+	if (!piv_check_sw_success(buf_len, buf, sizeof(buf)) &&
+	    !piv_check_sw(buf_len, buf, sizeof(buf), 0x61))
 		return NTE_BAD_KEY;
 
 	WinPrAsn1Decoder dec = WinPrAsn1Decoder_init();
@@ -1101,7 +1106,8 @@ static SECURITY_STATUS get_piv_container_name(NCryptP11KeyHandle* key, const BYT
 	if (SCardTransmit(card, pci, APDU_PIV_SELECT_AID, sizeof(APDU_PIV_SELECT_AID), nullptr, buf,
 	                  &buf_len) != SCARD_S_SUCCESS)
 		goto out;
-	if (!piv_check_sw_success(buf_len, buf) && !piv_check_sw(buf_len, buf, 0x61))
+	if (!piv_check_sw_success(buf_len, buf, sizeof(buf)) &&
+	    !piv_check_sw(buf_len, buf, sizeof(buf), 0x61))
 		goto out;
 
 	/* Try MSCMAP first, fall back to CHUID */
