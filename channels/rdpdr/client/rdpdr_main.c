@@ -2350,7 +2350,8 @@ static UINT rdpdr_virtual_channel_event_initialized(rdpdrPlugin* rdpdr,
 #if !defined(_WIN32)
 	WINPR_ASSERT(!rdpdr->stopEvent);
 	rdpdr->stopEvent = CreateEvent(nullptr, TRUE, FALSE, nullptr);
-	WINPR_ASSERT(rdpdr->stopEvent);
+	if (!rdpdr->stopEvent)
+		return ERROR_INTERNAL_ERROR;
 #endif
 
 	rdpdr->context.handle = rdpdr;

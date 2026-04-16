@@ -77,6 +77,7 @@ struct s_wLog
 	CRITICAL_SECTION lock;
 	WINPR_ATTR_NODISCARD const char* (*custom)(void*);
 	void* context;
+	BOOL independent;
 };
 
 WINPR_LOCAL extern const char* WLOG_LEVELS[7];

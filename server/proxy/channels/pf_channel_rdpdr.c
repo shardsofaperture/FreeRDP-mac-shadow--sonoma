@@ -1529,6 +1529,7 @@ static void pf_channel_rdpdr_client_context_free(InterceptContextMapEntry* base)
 
 	pf_channel_rdpdr_common_context_free(&entry->common);
 	Queue_Free(entry->queue);
+	WLog_Discard(entry->log);
 	free(entry);
 }
 
@@ -1793,10 +1794,13 @@ BOOL pf_channel_rdpdr_client_new(pClientContext* pc)
 	rdpdr = calloc(1, sizeof(pf_channel_client_context));
 	if (!rdpdr)
 		return FALSE;
-	rdpdr->log = WLog_Get(RTAG);
-	WINPR_ASSERT(rdpdr->log);
+	rdpdr->log = WLog_Create(RTAG, WLog_GetRoot());
+	if (!rdpdr->log)
+		goto fail;
 
-	WLog_SetContext(rdpdr->log, pf_channel_rdpdr_client_context, pc);
+	if (!WLog_SetContext(rdpdr->log, pf_channel_rdpdr_client_context, pc))
+		goto fail;
+
 	if (!pf_channel_rdpdr_common_context_new(&rdpdr->common, pf_channel_rdpdr_client_context_free))
 		goto fail;
 
@@ -1836,6 +1840,7 @@ static void pf_channel_rdpdr_server_context_free(InterceptContextMapEntry* base)
 	(void)WTSVirtualChannelClose(entry->handle);
 	pf_channel_rdpdr_common_context_free(&entry->common);
 	ArrayList_Free(entry->blockedDevices);
+	WLog_Discard(entry->log);
 	free(entry);
 }
 
@@ -1862,9 +1867,12 @@ BOOL pf_channel_rdpdr_server_new(pServerContext* ps)
 	rdpdr = calloc(1, sizeof(pf_channel_server_context));
 	if (!rdpdr)
 		return FALSE;
-	rdpdr->log = WLog_Get(RTAG);
-	WINPR_ASSERT(rdpdr->log);
-	WLog_SetContext(rdpdr->log, pf_channel_rdpdr_server_context, ps);
+	rdpdr->log = WLog_Create(RTAG, WLog_GetRoot());
+	if (!rdpdr->log)
+		goto fail;
+
+	if (!WLog_SetContext(rdpdr->log, pf_channel_rdpdr_server_context, ps))
+		goto fail;
 
 	if (!pf_channel_rdpdr_common_context_new(&rdpdr->common, pf_channel_rdpdr_server_context_free))
 		goto fail;

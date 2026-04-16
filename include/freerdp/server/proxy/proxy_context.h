@@ -173,13 +173,11 @@ extern "C"
 	FREERDP_API BOOL pf_context_init_server_context(freerdp_peer* client);
 
 	WINPR_ATTR_MALLOC(freerdp_client_context_free, 1)
-	WINPR_ATTR_NODISCARD
 	FREERDP_API pClientContext* pf_context_create_client_context(const rdpSettings* clientSettings);
 
 	FREERDP_API void proxy_data_free(proxyData* pdata);
 
 	WINPR_ATTR_MALLOC(proxy_data_free, 1)
-	WINPR_ATTR_NODISCARD
 	FREERDP_API proxyData* proxy_data_new(void);
 	FREERDP_API void proxy_data_set_client_context(proxyData* pdata, pClientContext* context);
 	FREERDP_API void proxy_data_set_server_context(proxyData* pdata, pServerContext* context);

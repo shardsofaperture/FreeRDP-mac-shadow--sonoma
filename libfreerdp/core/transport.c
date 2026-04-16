@@ -802,7 +802,7 @@ static void transport_bio_error_log(rdpTransport* transport, LPCSTR biofunc,
 	saveerrno = errno;
 	level = WLOG_ERROR;
 
-	if (level < WLog_GetLogLevel(transport->log))
+	if (!WLog_IsLevelActive(transport->log, level))
 		return;
 
 	if (ERR_peek_error() == 0)
@@ -1706,7 +1706,7 @@ rdpTransport* transport_new(rdpContext* context)
 	if (!transport)
 		return nullptr;
 
-	transport->log = WLog_Get(TAG);
+	transport->log = WLog_Create(TAG, WLog_GetRoot());
 
 	if (!transport->log)
 		goto fail;
@@ -1809,6 +1809,7 @@ void transport_free(rdpTransport* transport)
 	if (transport->haveWriteLock)
 		LeaveCriticalSection(&(transport->WriteLock));
 	DeleteCriticalSection(&(transport->WriteLock));
+	WLog_Discard(transport->log);
 	free(transport);
 }
 

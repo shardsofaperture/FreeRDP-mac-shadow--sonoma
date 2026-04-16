@@ -182,6 +182,24 @@ extern "C"
 	WINPR_ATTR_NODISCARD
 	WINPR_API wLog* WLog_Get(LPCSTR name);
 
+	/** @brief discard a WLog instance created by \b WLog_Discard and not managed internally.
+	 *
+	 *  @param log The logger instance to discard.
+	 *  @since version 3.25.0
+	 */
+	WINPR_API void WLog_Discard(wLog* log);
+
+	/** @brief Create an independent logger instance. Management of this logger
+	 *  is up to the caller.
+	 *
+	 *  @param name The name of the logger, must not be \b nullptr
+	 *  @param root The parent logger this instance should copy defaults from.
+	 *  @return A new logger instance or \b nullptr in case of failures.
+	 *  @since version 3.25.0
+	 */
+	WINPR_ATTR_MALLOC(WLog_Discard, 1)
+	WINPR_API wLog* WLog_Create(LPCSTR name, wLog* root);
+
 	WINPR_ATTR_NODISCARD
 	WINPR_API DWORD WLog_GetLogLevel(wLog* log);
 
@@ -190,6 +208,10 @@ extern "C"
 
 	/** @brief Set a custom context for a dynamic logger.
 	 *  This can be used to print a customized prefix, e.g. some session id for a specific context
+	 *
+	 *  @warning In multi instance applications only use this with loggers created with \b
+	 * WLog_Create otherwise there may be out of bound reads as the internally managed loggers only
+	 * support a single context
 	 *
 	 *  @param log The logger to ste the context for. Must not be \b nullptr
 	 *  @param fkt A function pointer that is called to get the custimized string.

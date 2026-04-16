@@ -817,6 +817,7 @@ static void DynChannelContext_free(void* context)
 	channelTracker_free(c->backTracker);
 	channelTracker_free(c->frontTracker);
 	HashTable_Free(c->channels);
+	WLog_Discard(c->log);
 	free(c);
 }
 
@@ -830,7 +831,6 @@ static const char* dynamic_context(void* arg)
 }
 
 WINPR_ATTR_MALLOC(DynChannelContext_free, 1)
-WINPR_ATTR_NODISCARD
 static DynChannelContext* DynChannelContext_new(proxyData* pdata,
                                                 pServerStaticChannelContext* channel)
 {
@@ -838,9 +838,12 @@ static DynChannelContext* DynChannelContext_new(proxyData* pdata,
 	if (!dyn)
 		return nullptr;
 
-	dyn->log = WLog_Get(DTAG);
-	WINPR_ASSERT(dyn->log);
-	WLog_SetContext(dyn->log, dynamic_context, pdata);
+	dyn->log = WLog_Create(DTAG, WLog_GetRoot());
+	if (!dyn->log)
+		goto fail;
+
+	if (!WLog_SetContext(dyn->log, dynamic_context, pdata))
+		goto fail;
 
 	dyn->backTracker = channelTracker_new(channel, DynvcTrackerPeekFn, dyn);
 	if (!dyn->backTracker)

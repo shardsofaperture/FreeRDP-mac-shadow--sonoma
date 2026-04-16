@@ -94,7 +94,7 @@ if(HAVE_LIB_M)
   list(APPEND LIBS m)
 endif()
 
-target_include_directories(${MODULE_NAME} INTERFACE $<INSTALL_INTERFACE:include>)
+target_include_directories(${MODULE_NAME} INTERFACE $<INSTALL_INTERFACE:include/freerdp${FREERDP_VERSION_MAJOR}>)
 target_link_libraries(${MODULE_NAME} PRIVATE ${FREERDP_CHANNELS_CLIENT_LIBS})
 target_link_libraries(${MODULE_NAME} PUBLIC ${LIBS})
 

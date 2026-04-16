@@ -2386,11 +2386,13 @@ rdpRdp* rdp_new(rdpContext* context)
 	if (!rdp)
 		return nullptr;
 
-	rdp->log = WLog_Get(RDP_TAG);
-	WINPR_ASSERT(rdp->log);
+	rdp->log = WLog_Create(RDP_TAG, WLog_GetRoot());
+	if (!rdp->log)
+		goto fail;
 
 	(void)_snprintf(rdp->log_context, sizeof(rdp->log_context), "%p", (void*)context);
-	WLog_SetContext(rdp->log, nullptr, rdp->log_context);
+	if (!WLog_SetContext(rdp->log, nullptr, rdp->log_context))
+		goto fail;
 
 	InitializeCriticalSection(&rdp->critical);
 	rdp->context = context;
@@ -2597,6 +2599,7 @@ void rdp_free(rdpRdp* rdp)
 		aad_free(rdp->aad);
 		WINPR_JSON_Delete(rdp->wellknown);
 		DeleteCriticalSection(&rdp->critical);
+		WLog_Discard(rdp->log);
 		free(rdp);
 	}
 }

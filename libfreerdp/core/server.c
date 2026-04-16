@@ -1016,6 +1016,11 @@ static BOOL CALLBACK initializeHandles(WINPR_ATTR_UNUSED PINIT_ONCE once,
 	return g_ServerHandles != nullptr;
 }
 
+static bool setup(void)
+{
+	return InitOnceExecuteOnce(&g_HandleInitializer, initializeHandles, nullptr, nullptr);
+}
+
 static void wtsCloseVCM(WTSVirtualChannelManager* vcm, bool closeDrdynvc)
 {
 	WINPR_ASSERT(vcm);
@@ -1054,7 +1059,7 @@ HANDLE WINAPI FreeRDP_WTSOpenServerA(LPSTR pServerName)
 
 	rdpContext* context = (rdpContext*)pServerName;
 
-	if (!context)
+	if (!setup() || !context)
 		return INVALID_HANDLE_VALUE;
 
 	freerdp_peer* client = context->peer;
@@ -1065,11 +1070,7 @@ HANDLE WINAPI FreeRDP_WTSOpenServerA(LPSTR pServerName)
 		return INVALID_HANDLE_VALUE;
 	}
 
-	if (!InitOnceExecuteOnce(&g_HandleInitializer, initializeHandles, nullptr, nullptr))
-		return INVALID_HANDLE_VALUE;
-
-	WTSVirtualChannelManager* vcm =
-	    (WTSVirtualChannelManager*)calloc(1, sizeof(WTSVirtualChannelManager));
+	WTSVirtualChannelManager* vcm = calloc(1, sizeof(WTSVirtualChannelManager));
 
 	if (!vcm)
 		goto fail;
@@ -1463,6 +1464,9 @@ HANDLE WINAPI FreeRDP_WTSVirtualChannelOpenEx(DWORD SessionId, LPSTR pVirtualNam
 	rdpPeerChannel* channel = nullptr;
 	BOOL joined = FALSE;
 	ULONG written = 0;
+
+	if (!setup())
+		return nullptr;
 
 	if (SessionId == WTS_CURRENT_SESSION)
 		return nullptr;
