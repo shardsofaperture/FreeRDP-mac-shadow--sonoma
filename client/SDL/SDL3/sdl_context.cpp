@@ -1235,8 +1235,8 @@ void SdlContext::addOrUpdateDisplay(SDL_DisplayID id)
 	auto neighbors = updateDisplayOffsetsForNeighbours(primary);
 	while (!neighbors.empty())
 	{
-		auto neighbor = *neighbors.begin();
-		neighbors.pop_back();
+		auto neighbor = neighbors.front();
+		neighbors.erase(neighbors.begin());
 
 		if (std::find(handled.begin(), handled.end(), neighbor) != handled.end())
 			continue;
