@@ -18,6 +18,8 @@
  */
 
 #include <winpr/winpr.h>
+#include <winpr/library.h>
+
 #include <freerdp/log.h>
 #include <freerdp/codec/h264.h>
 
@@ -170,7 +172,8 @@ error:
 	return hr;
 }
 
-static int mf_decompress(H264_CONTEXT* h264, const BYTE* pSrcData, UINT32 SrcSize)
+static int mf_decompress(H264_CONTEXT* WINPR_RESTRICT h264, const BYTE* WINPR_RESTRICT pSrcData,
+                         UINT32 SrcSize)
 {
 	HRESULT hr;
 	BYTE* pbBuffer = nullptr;
@@ -379,8 +382,9 @@ error:
 	return -1;
 }
 
-static int mf_compress(H264_CONTEXT* h264, const BYTE** ppSrcYuv, const UINT32* pStride,
-                       BYTE** ppDstData, UINT32* pDstSize)
+static int mf_compress(H264_CONTEXT* WINPR_RESTRICT h264, const BYTE** WINPR_RESTRICT ppSrcYuv,
+                       const UINT32* WINPR_RESTRICT pStride, BYTE** WINPR_RESTRICT ppDstData,
+                       UINT32* WINPR_RESTRICT pDstSize)
 {
 	H264_CONTEXT_MF* sys = (H264_CONTEXT_MF*)h264->pSystemData;
 	return 1;
@@ -514,8 +518,8 @@ static BOOL mf_init(H264_CONTEXT* h264)
 			goto error;
 		}
 
-		var.vt = VT_UI4;
-		var.ulVal = 1;
+		var.n1.n2.vt = VT_UI4;
+		var.n1.n2.n3.ulVal = 1;
 		hr = sys->codecApi->lpVtbl->SetValue(sys->codecApi, &sCODECAPI_AVLowLatencyMode, &var);
 
 		if (FAILED(hr))

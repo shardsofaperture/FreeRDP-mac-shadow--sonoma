@@ -45,6 +45,7 @@ class SdlWindow
 	[[nodiscard]] SDL_Rect rect() const;
 	[[nodiscard]] SDL_Rect bounds() const;
 	[[nodiscard]] SDL_Window* window() const;
+	[[nodiscard]] SDL_Renderer* renderer() const;
 
 	[[nodiscard]] Sint32 offsetX() const;
 	void setOffsetX(Sint32 x);

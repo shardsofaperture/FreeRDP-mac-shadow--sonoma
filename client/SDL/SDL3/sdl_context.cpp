@@ -1260,9 +1260,9 @@ bool SdlContext::eventToPixelCoordinates(SDL_WindowID id, SDL_Event& ev)
 		return false;
 
 	/* Ignore errors here, sometimes SDL has no renderer */
-	auto renderer = SDL_GetRenderer(w->window());
+	auto renderer = w->renderer();
 	if (!renderer)
-		return false;
+		return true;
 	return SDL_ConvertEventToRenderCoordinates(renderer, &ev);
 }
 
@@ -1292,7 +1292,7 @@ SDL_FPoint SdlContext::screenToPixel(SDL_WindowID id, const SDL_FPoint& pos)
 		return {};
 
 	/* Ignore errors here, sometimes SDL has no renderer */
-	auto renderer = SDL_GetRenderer(w->window());
+	auto renderer = w->renderer();
 	if (!renderer)
 		return pos;
 
@@ -1310,7 +1310,7 @@ SDL_FPoint SdlContext::pixelToScreen(SDL_WindowID id, const SDL_FPoint& pos)
 		return {};
 
 	/* Ignore errors here, sometimes SDL has no renderer */
-	auto renderer = SDL_GetRenderer(w->window());
+	auto renderer = w->renderer();
 	if (!renderer)
 		return pos;
 

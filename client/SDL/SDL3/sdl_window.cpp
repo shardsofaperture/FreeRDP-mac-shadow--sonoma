@@ -105,6 +105,11 @@ SDL_Window* SdlWindow::window() const
 	return _window;
 }
 
+SDL_Renderer* SdlWindow::renderer() const
+{
+	return SDL_GetRenderer(_window);
+}
+
 Sint32 SdlWindow::offsetX() const
 {
 	return _offset_x;
