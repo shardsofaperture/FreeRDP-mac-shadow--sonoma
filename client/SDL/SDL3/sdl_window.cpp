@@ -557,33 +557,30 @@ bool SdlWindow::tryFallback(bool isFullscreen)
 	if ((driver == nullptr) || (strcmp(driver, "wayland") != 0))
 		return false;
 
-	/* check XDG_SESSION_DESKTOP
-	 *
-	 * if set and the value is
-	 * - sway
-	 *
-	 * then we need the hack.
+	/* Check XDG_SESSION_DESKTOP and XDG_CURRENT_DESKTOP for wlroots-based
+	 * compositors. The original check only matched Sway, but other wlroots
+	 * compositors (Hyprland, river, etc.) have the same dummy-window sizing
+	 * behavior where hidden/unmapped windows return 64x64 instead of the
+	 * display size. Use strstr for substring matching since XDG_CURRENT_DESKTOP
+	 * can be a colon-separated list (e.g. "sway:wlroots", "Hyprland").
 	 */
-	const auto xdg_session = SDL_getenv("XDG_SESSION_DESKTOP");
-	if (xdg_session != nullptr)
+	auto isWlrootsCompositor = [](const char* value) -> bool
 	{
-		if (strcmp(xdg_session, "sway") == 0)
-			return isFullscreen;
-	}
+		if (!value)
+			return false;
+		if (strstr(value, "sway") || strstr(value, "Sway") || strstr(value, "Hyprland") ||
+		    strstr(value, "hyprland") || strstr(value, "river") || strstr(value, "wlroots"))
+			return true;
+		return false;
+	};
 
-	/* check XDG_CURRENT_DESKTOP
-	 *
-	 * if set and the value is
-	 * - sway:wlroots
-	 *
-	 * then we need the hack.
-	 */
+	const auto xdg_session = SDL_getenv("XDG_SESSION_DESKTOP");
+	if (isWlrootsCompositor(xdg_session))
+		return isFullscreen;
+
 	const auto xdg_desktop = SDL_getenv("XDG_CURRENT_DESKTOP");
-	if (xdg_desktop != nullptr)
-	{
-		if (strcmp(xdg_desktop, "sway:wlroots") == 0)
-			return isFullscreen;
-	}
+	if (isWlrootsCompositor(xdg_desktop))
+		return isFullscreen;
 
 	return false;
 }
