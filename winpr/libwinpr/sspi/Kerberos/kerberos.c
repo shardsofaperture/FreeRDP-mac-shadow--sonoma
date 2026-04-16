@@ -2084,11 +2084,11 @@ static SECURITY_STATUS SEC_ENTRY kerberos_EncryptMessage(WINPR_ATTR_UNUSED PCtxt
 	BYTE flags = 0;
 	krb5glue_key key = nullptr;
 	krb5_keyusage usage = 0;
-	krb5_crypto_iov encrypt_iov[] = { { KRB5_CRYPTO_TYPE_HEADER, { 0 } },
-		                              { KRB5_CRYPTO_TYPE_DATA, { 0 } },
-		                              { KRB5_CRYPTO_TYPE_DATA, { 0 } },
-		                              { KRB5_CRYPTO_TYPE_PADDING, { 0 } },
-		                              { KRB5_CRYPTO_TYPE_TRAILER, { 0 } } };
+	krb5_crypto_iov encrypt_iov[] = { { KRB5_CRYPTO_TYPE_HEADER, WINPR_C_ARRAY_INIT },
+		                              { KRB5_CRYPTO_TYPE_DATA, WINPR_C_ARRAY_INIT },
+		                              { KRB5_CRYPTO_TYPE_DATA, WINPR_C_ARRAY_INIT },
+		                              { KRB5_CRYPTO_TYPE_PADDING, WINPR_C_ARRAY_INIT },
+		                              { KRB5_CRYPTO_TYPE_TRAILER, WINPR_C_ARRAY_INIT } };
 
 	if (!context)
 		return SEC_E_INVALID_HANDLE;
@@ -2178,11 +2178,11 @@ static SECURITY_STATUS SEC_ENTRY kerberos_DecryptMessage(WINPR_ATTR_UNUSED PCtxt
 	uint16_t ec = 0;
 	uint16_t rrc = 0;
 	uint64_t seq_no = 0;
-	krb5_crypto_iov iov[] = { { KRB5_CRYPTO_TYPE_HEADER, { 0 } },
-		                      { KRB5_CRYPTO_TYPE_DATA, { 0 } },
-		                      { KRB5_CRYPTO_TYPE_DATA, { 0 } },
-		                      { KRB5_CRYPTO_TYPE_PADDING, { 0 } },
-		                      { KRB5_CRYPTO_TYPE_TRAILER, { 0 } } };
+	krb5_crypto_iov iov[] = { { KRB5_CRYPTO_TYPE_HEADER, WINPR_C_ARRAY_INIT },
+		                      { KRB5_CRYPTO_TYPE_DATA, WINPR_C_ARRAY_INIT },
+		                      { KRB5_CRYPTO_TYPE_DATA, WINPR_C_ARRAY_INIT },
+		                      { KRB5_CRYPTO_TYPE_PADDING, WINPR_C_ARRAY_INIT },
+		                      { KRB5_CRYPTO_TYPE_TRAILER, WINPR_C_ARRAY_INIT } };
 
 	if (!context)
 		return SEC_E_INVALID_HANDLE;
@@ -2281,9 +2281,9 @@ static SECURITY_STATUS SEC_ENTRY kerberos_MakeSignature(WINPR_ATTR_UNUSED PCtxtH
 	krb5glue_key key = nullptr;
 	krb5_keyusage usage = 0;
 	BYTE flags = 0;
-	krb5_crypto_iov iov[] = { { KRB5_CRYPTO_TYPE_DATA, { 0 } },
-		                      { KRB5_CRYPTO_TYPE_DATA, { 0 } },
-		                      { KRB5_CRYPTO_TYPE_CHECKSUM, { 0 } } };
+	krb5_crypto_iov iov[] = { { KRB5_CRYPTO_TYPE_DATA, WINPR_C_ARRAY_INIT },
+		                      { KRB5_CRYPTO_TYPE_DATA, WINPR_C_ARRAY_INIT },
+		                      { KRB5_CRYPTO_TYPE_CHECKSUM, WINPR_C_ARRAY_INIT } };
 
 	if (!context)
 		return SEC_E_INVALID_HANDLE;
@@ -2355,9 +2355,9 @@ static SECURITY_STATUS SEC_ENTRY kerberos_VerifySignature(WINPR_ATTR_UNUSED PCtx
 	uint16_t tok_id = 0;
 	uint64_t seq_no = 0;
 	krb5_boolean is_valid = 0;
-	krb5_crypto_iov iov[] = { { KRB5_CRYPTO_TYPE_DATA, { 0 } },
-		                      { KRB5_CRYPTO_TYPE_DATA, { 0 } },
-		                      { KRB5_CRYPTO_TYPE_CHECKSUM, { 0 } } };
+	krb5_crypto_iov iov[] = { { KRB5_CRYPTO_TYPE_DATA, WINPR_C_ARRAY_INIT },
+		                      { KRB5_CRYPTO_TYPE_DATA, WINPR_C_ARRAY_INIT },
+		                      { KRB5_CRYPTO_TYPE_CHECKSUM, WINPR_C_ARRAY_INIT } };
 	BYTE cmp_filler[] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
 
 	KRB_CONTEXT* context = get_context(phContext);

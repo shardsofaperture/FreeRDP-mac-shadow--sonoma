@@ -64,7 +64,7 @@ static void fuzz_ntlm_client_uninit(FUZZ_NTLM_CLIENT* client)
 		return;
 
 	free(client->outputBuffer[0].pvBuffer);
-	client->outputBuffer[0].pvBuffer = NULL;
+	client->outputBuffer[0].pvBuffer = nullptr;
 
 	free(client->identity.User);
 	free(client->identity.Domain);
@@ -121,7 +121,7 @@ static SECURITY_STATUS fuzz_ntlm_client_step(FUZZ_NTLM_CLIENT* client)
 	WINPR_ASSERT(client);
 
 	free(client->outputBuffer[0].pvBuffer);
-	client->outputBuffer[0].pvBuffer = NULL;
+	client->outputBuffer[0].pvBuffer = nullptr;
 
 	client->outputBufferDesc.ulVersion = SECBUFFER_VERSION;
 	client->outputBufferDesc.cBuffers = ARRAYSIZE(client->outputBuffer);
@@ -169,7 +169,7 @@ static void fuzz_ntlm_server_uninit(FUZZ_NTLM_SERVER* server)
 		return;
 
 	free(server->outputBuffer[0].pvBuffer);
-	server->outputBuffer[0].pvBuffer = NULL;
+	server->outputBuffer[0].pvBuffer = nullptr;
 
 	if (server->table)
 	{
@@ -220,7 +220,7 @@ static SECURITY_STATUS fuzz_ntlm_server_step(FUZZ_NTLM_SERVER* server)
 	WINPR_ASSERT(server);
 
 	free(server->outputBuffer[0].pvBuffer);
-	server->outputBuffer[0].pvBuffer = NULL;
+	server->outputBuffer[0].pvBuffer = nullptr;
 
 	server->inputBufferDesc.ulVersion = SECBUFFER_VERSION;
 	server->inputBufferDesc.cBuffers = ARRAYSIZE(server->inputBuffer);
@@ -270,7 +270,7 @@ static void fuzz_ntlm_set_input(SecBuffer* buffer, BOOL* haveInputBuffer, const 
 
 static void fuzz_ntlm_negotiate(const uint8_t* data, size_t size)
 {
-	FUZZ_NTLM_SERVER server = { 0 };
+	FUZZ_NTLM_SERVER server = WINPR_C_ARRAY_INIT;
 
 	if (!fuzz_ntlm_server_init(&server))
 		goto fail;
@@ -284,7 +284,7 @@ fail:
 
 static void fuzz_ntlm_challenge(const uint8_t* data, size_t size)
 {
-	FUZZ_NTLM_CLIENT client = { 0 };
+	FUZZ_NTLM_CLIENT client = WINPR_C_ARRAY_INIT;
 
 	if (!fuzz_ntlm_client_init(&client))
 		goto fail;
@@ -301,8 +301,8 @@ fail:
 
 static void fuzz_ntlm_authenticate(const uint8_t* data, size_t size)
 {
-	FUZZ_NTLM_CLIENT client = { 0 };
-	FUZZ_NTLM_SERVER server = { 0 };
+	FUZZ_NTLM_CLIENT client = WINPR_C_ARRAY_INIT;
+	FUZZ_NTLM_SERVER server = WINPR_C_ARRAY_INIT;
 
 	if (!fuzz_ntlm_client_init(&client))
 		goto fail;
@@ -331,7 +331,7 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 
 	if (!loggingInitialized)
 	{
-		(void)WLog_SetLogLevel(WLog_GetRoot(), WLOG_OFF);
+		(void)WLog_SetLogLevel(WLog_GetRoot(), WLOG_TRACE);
 		loggingInitialized = TRUE;
 	}
 

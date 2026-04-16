@@ -205,7 +205,7 @@ INT32 freerdp_av1_compress(FREERDP_AV1_CONTEXT* av1, const BYTE* pSrcData, DWORD
 
 	const prim_size_t roi = { .width = nSrcWidth, .height = nSrcHeight };
 
-	aom_image_t buffer = { 0 };
+	aom_image_t buffer = WINPR_C_ARRAY_INIT;
 
 	aom_image_t* img = &buffer;
 #if defined(WITH_LIBYUV)

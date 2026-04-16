@@ -113,7 +113,7 @@ static const ZGFX_TOKEN ZGFX_TOKEN_TABLE[] = {
 	{ 9, 380, 22, 1, 4511392 },  // 101111100
 	{ 9, 381, 23, 1, 8705696 },  // 101111101
 	{ 9, 382, 24, 1, 17094304 }, // 101111110
-	{ 0 }
+	WINPR_C_ARRAY_INIT
 };
 
 static inline BOOL zgfx_GetBits(ZGFX_CONTEXT* WINPR_RESTRICT zgfx, UINT32 nbits)

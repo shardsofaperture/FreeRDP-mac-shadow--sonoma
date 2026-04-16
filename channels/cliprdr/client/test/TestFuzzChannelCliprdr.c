@@ -24,7 +24,7 @@ static UINT32 fuzz_stream_len_u32(wStream* s)
 
 static void fuzz_format_list(wStream* s, BOOL longNames)
 {
-	CLIPRDR_FORMAT_LIST list = { 0 };
+	CLIPRDR_FORMAT_LIST list = WINPR_C_ARRAY_INIT;
 	list.common.dataLen = fuzz_stream_len_u32(s);
 
 	if (cliprdr_read_format_list(g_Log, s, &list, longNames) == CHANNEL_RC_OK)
@@ -33,28 +33,28 @@ static void fuzz_format_list(wStream* s, BOOL longNames)
 
 static void fuzz_format_data_request(wStream* s)
 {
-	CLIPRDR_FORMAT_DATA_REQUEST request = { 0 };
+	CLIPRDR_FORMAT_DATA_REQUEST request = WINPR_C_ARRAY_INIT;
 	request.common.dataLen = fuzz_stream_len_u32(s);
 	(void)cliprdr_read_format_data_request(s, &request);
 }
 
 static void fuzz_format_data_response(wStream* s)
 {
-	CLIPRDR_FORMAT_DATA_RESPONSE response = { 0 };
+	CLIPRDR_FORMAT_DATA_RESPONSE response = WINPR_C_ARRAY_INIT;
 	response.common.dataLen = fuzz_stream_len_u32(s);
 	(void)cliprdr_read_format_data_response(s, &response);
 }
 
 static void fuzz_file_contents_request(wStream* s)
 {
-	CLIPRDR_FILE_CONTENTS_REQUEST request = { 0 };
+	CLIPRDR_FILE_CONTENTS_REQUEST request = WINPR_C_ARRAY_INIT;
 	request.common.dataLen = fuzz_stream_len_u32(s);
 	(void)cliprdr_read_file_contents_request(s, &request);
 }
 
 static void fuzz_file_contents_response(wStream* s)
 {
-	CLIPRDR_FILE_CONTENTS_RESPONSE response = { 0 };
+	CLIPRDR_FILE_CONTENTS_RESPONSE response = WINPR_C_ARRAY_INIT;
 	const UINT32 dataLen = fuzz_stream_len_u32(s);
 
 	response.common.dataLen = (dataLen >= 4) ? dataLen : 4;
@@ -63,17 +63,13 @@ static void fuzz_file_contents_response(wStream* s)
 
 static void fuzz_unlock(wStream* s)
 {
-	CLIPRDR_UNLOCK_CLIPBOARD_DATA data = { 0 };
+	CLIPRDR_UNLOCK_CLIPBOARD_DATA data = WINPR_C_ARRAY_INIT;
 	data.common.dataLen = fuzz_stream_len_u32(s);
 	(void)cliprdr_read_unlock_clipdata(s, &data);
 }
 
 int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 {
-	const uint8_t* body = NULL;
-	BOOL longNames = FALSE;
-	wStream* s = NULL;
-
 	if (size < 2)
 		return 0;
 	if (size > (1u << 20))
@@ -82,9 +78,9 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 	if (!g_Log)
 		g_Log = WLog_Get("fuzz.cliprdr");
 
-	longNames = (data[1] & 0x1) ? TRUE : FALSE;
-	body = data + 2;
-	s = Stream_New((BYTE*)body, size - 2);
+	BOOL longNames = (data[1] & 0x1) ? TRUE : FALSE;
+	const uint8_t* body = data + 2;
+	wStream* s = Stream_New((BYTE*)body, size - 2);
 	if (!s)
 		return 0;
 

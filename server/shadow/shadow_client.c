@@ -1420,7 +1420,7 @@ static BOOL shadow_client_send_rfx(rdpShadowClient* client, const BYTE* pSrcData
 
 	UINT error = CHANNEL_RC_OK;
 	BOOL rc = 0;
-	RFX_RECT rect = { 0 };
+	RFX_RECT rect = WINPR_C_ARRAY_INIT;
 
 	if (shadow_encoder_prepare(encoder, FREERDP_CODEC_REMOTEFX) < 0)
 	{

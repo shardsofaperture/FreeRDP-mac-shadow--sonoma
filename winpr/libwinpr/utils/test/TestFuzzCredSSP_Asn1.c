@@ -40,14 +40,14 @@ static void fuzz_consume_one(WinPrAsn1Decoder* decoder, int depth)
 		}
 		case ER_TAG_OCTET_STRING:
 		{
-			WinPrAsn1_OctetString value = { 0 };
+			WinPrAsn1_OctetString value = WINPR_C_ARRAY_INIT;
 			if (WinPrAsn1DecReadOctetString(&inner, &value, TRUE))
 				WinPrAsn1FreeOctetString(&value);
 			break;
 		}
 		case ER_TAG_OBJECT_IDENTIFIER:
 		{
-			WinPrAsn1_OID value = { 0 };
+			WinPrAsn1_OID value = WINPR_C_ARRAY_INIT;
 			if (WinPrAsn1DecReadOID(&inner, &value, TRUE))
 				WinPrAsn1FreeOID(&value);
 			break;
@@ -60,13 +60,13 @@ static void fuzz_consume_one(WinPrAsn1Decoder* decoder, int depth)
 		}
 		case ER_TAG_UTCTIME:
 		{
-			WinPrAsn1_UTCTIME value = { 0 };
+			WinPrAsn1_UTCTIME value = WINPR_C_ARRAY_INIT;
 			(void)WinPrAsn1DecReadUtcTime(&inner, &value);
 			break;
 		}
 		case ER_TAG_IA5STRING:
 		{
-			WinPrAsn1_IA5STRING value = NULL;
+			WinPrAsn1_IA5STRING value = nullptr;
 			(void)WinPrAsn1DecReadIA5String(&inner, &value);
 			free(value);
 			break;
@@ -106,7 +106,7 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 
 	if (!loggingInitialized)
 	{
-		(void)WLog_SetLogLevel(WLog_GetRoot(), WLOG_OFF);
+		(void)WLog_SetLogLevel(WLog_GetRoot(), WLOG_TRACE);
 		loggingInitialized = TRUE;
 	}
 

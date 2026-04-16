@@ -15,18 +15,16 @@
 static int fuzz_nsc_message(UINT16 bpp, UINT32 width, UINT32 height, UINT32 dstFormat,
                             const uint8_t* data, size_t size)
 {
-	SSIZE_T stride = 0;
-	BYTE* dst = NULL;
-	NSC_CONTEXT* ctx = NULL;
+	BYTE* dst = nullptr;
 
 	if (size > UINT32_MAX)
 		return 0;
 
-	ctx = nsc_context_new();
+	NSC_CONTEXT* ctx = nsc_context_new();
 	if (!ctx)
 		return 0;
 
-	stride = (SSIZE_T)width * FreeRDPGetBytesPerPixel(dstFormat);
+	SSIZE_T stride = (SSIZE_T)width * FreeRDPGetBytesPerPixel(dstFormat);
 	if (stride <= 0)
 		goto fail;
 
@@ -49,7 +47,7 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 
 	if (!loggingInitialized)
 	{
-		(void)WLog_SetLogLevel(WLog_GetRoot(), WLOG_OFF);
+		(void)WLog_SetLogLevel(WLog_GetRoot(), WLOG_TRACE);
 		loggingInitialized = TRUE;
 	}
 

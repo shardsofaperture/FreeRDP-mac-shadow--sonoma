@@ -29,21 +29,13 @@ static UINT32 fuzz_read_variable_uint(wStream* s, UINT8 cbLen)
 	switch (cbLen)
 	{
 		case 0:
-		{
-			UINT8 value8 = 0;
-			Stream_Read_UINT8(s, value8);
-			value = value8;
+			value = Stream_Get_UINT8(s);
 			break;
-		}
 		case 1:
-		{
-			UINT16 value16 = 0;
-			Stream_Read_UINT16(s, value16);
-			value = value16;
+			value = Stream_Get_UINT16(s);
 			break;
-		}
 		default:
-			Stream_Read_UINT32(s, value);
+			value = Stream_Get_UINT32(s);
 			break;
 	}
 
@@ -64,20 +56,15 @@ enum
 static int fuzz_process_one_pdu(wStream* s)
 {
 	const size_t required = 1;
-	UINT8 header = 0;
-	UINT8 command = 0;
-	UINT8 spacing = 0;
-	UINT8 cbChId = 0;
-	size_t needed = 0;
 
 	if (!Stream_CheckAndLogRequiredLength("fuzz", s, required))
 		return -1;
 
-	header = Stream_Get_UINT8(s);
-	command = (header & 0xf0) >> 4;
-	spacing = (header & 0x0c) >> 2;
-	cbChId = (header & 0x03);
-	needed = fuzz_var_uint_bytes(cbChId);
+	UINT8 header = Stream_Get_UINT8(s);
+	UINT8 command = (header & 0xf0) >> 4;
+	UINT8 spacing = (header & 0x0c) >> 2;
+	UINT8 cbChId = (header & 0x03);
+	size_t needed = fuzz_var_uint_bytes(cbChId);
 
 	switch (command)
 	{
@@ -124,12 +111,10 @@ static int fuzz_process_one_pdu(wStream* s)
 
 int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 {
-	wStream* s = NULL;
-
 	if ((size == 0) || (size > (1u << 20)))
 		return 0;
 
-	s = Stream_New((BYTE*)data, size);
+	wStream* s = Stream_New((BYTE*)data, size);
 	if (!s)
 		return 0;
 
