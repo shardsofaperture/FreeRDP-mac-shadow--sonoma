@@ -53,19 +53,33 @@ SdlWindow::SdlWindow(SDL_DisplayID id, const std::string& title, const SDL_Rect&
 	SDL_SetHint(SDL_HINT_APP_NAME, "");
 	std::ignore = SDL_SyncWindow(_window);
 
+	_renderer = SDL_CreateRenderer(_window, nullptr);
+
 	_monitor = query(_window, id, true);
 }
 
 SdlWindow::SdlWindow(SdlWindow&& other) noexcept
-    : _window(other._window), _displayID(other._displayID), _offset_x(other._offset_x),
+    : _window(other._window), _renderer(other._renderer), _renderTarget(other._renderTarget),
+      _gdiTexture(other._gdiTexture), _gdiTextureW(other._gdiTextureW),
+      _gdiTextureH(other._gdiTextureH), _displayID(other._displayID), _offset_x(other._offset_x),
       _offset_y(other._offset_y), _monitor(other._monitor)
 {
 	other._window = nullptr;
+	other._renderer = nullptr;
+	other._renderTarget = nullptr;
+	other._gdiTexture = nullptr;
 }
 
 SdlWindow::~SdlWindow()
 {
-	SDL_DestroyWindow(_window);
+	if (_gdiTexture)
+		SDL_DestroyTexture(_gdiTexture);
+	if (_renderTarget)
+		SDL_DestroyTexture(_renderTarget);
+	if (_renderer)
+		SDL_DestroyRenderer(_renderer);
+	if (_window)
+		SDL_DestroyWindow(_window);
 }
 
 SDL_WindowID SdlWindow::id() const
@@ -107,7 +121,7 @@ SDL_Window* SdlWindow::window() const
 
 SDL_Renderer* SdlWindow::renderer() const
 {
-	return SDL_GetRenderer(_window);
+	return _renderer;
 }
 
 Sint32 SdlWindow::offsetX() const
@@ -228,6 +242,36 @@ bool SdlWindow::resize(const SDL_Point& size)
 	return SDL_SetWindowSize(_window, size.x, size.y);
 }
 
+void SdlWindow::ensureRenderTarget()
+{
+	if (!_renderer)
+		return;
+
+	int w = 0;
+	int h = 0;
+	SDL_GetWindowSizeInPixels(_window, &w, &h);
+	if (w <= 0 || h <= 0)
+		return;
+
+	/* Recreate if missing or if window size changed */
+	if (_renderTarget)
+	{
+		float tw = 0;
+		float th = 0;
+		if (!SDL_GetTextureSize(_renderTarget, &tw, &th))
+			return;
+		if (static_cast<int>(tw) == w && static_cast<int>(th) == h)
+			return;
+		SDL_DestroyTexture(_renderTarget);
+	}
+
+	_renderTarget =
+	    SDL_CreateTexture(_renderer, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_TARGET, w, h);
+	if (!_renderTarget)
+		SDL_LogError(SDL_LOG_CATEGORY_RENDER, "SDL_CreateTexture (render target): %s",
+		             SDL_GetError());
+}
+
 bool SdlWindow::drawRect(SDL_Surface* surface, SDL_Point offset, const SDL_Rect& srcRect)
 {
 	WINPR_ASSERT(surface);
@@ -278,6 +322,15 @@ bool SdlWindow::drawScaledRects(SDL_Surface* surface, const SDL_FPoint& scale,
 
 bool SdlWindow::fill(Uint8 r, Uint8 g, Uint8 b, Uint8 a)
 {
+	if (_renderer)
+	{
+		ensureRenderTarget();
+		if (!SDL_SetRenderTarget(_renderer, _renderTarget))
+			return false;
+		if (!SDL_SetRenderDrawColor(_renderer, r, g, b, a))
+			return false;
+		return SDL_RenderClear(_renderer);
+	}
 	return fill(_window, r, g, b, a);
 }
 
@@ -420,16 +473,47 @@ SdlWindow::HighDPIMode SdlWindow::isHighDPIWindowsMode(SDL_Window* window)
 
 bool SdlWindow::blit(SDL_Surface* surface, const SDL_Rect& srcRect, SDL_Rect& dstRect)
 {
-	auto screen = SDL_GetWindowSurface(_window);
-	if (!screen || !surface)
+	if (!_renderer || !surface)
 		return false;
-	if (!SDL_SetSurfaceClipRect(surface, &srcRect))
-		return true;
-	if (!SDL_SetSurfaceClipRect(screen, &dstRect))
-		return true;
-	if (!SDL_BlitSurfaceScaled(surface, &srcRect, screen, &dstRect, SDL_SCALEMODE_LINEAR))
+
+	/* Lazily create or recreate the persistent GDI texture */
+	if (!_gdiTexture || _gdiTextureW != surface->w || _gdiTextureH != surface->h)
 	{
-		SDL_LogError(SDL_LOG_CATEGORY_RENDER, "SDL_BlitScaled: %s", SDL_GetError());
+		if (_gdiTexture)
+			SDL_DestroyTexture(_gdiTexture);
+		_gdiTexture = SDL_CreateTexture(_renderer, surface->format, SDL_TEXTUREACCESS_STREAMING,
+		                                surface->w, surface->h);
+		if (!_gdiTexture)
+		{
+			SDL_LogError(SDL_LOG_CATEGORY_RENDER, "SDL_CreateTexture: %s", SDL_GetError());
+			return false;
+		}
+		_gdiTextureW = surface->w;
+		_gdiTextureH = surface->h;
+	}
+
+	/* Upload only the dirty region */
+	const auto* details = SDL_GetPixelFormatDetails(surface->format);
+	const int bpp = details ? details->bytes_per_pixel : 4;
+	const auto* pixels =
+	    static_cast<const uint8_t*>(surface->pixels) + srcRect.y * surface->pitch + srcRect.x * bpp;
+	if (!SDL_UpdateTexture(_gdiTexture, &srcRect, pixels, surface->pitch))
+	{
+		SDL_LogError(SDL_LOG_CATEGORY_RENDER, "SDL_UpdateTexture: %s", SDL_GetError());
+		return false;
+	}
+
+	/* Render onto persistent render target to accumulate dirty rects */
+	if (!SDL_SetRenderTarget(_renderer, _renderTarget))
+		return false;
+
+	SDL_FRect fsrc = { static_cast<float>(srcRect.x), static_cast<float>(srcRect.y),
+		               static_cast<float>(srcRect.w), static_cast<float>(srcRect.h) };
+	SDL_FRect fdst = { static_cast<float>(dstRect.x), static_cast<float>(dstRect.y),
+		               static_cast<float>(dstRect.w), static_cast<float>(dstRect.h) };
+	if (!SDL_RenderTexture(_renderer, _gdiTexture, &fsrc, &fdst))
+	{
+		SDL_LogError(SDL_LOG_CATEGORY_RENDER, "SDL_RenderTexture: %s", SDL_GetError());
 		return false;
 	}
 	return true;
@@ -437,7 +521,18 @@ bool SdlWindow::blit(SDL_Surface* surface, const SDL_Rect& srcRect, SDL_Rect& ds
 
 void SdlWindow::updateSurface()
 {
-	SDL_UpdateWindowSurface(_window);
+	if (!_renderer)
+		return;
+
+	ensureRenderTarget();
+
+	/* Copy accumulated render target to screen and present */
+	if (!SDL_SetRenderTarget(_renderer, nullptr))
+		return;
+	if (!SDL_RenderTexture(_renderer, _renderTarget, nullptr, nullptr))
+		return;
+	if (!SDL_RenderPresent(_renderer))
+		return;
 }
 
 SdlWindow SdlWindow::create(SDL_DisplayID id, const std::string& title, Uint32 flags, Uint32 width,
