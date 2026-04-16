@@ -844,7 +844,6 @@ static UINT video_VideoData(VideoClientContext* context, const TSMM_VIDEO_DATA* 
 		Stream_SealLength(presentation->currentSample);
 		Stream_ResetPosition(presentation->currentSample);
 
-		const UINT64 timeAfterH264 = winpr_GetTickCount64NS();
 		if (data->SampleNumber == 1)
 		{
 			presentation->lastPublishTime = startTime;
