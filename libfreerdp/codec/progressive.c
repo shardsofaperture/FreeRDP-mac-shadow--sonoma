@@ -1265,8 +1265,6 @@ static inline int progressive_rfx_upgrade_component(
     WINPR_ATTR_UNUSED BOOL subbandDiff, BOOL extrapolate)
 {
 	int rc = 0;
-	UINT32 aRawLen = 0;
-	UINT32 aSrlLen = 0;
 	wBitStream s_srl = WINPR_C_ARRAY_INIT;
 	wBitStream s_raw = WINPR_C_ARRAY_INIT;
 	RFX_PROGRESSIVE_UPGRADE_STATE state = WINPR_C_ARRAY_INIT;
@@ -1326,29 +1324,6 @@ static inline int progressive_rfx_upgrade_component(
 	rc = progressive_rfx_upgrade_state_finish(&state);
 	if (rc < 0)
 		return rc;
-	aRawLen = (state.raw->position + 7) / 8;
-	aSrlLen = (state.srl->position + 7) / 8;
-
-	if ((aRawLen != rawLen) || (aSrlLen != srlLen))
-	{
-		int pRawLen = 0;
-		int pSrlLen = 0;
-
-		if (rawLen)
-			pRawLen = (int)((((float)aRawLen) / ((float)rawLen)) * 100.0f);
-
-		if (srlLen)
-			pSrlLen = (int)((((float)aSrlLen) / ((float)srlLen)) * 100.0f);
-
-		WLog_Print(progressive->log, WLOG_WARN,
-		           "RAW: %" PRIu32 "/%" PRIu32 " %d%% (%" PRIu32 "/%" PRIu32 ":%" PRIu32
-		           ")\tSRL: %" PRIu32 "/%" PRIu32 " %d%% (%" PRIu32 "/%" PRIu32 ":%" PRIu32 ")",
-		           aRawLen, rawLen, pRawLen, state.raw->position, rawLen * 8,
-		           (rawLen * 8) - state.raw->position, aSrlLen, srlLen, pSrlLen,
-		           state.srl->position, srlLen * 8, (srlLen * 8) - state.srl->position);
-		return -1;
-	}
-
 	return progressive_rfx_dwt_2d_decode(progressive, buffer, current, coeffDiff, extrapolate,
 	                                     TRUE);
 }
