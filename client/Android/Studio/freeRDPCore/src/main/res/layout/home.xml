@@ -13,24 +13,10 @@
     android:layout_height="match_parent"
     android:fitsSystemWindows="true">
 
-    <!-- Dummy item to prevent SuperBarView from receiving focus (and showing the keyboard) -->
-
-    <LinearLayout
-        android:layout_width="0px"
-        android:layout_height="0px"
-        android:focusable="true"
-        android:focusableInTouchMode="true" />
-
-    <include
-        android:id="@+id/superBar"
-        layout="@layout/super_bar"
-        android:layout_alignParentTop="true" />
-
     <ListView
         android:id="@+id/listViewBookmarks"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_below="@id/superBar"
         android:divider="@android:drawable/divider_horizontal_dark"
         android:dividerHeight="1dp" />
 

@@ -10,15 +10,12 @@
 
 package com.freerdp.freerdpcore.presentation;
 
-import android.app.AlertDialog;
-import android.content.DialogInterface;
+import androidx.appcompat.app.AlertDialog;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.net.Uri;
 import android.os.Bundle;
 import androidx.appcompat.app.AppCompatActivity;
-import android.text.Editable;
-import android.text.TextWatcher;
 import android.util.Log;
 import android.view.ContextMenu;
 import android.view.ContextMenu.ContextMenuInfo;
@@ -26,14 +23,13 @@ import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
-import android.view.View.OnClickListener;
 import android.view.View.OnCreateContextMenuListener;
 import android.widget.AdapterView;
 import android.widget.AdapterView.AdapterContextMenuInfo;
-import android.widget.Button;
-import android.widget.CheckBox;
-import android.widget.EditText;
 import android.widget.ListView;
+
+import androidx.activity.OnBackPressedCallback;
+import androidx.appcompat.widget.SearchView;
 
 import com.freerdp.freerdpcore.R;
 import com.freerdp.freerdpcore.application.GlobalApp;
@@ -50,22 +46,22 @@ public class HomeActivity extends AppCompatActivity
 {
 	private final static String ADD_BOOKMARK_PLACEHOLDER = "add_bookmark";
 	private static final String TAG = "HomeActivity";
-	private static final String PARAM_SUPERBAR_TEXT = "superbar_text";
+	private static final String PARAM_SEARCH_QUERY = "search_query";
+
 	private ListView listViewBookmarks;
-	private Button clearTextButton;
-	private EditText superBarEditText;
 	private BookmarkArrayAdapter manualBookmarkAdapter;
 	private SeparatedListAdapter separatedListAdapter;
 	private PlaceholderBookmark addBookmarkPlaceholder;
 	private String sectionLabelBookmarks;
-
+	private String currentSearchQuery = "";
+	private MenuItem searchMenuItem;
+	private SearchView searchView;
 
 	@Override public void onCreate(Bundle savedInstanceState)
 	{
 		setTitle(R.string.title_home);
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.home);
-
 
 		long heapSize = Runtime.getRuntime().maxMemory();
 		Log.i(TAG, "Max HeapSize: " + heapSize);
@@ -97,9 +93,6 @@ public class HomeActivity extends AppCompatActivity
 		}
 
 		// load views
-		clearTextButton = findViewById(R.id.clear_search_btn);
-		superBarEditText = findViewById(R.id.superBarEditText);
-
 		listViewBookmarks = findViewById(R.id.listViewBookmarks);
 
 		// set listeners for the list view
@@ -122,9 +115,16 @@ public class HomeActivity extends AppCompatActivity
 						sessionIntent.putExtras(bundle);
 						startActivity(sessionIntent);
 
-						// clear any search text
-						superBarEditText.setText("");
-						superBarEditText.clearFocus();
+						currentSearchQuery = "";
+						if (searchView != null)
+						{
+							searchView.setQuery("", false);
+							searchView.setIconified(true);
+						}
+						if (searchMenuItem != null)
+						{
+							searchMenuItem.collapseActionView();
+						}
 					}
 					else if (ConnectionReference.isPlaceholderReference(refStr))
 					{
@@ -158,12 +158,22 @@ public class HomeActivity extends AppCompatActivity
 			}
 		});
 
-		superBarEditText.addTextChangedListener(new SuperBarTextWatcher());
-
-		clearTextButton.setOnClickListener(new OnClickListener() {
-			@Override public void onClick(View v)
+		getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+			@Override public void handleOnBackPressed()
 			{
-				superBarEditText.setText("");
+				if (ApplicationSettingsActivity.getAskOnExit(HomeActivity.this))
+				{
+					new AlertDialog.Builder(HomeActivity.this)
+					    .setTitle(R.string.dlg_title_exit)
+					    .setMessage(R.string.dlg_msg_exit)
+					    .setPositiveButton(R.string.yes, (dialog, which) -> finish())
+					    .setNegativeButton(R.string.no, (dialog, which) -> dialog.dismiss())
+					    .show();
+				}
+				else
+				{
+					finish();
+				}
 			}
 		});
 	}
@@ -176,13 +186,11 @@ public class HomeActivity extends AppCompatActivity
 
 	@Override public boolean onSearchRequested()
 	{
-		superBarEditText.requestFocus();
-		return true;
+		return super.onSearchRequested();
 	}
 
 	@Override public boolean onContextItemSelected(MenuItem aItem)
 	{
-
 		// get connection reference
 		AdapterContextMenuInfo menuInfo = (AdapterContextMenuInfo)aItem.getMenuInfo();
 		String refStr = menuInfo.targetView.getTag().toString();
@@ -225,12 +233,37 @@ public class HomeActivity extends AppCompatActivity
 				assert false;
 			}
 
-			// clear super bar text
-			superBarEditText.setText("");
 			return true;
 		}
 
 		return false;
+	}
+
+	private void performSearch(String query)
+	{
+		if (separatedListAdapter == null || manualBookmarkAdapter == null)
+			return;
+
+		if (query != null && query.length() > 0)
+		{
+			ArrayList<BookmarkBase> computers_list =
+			    GlobalApp.getQuickConnectHistoryGateway().findHistory(query);
+			computers_list.addAll(
+			    GlobalApp.getManualBookmarkGateway().findByLabelOrHostnameLike(query));
+
+			manualBookmarkAdapter.replaceItems(computers_list);
+			QuickConnectBookmark qcBm = new QuickConnectBookmark();
+			qcBm.setLabel(query);
+			qcBm.setHostname(query);
+			manualBookmarkAdapter.insert(qcBm, 0);
+			separatedListAdapter.notifyDataSetChanged();
+		}
+		else
+		{
+			manualBookmarkAdapter.replaceItems(GlobalApp.getManualBookmarkGateway().findAll());
+			manualBookmarkAdapter.insert(addBookmarkPlaceholder, 0);
+			separatedListAdapter.notifyDataSetChanged();
+		}
 	}
 
 	@Override protected void onResume()
@@ -250,10 +283,7 @@ public class HomeActivity extends AppCompatActivity
 		separatedListAdapter.addSection(sectionLabelBookmarks, manualBookmarkAdapter);
 		listViewBookmarks.setAdapter(separatedListAdapter);
 
-		// if we have a filter text entered cause an update to be caused here
-		String filter = superBarEditText.getText().toString();
-		if (filter.length() > 0)
-			superBarEditText.setText(filter);
+		performSearch(currentSearchQuery);
 	}
 
 	@Override protected void onPause()
@@ -267,64 +297,31 @@ public class HomeActivity extends AppCompatActivity
 		manualBookmarkAdapter = null;
 	}
 
-	@Override public void onBackPressed()
-	{
-		// if back was pressed - ask the user if he really wants to exit
-		if (ApplicationSettingsActivity.getAskOnExit(this))
-		{
-			final CheckBox cb = new CheckBox(this);
-			cb.setChecked(!ApplicationSettingsActivity.getAskOnExit(this));
-			cb.setText(R.string.dlg_dont_show_again);
-
-			AlertDialog.Builder builder = new AlertDialog.Builder(this);
-			builder.setTitle(R.string.dlg_title_exit)
-			    .setMessage(R.string.dlg_msg_exit)
-			    .setView(cb)
-			    .setPositiveButton(R.string.yes,
-			                       new DialogInterface.OnClickListener() {
-				                       public void onClick(DialogInterface dialog, int which)
-				                       {
-					                       finish();
-				                       }
-			                       })
-			    .setNegativeButton(R.string.no,
-			                       new DialogInterface.OnClickListener() {
-				                       public void onClick(DialogInterface dialog, int which)
-				                       {
-					                       dialog.dismiss();
-				                       }
-			                       })
-			    .create()
-			    .show();
-		}
-		else
-		{
-			super.onBackPressed();
-		}
-	}
-
 	@Override protected void onSaveInstanceState(Bundle outState)
 	{
 		super.onSaveInstanceState(outState);
-		outState.putString(PARAM_SUPERBAR_TEXT, superBarEditText.getText().toString());
+		outState.putString(PARAM_SEARCH_QUERY, currentSearchQuery);
 	}
 
 	@Override protected void onRestoreInstanceState(Bundle inState)
 	{
 		super.onRestoreInstanceState(inState);
-		superBarEditText.setText(inState.getString(PARAM_SUPERBAR_TEXT));
+		if (inState.getString(PARAM_SEARCH_QUERY) != null)
+		{
+			currentSearchQuery = inState.getString(PARAM_SEARCH_QUERY);
+		}
 	}
 
 	@Override public boolean onCreateOptionsMenu(Menu menu)
 	{
 		MenuInflater inflater = getMenuInflater();
 		inflater.inflate(R.menu.home_menu, menu);
+		setupSearchView(menu);
 		return true;
 	}
 
 	@Override public boolean onOptionsItemSelected(MenuItem item)
 	{
-
 		// refer to http://tools.android.com/tips/non-constant-fields why we can't use switch/case
 		// here ..
 		int itemId = item.getItemId();
@@ -352,42 +349,33 @@ public class HomeActivity extends AppCompatActivity
 		return true;
 	}
 
-	private class SuperBarTextWatcher implements TextWatcher
+	private void setupSearchView(Menu menu)
 	{
-		@Override public void afterTextChanged(Editable s)
+		searchMenuItem = menu.findItem(R.id.action_search);
+		if (searchMenuItem != null)
 		{
-			if (separatedListAdapter != null)
+			searchView = (SearchView)searchMenuItem.getActionView();
+
+			if (currentSearchQuery != null && currentSearchQuery.length() > 0)
 			{
-				String text = s.toString();
-				if (text.length() > 0)
-				{
-					ArrayList<BookmarkBase> computers_list =
-					    GlobalApp.getQuickConnectHistoryGateway().findHistory(text);
-					computers_list.addAll(
-					    GlobalApp.getManualBookmarkGateway().findByLabelOrHostnameLike(text));
-					manualBookmarkAdapter.replaceItems(computers_list);
-					QuickConnectBookmark qcBm = new QuickConnectBookmark();
-					qcBm.setLabel(text);
-					qcBm.setHostname(text);
-					manualBookmarkAdapter.insert(qcBm, 0);
-				}
-				else
-				{
-					manualBookmarkAdapter.replaceItems(
-					    GlobalApp.getManualBookmarkGateway().findAll());
-					manualBookmarkAdapter.insert(addBookmarkPlaceholder, 0);
-				}
-
-				separatedListAdapter.notifyDataSetChanged();
+				searchMenuItem.expandActionView();
+				searchView.setQuery(currentSearchQuery, false);
+				searchView.clearFocus();
 			}
-		}
 
-		@Override public void beforeTextChanged(CharSequence s, int start, int count, int after)
-		{
-		}
+			searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+				@Override public boolean onQueryTextSubmit(String query)
+				{
+					return true;
+				}
 
-		@Override public void onTextChanged(CharSequence s, int start, int before, int count)
-		{
+				@Override public boolean onQueryTextChange(String s)
+				{
+					currentSearchQuery = s;
+					performSearch(s);
+					return true;
+				}
+			});
 		}
 	}
 }
