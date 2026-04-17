@@ -250,7 +250,7 @@ BOOL SetEnvironmentVariableW(WINPR_ATTR_UNUSED LPCWSTR lpName, WINPR_ATTR_UNUSED
 
 extern char** environ;
 
-LPCH GetEnvironmentStringsA(VOID)
+static LPCH GetEnvironmentStringsAN(size_t* pLen)
 {
 #if !defined(_UWP)
 	size_t offset = 0;
@@ -258,6 +258,9 @@ LPCH GetEnvironmentStringsA(VOID)
 	const size_t blocksize = 128;
 	size_t cchEnvironmentBlock = blocksize;
 	LPCH lpszEnvironmentBlock = (LPCH)calloc(cchEnvironmentBlock, sizeof(CHAR));
+
+	if (pLen)
+		*pLen = 0;
 
 	if (!lpszEnvironmentBlock)
 		return nullptr;
@@ -288,8 +291,12 @@ LPCH GetEnvironmentStringsA(VOID)
 				return nullptr;
 			}
 
+			const size_t diff = new_size - cchEnvironmentBlock;
+			const size_t old = cchEnvironmentBlock;
 			lpszEnvironmentBlock = new_blk;
 			cchEnvironmentBlock = new_size;
+
+			memset(&lpszEnvironmentBlock[old], 0, diff);
 		}
 
 		char* p = &(lpszEnvironmentBlock[offset]);
@@ -302,17 +309,31 @@ LPCH GetEnvironmentStringsA(VOID)
 	}
 
 	lpszEnvironmentBlock[offset] = '\0';
+	if (pLen)
+		*pLen = cchEnvironmentBlock;
 
 	return lpszEnvironmentBlock;
 #else
+	if (pLen)
+		*pLen = 0;
 	return nullptr;
 #endif
 }
 
+LPCH GetEnvironmentStringsA(VOID)
+{
+	return GetEnvironmentStringsAN(nullptr);
+}
+
 LPWCH GetEnvironmentStringsW(VOID)
 {
-	WLog_ERR(TAG, "TODO: not implemented");
-	return nullptr;
+	size_t len = 0;
+	LPCH env = GetEnvironmentStringsAN(&len);
+	if (!env)
+		return nullptr;
+	LPWCH envW = ConvertMszUtf8NToWCharAlloc(env, len, nullptr);
+	FreeEnvironmentStringsA(env);
+	return envW;
 }
 
 BOOL SetEnvironmentStringsA(WINPR_ATTR_UNUSED LPCH NewEnvironment)
