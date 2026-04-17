@@ -409,7 +409,7 @@ wStreamPool* StreamPool_New(BOOL synchronized, size_t defaultSize)
 		return nullptr;
 
 	pool->log = WLog_Create(XTAG, WLog_GetRoot());
-	if (!pool)
+	if (!pool->log)
 		goto fail;
 
 	pool->synchronized = synchronized;
