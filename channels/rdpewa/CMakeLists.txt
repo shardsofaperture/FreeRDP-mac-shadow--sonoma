@@ -13,8 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-find_package(libcbor REQUIRED)
-find_package(libfido2 REQUIRED)
+find_package(libcbor 0.10.2 REQUIRED)
+find_package(libfido2 1.14.0 REQUIRED)
 
 define_channel("rdpewa")
 
