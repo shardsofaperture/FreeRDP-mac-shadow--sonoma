@@ -206,9 +206,8 @@ int sdl_list_monitors([[maybe_unused]] SdlContext* sdl)
 	// /monitors: may select a subset that excludes the SDL primary. The
 	// library rejects arrays without a primary, so promote the first entry
 	// when none is marked.
-	if (!monitors.empty() &&
-	    std::none_of(monitors.cbegin(), monitors.cend(),
-	                 [](const rdpMonitor& m) { return m.is_primary; }))
+	if (!monitors.empty() && std::none_of(monitors.cbegin(), monitors.cend(),
+	                                      [](const rdpMonitor& m) { return m.is_primary; }))
 		monitors[0].is_primary = true;
 	return freerdp_settings_set_monitor_def_array_sorted(settings, monitors.data(),
 	                                                     monitors.size());

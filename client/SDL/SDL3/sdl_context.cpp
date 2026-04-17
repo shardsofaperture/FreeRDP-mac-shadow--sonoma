@@ -451,8 +451,8 @@ bool SdlContext::updateWindowList()
 	// /monitors: subset may exclude the SDL primary. The library requires
 	// the array to mark one monitor as primary, so promote the first when
 	// none of the kept windows cover the original primary.
-	if (!list.empty() && std::none_of(list.cbegin(), list.cend(),
-	                                  [](const rdpMonitor& m) { return m.is_primary; }))
+	if (!list.empty() &&
+	    std::none_of(list.cbegin(), list.cend(), [](const rdpMonitor& m) { return m.is_primary; }))
 		list[0].is_primary = true;
 
 	return freerdp_settings_set_monitor_def_array_sorted(context()->settings, list.data(),
