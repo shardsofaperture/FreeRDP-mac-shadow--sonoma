@@ -447,6 +447,7 @@ static UINT video_PresentationRequest(VideoClientContext* video,
 	VideoClientContextPriv* priv = video->priv;
 	WINPR_ASSERT(priv);
 
+	EnterCriticalSection(&priv->framesLock);
 	if (req->Command == TSMM_START_PRESENTATION)
 	{
 		MAPPED_GEOMETRY* geom = nullptr;
@@ -455,7 +456,7 @@ static UINT video_PresentationRequest(VideoClientContext* video,
 		if (memcmp(req->VideoSubtypeId, MFVideoFormat_H264, 16) != 0)
 		{
 			WLog_ERR(TAG, "not a H264 video, ignoring request");
-			return CHANNEL_RC_OK;
+			goto fail;
 		}
 
 		if (priv->currentPresentation)
@@ -464,7 +465,7 @@ static UINT video_PresentationRequest(VideoClientContext* video,
 			{
 				WLog_ERR(TAG, "ignoring start request for existing presentation %" PRIu8,
 				         req->PresentationId);
-				return CHANNEL_RC_OK;
+				goto fail;
 			}
 
 			WLog_ERR(TAG, "releasing current presentation %" PRIu8, req->PresentationId);
@@ -474,14 +475,14 @@ static UINT video_PresentationRequest(VideoClientContext* video,
 		if (!priv->geometry)
 		{
 			WLog_ERR(TAG, "geometry channel not ready, ignoring request");
-			return CHANNEL_RC_OK;
+			goto fail;
 		}
 
 		geom = HashTable_GetItemValue(priv->geometry->geometries, &(req->GeometryMappingId));
 		if (!geom)
 		{
 			WLog_ERR(TAG, "geometry mapping 0x%" PRIx64 " not registered", req->GeometryMappingId);
-			return CHANNEL_RC_OK;
+			goto fail;
 		}
 
 		WLog_DBG(TAG, "creating presentation 0x%x", req->PresentationId);
@@ -493,7 +494,8 @@ static UINT video_PresentationRequest(VideoClientContext* video,
 		if (!priv->currentPresentation)
 		{
 			WLog_ERR(TAG, "unable to create presentation video");
-			return CHANNEL_RC_NO_MEMORY;
+			ret = CHANNEL_RC_NO_MEMORY;
+			goto fail;
 		}
 
 		mappedGeometryRef(geom);
@@ -517,7 +519,7 @@ static UINT video_PresentationRequest(VideoClientContext* video,
 		if (!priv->currentPresentation)
 		{
 			WLog_ERR(TAG, "unknown presentation to stop %" PRIu8, req->PresentationId);
-			return CHANNEL_RC_OK;
+			goto fail;
 		}
 
 		priv->droppedFrames = 0;
@@ -525,6 +527,8 @@ static UINT video_PresentationRequest(VideoClientContext* video,
 		PresentationContext_unref(&priv->currentPresentation);
 	}
 
+fail:
+	LeaveCriticalSection(&priv->framesLock);
 	return ret;
 }
 
