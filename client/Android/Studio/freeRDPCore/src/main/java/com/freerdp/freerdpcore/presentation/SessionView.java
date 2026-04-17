@@ -91,9 +91,6 @@ public class SessionView extends View
 		scaleMatrix = new Matrix();
 		invScaleMatrix = new Matrix();
 		invalidRegionF = new RectF();
-
-		setSystemUiVisibility(View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
-		                      View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
 	}
 
 	/* External Mouse Hover */
@@ -282,7 +279,8 @@ public class SessionView extends View
 		return res;
 	}
 
-	public interface SessionViewListener {
+	public interface SessionViewListener
+	{
 		void onSessionViewBeginTouch();
 
 		void onSessionViewEndTouch();

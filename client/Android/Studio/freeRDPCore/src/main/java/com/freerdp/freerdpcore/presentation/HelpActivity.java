@@ -17,6 +17,8 @@ import android.util.Log;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 
+import com.freerdp.freerdpcore.R;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -32,8 +34,14 @@ public class HelpActivity extends AppCompatActivity
 	{
 		super.onCreate(savedInstanceState);
 
-		WebView webview = new WebView(this);
-		setContentView(webview);
+		setContentView(R.layout.activity_help);
+
+		if (getSupportActionBar() != null)
+		{
+			getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+		}
+
+		WebView webview = findViewById(R.id.activity_help_webview);
 
 		String filename;
 		if ((getResources().getConfiguration().screenLayout &

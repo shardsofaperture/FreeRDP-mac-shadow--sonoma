@@ -11,6 +11,7 @@
 package com.freerdp.freerdpcore.application;
 
 import android.app.Application;
+import androidx.core.content.ContextCompat;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -148,7 +149,8 @@ public class GlobalApp extends Application implements LibFreeRDP.EventListener
 		// http://thinkandroid.wordpress.com/2010/01/24/handling-screen-off-and-screen-on-intents/
 		IntentFilter filter = new IntentFilter(Intent.ACTION_SCREEN_ON);
 		filter.addAction(Intent.ACTION_SCREEN_OFF);
-		registerReceiver(new ScreenReceiver(), filter, RECEIVER_EXPORTED);
+		ContextCompat.registerReceiver(this, new ScreenReceiver(), filter,
+		                               ContextCompat.RECEIVER_EXPORTED);
 	}
 
 	// helper to send FreeRDP notifications

@@ -31,6 +31,12 @@ public class AboutActivity extends AppCompatActivity
 	{
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_about);
+
+		if (getSupportActionBar() != null)
+		{
+			getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+		}
+
 		mWebView = findViewById(R.id.activity_about_webview);
 	}
 

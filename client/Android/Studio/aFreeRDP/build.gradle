@@ -19,7 +19,6 @@ android {
         applicationId "com.freerdp.afreerdp"
         minSdkVersion rootProject.ext.minApi
         targetSdkVersion rootProject.ext.targetApi
-        vectorDrawables.useSupportLibrary = true
         versionName = androidGitVersion.name()
         versionCode = androidGitVersion.code()
     }

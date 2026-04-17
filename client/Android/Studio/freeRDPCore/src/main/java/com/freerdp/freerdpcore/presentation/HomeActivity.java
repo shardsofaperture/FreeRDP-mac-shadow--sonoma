@@ -59,7 +59,6 @@ public class HomeActivity extends AppCompatActivity
 	private PlaceholderBookmark addBookmarkPlaceholder;
 	private String sectionLabelBookmarks;
 
-	View mDecor;
 
 	@Override public void onCreate(Bundle savedInstanceState)
 	{
@@ -67,9 +66,6 @@ public class HomeActivity extends AppCompatActivity
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.home);
 
-		mDecor = getWindow().getDecorView();
-		mDecor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
-		                             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
 
 		long heapSize = Runtime.getRuntime().maxMemory();
 		Log.i(TAG, "Max HeapSize: " + heapSize);
@@ -176,8 +172,6 @@ public class HomeActivity extends AppCompatActivity
 	{
 		// ignore orientation/keyboard change
 		super.onConfigurationChanged(newConfig);
-		mDecor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
-		                             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
 	}
 
 	@Override public boolean onSearchRequested()

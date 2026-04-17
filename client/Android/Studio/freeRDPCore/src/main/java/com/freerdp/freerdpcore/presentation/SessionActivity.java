@@ -15,6 +15,7 @@ import android.app.Dialog;
 import android.app.ProgressDialog;
 import android.app.UiModeManager;
 import android.content.BroadcastReceiver;
+import androidx.core.content.ContextCompat;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -36,6 +37,9 @@ import android.os.Message;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 import android.text.InputType;
 import android.util.Log;
@@ -123,7 +127,6 @@ public class SessionActivity extends AppCompatActivity
 	private int discardedMoveEvents = 0;
 	private ClipboardManagerProxy mClipboardManager;
 	private boolean callbackDialogResult;
-	View mDecor;
 
 	private void createDialogs()
 	{
@@ -210,16 +213,19 @@ public class SessionActivity extends AppCompatActivity
 		return false;
 	}
 
+	private void hideSystemBars()
+	{
+		WindowInsetsControllerCompat controller =
+		    WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+		controller.hide(WindowInsetsCompat.Type.systemBars());
+		controller.setSystemBarsBehavior(
+		    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+	}
+
 	@Override public void onCreate(Bundle savedInstanceState)
 	{
 		super.onCreate(savedInstanceState);
-
-		// show status bar or make fullscreen?
-		if (ApplicationSettingsActivity.getHideStatusBar(this))
-		{
-			getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
-			                     WindowManager.LayoutParams.FLAG_FULLSCREEN);
-		}
+		WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
 
 		this.setContentView(R.layout.session);
 		if (hasHardwareMenuButton() || ApplicationSettingsActivity.getHideActionBar(this))
@@ -313,14 +319,13 @@ public class SessionActivity extends AppCompatActivity
 		// register freerdp events broadcast receiver
 		IntentFilter filter = new IntentFilter();
 		filter.addAction(GlobalApp.ACTION_EVENT_FREERDP);
-		registerReceiver(libFreeRDPBroadcastReceiver, filter, RECEIVER_EXPORTED);
+		ContextCompat.registerReceiver(this, libFreeRDPBroadcastReceiver, filter,
+		                               ContextCompat.RECEIVER_EXPORTED);
 
 		mClipboardManager = ClipboardManagerProxy.getClipboardManager(this);
 		mClipboardManager.addClipboardChangedListener(this);
 
-		mDecor = getWindow().getDecorView();
-		mDecor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
-		                             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+		hideSystemBars();
 	}
 
 	@Override public void onWindowFocusChanged(boolean hasFocus)
@@ -405,8 +410,7 @@ public class SessionActivity extends AppCompatActivity
 		keyboardView.setKeyboard(specialkeysKeyboard);
 		modifiersKeyboardView.setKeyboard(modifiersKeyboard);
 
-		mDecor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
-		                             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+		hideSystemBars();
 	}
 
 	private void processIntent(Intent intent)
@@ -549,8 +553,7 @@ public class SessionActivity extends AppCompatActivity
 		sessionView.onSurfaceChange(session);
 		scrollView.requestLayout();
 		keyboardMapper.reset(this);
-		mDecor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
-		                             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+		hideSystemBars();
 	}
 
 	private void setSoftInputState(boolean state)
