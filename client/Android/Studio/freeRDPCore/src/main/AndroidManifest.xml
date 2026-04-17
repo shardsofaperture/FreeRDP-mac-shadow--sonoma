@@ -58,15 +58,7 @@
             android:exported="false"
             android:name=".presentation.BookmarkActivity"
             android:label="@string/title_bookmark_settings"
-            android:theme="@style/Theme.Settings">
-            <intent-filter>
-                <action android:name="freerdp.intent.action.BOOKMARK" />
-
-                <category android:name="android.intent.category.DEFAULT" />
-
-                <data android:scheme="preferences" />
-            </intent-filter>
-        </activity>
+            android:theme="@style/Theme.Settings" />
         <activity
             android:exported="true"
             android:name=".presentation.ApplicationSettingsActivity"

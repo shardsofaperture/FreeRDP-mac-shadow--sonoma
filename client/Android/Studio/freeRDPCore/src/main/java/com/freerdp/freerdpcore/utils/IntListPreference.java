@@ -11,7 +11,7 @@
 package com.freerdp.freerdpcore.utils;
 
 import android.content.Context;
-import android.preference.ListPreference;
+import androidx.preference.ListPreference;
 import android.util.AttributeSet;
 
 public class IntListPreference extends ListPreference
