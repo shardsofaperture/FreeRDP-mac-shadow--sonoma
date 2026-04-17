@@ -177,7 +177,18 @@ static BOOL CreateProcessExA(HANDLE hToken, WINPR_ATTR_UNUSED DWORD dwLogonFlags
 	lpszEnvironmentBlock = nullptr;
 	/* https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessa
 	 */
-	if (lpCommandLine)
+
+	if (lpCommandLine && lpApplicationName)
+	{
+		char* str = nullptr;
+		size_t len = 0;
+		winpr_asprintf(&str, &len, "%s %s", lpApplicationName, lpCommandLine);
+		if (!str)
+			return FALSE;
+		pArgs = CommandLineToArgvA(str, &numArgs);
+		free(str);
+	}
+	else if (lpCommandLine)
 		pArgs = CommandLineToArgvA(lpCommandLine, &numArgs);
 	else
 		pArgs = CommandLineToArgvA(lpApplicationName, &numArgs);
