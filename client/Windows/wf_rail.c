@@ -400,7 +400,7 @@ LRESULT CALLBACK wf_RailWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
 			break;
 
 		case WM_DESTROY:
-			PostQuitMessage(0);
+			/* PostQuitMessage(0) - REMOVED: closing RemoteApp window should not quit the session */
 			break;
 
 		default:
