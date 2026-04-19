@@ -250,6 +250,7 @@ BOOL SetEnvironmentVariableW(WINPR_ATTR_UNUSED LPCWSTR lpName, WINPR_ATTR_UNUSED
 
 extern char** environ;
 
+WINPR_ATTR_MALLOC(FreeEnvironmentStringsA, 1)
 static LPCH GetEnvironmentStringsAN(size_t* pLen)
 {
 #if !defined(_UWP)

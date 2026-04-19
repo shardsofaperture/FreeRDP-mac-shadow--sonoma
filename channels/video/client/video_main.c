@@ -891,8 +891,9 @@ static UINT video_VideoData(VideoClientContext* context, const TSMM_VIDEO_DATA* 
 	}
 
 out:
-	LeaveCriticalSection(&priv->framesLock);
 	PresentationContext_unref(&priv->currentPresentation);
+	LeaveCriticalSection(&priv->framesLock);
+
 	return res;
 }
 
