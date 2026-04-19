@@ -177,7 +177,7 @@ static void fuzz_ntlm_server_uninit(FUZZ_NTLM_SERVER* server)
 			(void)server->table->FreeCredentialsHandle(&server->credentials);
 		if (server->pPackageInfo)
 			(void)server->table->FreeContextBuffer(server->pPackageInfo);
-		if (server->haveContext && SecIsValidHandle(&server->context))
+		if (SecIsValidHandle(&server->context))
 			(void)server->table->DeleteSecurityContext(&server->context);
 	}
 }

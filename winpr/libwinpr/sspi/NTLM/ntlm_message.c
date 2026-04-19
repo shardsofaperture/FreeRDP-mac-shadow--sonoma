@@ -337,6 +337,7 @@ static BOOL ntlm_read_message_fields_buffer(wStream* s, NTLM_MESSAGE_FIELDS* fie
 	WINPR_ASSERT(s);
 	WINPR_ASSERT(fields);
 
+	ntlm_free_message_fields_buffer(fields);
 	if (fields->Len > 0)
 	{
 		const UINT32 offset = fields->BufferOffset + fields->Len;
@@ -740,7 +741,7 @@ SECURITY_STATUS ntlm_read_ChallengeMessage(NTLM_CONTEXT* context, PSecBuffer buf
 		{
 			PBYTE ptr = ntlm_av_pair_get_value_pointer(AvTimestamp);
 
-			if (!ptr)
+			if (!ptr || (AvTimestamp->AvLen < 8))
 				goto fail;
 
 			if (context->NTLMv2)
@@ -1056,7 +1057,12 @@ SECURITY_STATUS ntlm_read_AuthenticateMessage(NTLM_CONTEXT* context, PSecBuffer 
 		                     context->NTLMv2Response.Challenge.cbAvPairs, MsvAvFlags, &cbAvFlags);
 
 		if (AvFlags)
-			flags = winpr_Data_Get_UINT32(ntlm_av_pair_get_value_pointer(AvFlags));
+		{
+			const BYTE* ptr = ntlm_av_pair_get_value_pointer(AvFlags);
+			if (!ptr || (AvFlags->AvLen < 4))
+				goto fail;
+			flags = winpr_Data_Get_UINT32(ptr);
+		}
 	}
 
 	if (!ntlm_read_message_fields_buffer(

@@ -92,17 +92,14 @@ static int fuzz_process_one_pdu(wStream* s)
 			break;
 	}
 
-	if (Stream_GetRemainingLength(s) < 2)
-		return 0;
+	if (!Stream_CheckAndLogRequiredLength("fuzz", s, 2))
+		return -1;
 
 	{
-		UINT16 bodyLen = 0;
+		size_t bodyLen = Stream_Get_UINT16(s);
 		const size_t remaining = Stream_GetRemainingLength(s);
-
-		Stream_Read_UINT16(s, bodyLen);
 		if (bodyLen > remaining)
-			bodyLen = (UINT16)remaining;
-
+			bodyLen = remaining;
 		Stream_Seek(s, bodyLen);
 	}
 
