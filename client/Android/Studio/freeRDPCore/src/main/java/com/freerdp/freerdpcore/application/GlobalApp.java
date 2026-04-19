@@ -46,7 +46,7 @@ public class GlobalApp extends Application implements LibFreeRDP.EventListener
 	public static final int FREERDP_EVENT_CONNECTION_FAILURE = 2;
 	public static final int FREERDP_EVENT_DISCONNECTED = 3;
 	private static final String TAG = "GlobalApp";
-	public static boolean ConnectedTo3G = false;
+	public static boolean IsMeteredNetwork = false;
 	private static Map<Long, SessionState> sessionMap;
 	private static BookmarkDB bookmarkDB;
 	private static ManualBookmarkGateway manualBookmarkGateway;
@@ -143,7 +143,8 @@ public class GlobalApp extends Application implements LibFreeRDP.EventListener
 		historyDB = new HistoryDB(this);
 		quickConnectHistoryGateway = new QuickConnectHistoryGateway(historyDB);
 
-		ConnectedTo3G = NetworkStateReceiver.isConnectedTo3G(this);
+		IsMeteredNetwork = NetworkStateReceiver.isMeteredNetwork(this);
+		NetworkStateReceiver.registerNetworkCallback(this);
 
 		// init screen receiver here (this can't be declared in AndroidManifest - refer to:
 		// http://thinkandroid.wordpress.com/2010/01/24/handling-screen-off-and-screen-on-intents/

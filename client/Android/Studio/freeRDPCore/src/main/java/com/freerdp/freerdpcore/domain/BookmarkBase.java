@@ -185,14 +185,14 @@ public class BookmarkBase implements Parcelable, Cloneable
 
 	public ScreenSettings getActiveScreenSettings()
 	{
-		return (GlobalApp.ConnectedTo3G && advancedSettings.getEnable3GSettings())
+		return (GlobalApp.IsMeteredNetwork && advancedSettings.getEnable3GSettings())
 		    ? advancedSettings.getScreen3G()
 		    : screenSettings;
 	}
 
 	public PerformanceFlags getActivePerformanceFlags()
 	{
-		return (GlobalApp.ConnectedTo3G && advancedSettings.getEnable3GSettings())
+		return (GlobalApp.IsMeteredNetwork && advancedSettings.getEnable3GSettings())
 		    ? advancedSettings.getPerformance3G()
 		    : performanceFlags;
 	}

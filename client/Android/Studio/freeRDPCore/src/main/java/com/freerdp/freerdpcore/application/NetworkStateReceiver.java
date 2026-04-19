@@ -10,59 +10,59 @@
 
 package com.freerdp.freerdpcore.application;
 
-import android.content.BroadcastReceiver;
 import android.content.Context;
-import android.content.Intent;
 import android.net.ConnectivityManager;
-import android.net.NetworkInfo;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.NetworkRequest;
+import android.os.Build;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
 
-public class NetworkStateReceiver extends BroadcastReceiver
+public class NetworkStateReceiver
 {
+	private static final String TAG = "NetworkStateReceiver";
 
-	public static boolean isConnectedTo3G(Context context)
+	public static boolean isMeteredNetwork(Context context)
 	{
-		ConnectivityManager connectivity =
+		ConnectivityManager cm =
 		    (ConnectivityManager)context.getSystemService(Context.CONNECTIVITY_SERVICE);
-		NetworkInfo info = connectivity.getActiveNetworkInfo();
-
-		// no connection or background data disabled
-		if (info == null || !info.isConnected())
-			return false;
-
-		return (info.getType() != ConnectivityManager.TYPE_WIFI &&
-		        info.getType() != ConnectivityManager.TYPE_WIMAX);
+		return cm != null && cm.isActiveNetworkMetered();
 	}
 
-	@Override public void onReceive(@NonNull Context context, @NonNull Intent intent)
+	public static void registerNetworkCallback(Context context)
 	{
-		String action = intent.getAction();
-		if (!action.equals("android.net.conn.CONNECTIVITY_CHANGE"))
-		{
+		ConnectivityManager cm =
+		    (ConnectivityManager)context.getSystemService(Context.CONNECTIVITY_SERVICE);
+		if (cm == null)
 			return;
-		}
 
-		// check if we are connected via 3g or wlan
-		if (intent.getExtras() != null)
-		{
-			NetworkInfo info =
-			    (NetworkInfo)intent.getExtras().get(ConnectivityManager.EXTRA_NETWORK_INFO);
-
-			// are we connected at all?
-			if (info != null)
+		ConnectivityManager.NetworkCallback callback = new ConnectivityManager.NetworkCallback() {
+			private void update(String event)
 			{
-				if (info.isConnected())
-				{
-					// see if we are connected through 3G or WiFi
-					Log.d("app", "Connected via type " + info.getTypeName());
-					GlobalApp.ConnectedTo3G = (info.getType() != ConnectivityManager.TYPE_WIFI &&
-					                           info.getType() != ConnectivityManager.TYPE_WIMAX);
-				}
-
-				Log.v("NetworkState", info.toString());
+				GlobalApp.IsMeteredNetwork = isMeteredNetwork(context);
+				Log.d(TAG, event + " - IsMeteredNetwork=" + GlobalApp.IsMeteredNetwork);
 			}
-		}
+
+			@Override
+			public void onCapabilitiesChanged(@NonNull Network n, @NonNull NetworkCapabilities c)
+			{
+				update("Capabilities Changed");
+			}
+			@Override public void onAvailable(@NonNull Network n)
+			{
+				update("Available");
+			}
+			@Override public void onLost(@NonNull Network n)
+			{
+				update("Lost");
+			}
+		};
+
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+			cm.registerDefaultNetworkCallback(callback);
+		else
+			cm.registerNetworkCallback(new NetworkRequest.Builder().build(), callback);
 	}
 }
