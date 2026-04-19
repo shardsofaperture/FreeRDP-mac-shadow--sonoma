@@ -940,7 +940,8 @@ BOOL ntlm_compute_message_integrity_check(NTLM_CONTEXT* context, BYTE* mic, UINT
 		const BYTE data[WINPR_MD5_DIGEST_LENGTH] = WINPR_C_ARRAY_INIT;
 		const size_t rest = context->MessageIntegrityCheckOffset + sizeof(data);
 
-		WINPR_ASSERT(rest <= context->AuthenticateMessage.cbBuffer);
+		if (rest > context->AuthenticateMessage.cbBuffer)
+			goto fail;
 		if (!winpr_HMAC_Update(hmac, &auth[0], context->MessageIntegrityCheckOffset))
 			goto fail;
 		if (!winpr_HMAC_Update(hmac, data, sizeof(data)))
