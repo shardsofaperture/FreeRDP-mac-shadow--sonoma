@@ -10,18 +10,18 @@
 
 package com.freerdp.freerdpcore.presentation;
 
-import android.app.AlertDialog;
-import android.app.ListActivity;
-import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.Parcelable;
-import android.view.View;
-import android.widget.AdapterView;
 import android.widget.EditText;
+import android.widget.ListView;
 import android.widget.TextView;
+
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.pm.ShortcutInfoCompat;
+import androidx.core.content.pm.ShortcutManagerCompat;
+import androidx.core.graphics.drawable.IconCompat;
 
 import com.freerdp.freerdpcore.R;
 import com.freerdp.freerdpcore.application.GlobalApp;
@@ -31,10 +31,11 @@ import com.freerdp.freerdpcore.utils.BookmarkArrayAdapter;
 
 import java.util.ArrayList;
 
-public class ShortcutsActivity extends ListActivity
+public class ShortcutsActivity extends AppCompatActivity
 {
 
 	public static final String TAG = "ShortcutsActivity";
+	private ListView listView;
 
 	@Override public void onCreate(Bundle savedInstanceState)
 	{
@@ -45,14 +46,19 @@ public class ShortcutsActivity extends ListActivity
 		if (Intent.ACTION_CREATE_SHORTCUT.equals(intent.getAction()))
 		{
 			// set listeners for the list view
-			getListView().setOnItemClickListener(new AdapterView.OnItemClickListener() {
-				public void onItemClick(AdapterView<?> parent, View view, int position, long id)
-				{
-					String refStr = view.getTag().toString();
-					String defLabel =
-					    ((TextView)(view.findViewById(R.id.bookmark_text1))).getText().toString();
-					setupShortcut(refStr, defLabel);
-				}
+			listView = new ListView(this);
+			setContentView(listView);
+
+			if (getSupportActionBar() != null)
+			{
+				getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+			}
+
+			listView.setOnItemClickListener((parent, view, position, id) -> {
+				String refStr = view.getTag().toString();
+				String defLabel =
+				    ((TextView)(view.findViewById(R.id.bookmark_text1))).getText().toString();
+				setupShortcut(refStr, defLabel);
 			});
 		}
 		else
@@ -69,92 +75,62 @@ public class ShortcutsActivity extends ListActivity
 		ArrayList<BookmarkBase> bookmarks = GlobalApp.getManualBookmarkGateway().findAll();
 		BookmarkArrayAdapter bookmarkAdapter =
 		    new BookmarkArrayAdapter(this, android.R.layout.simple_list_item_2, bookmarks);
-		getListView().setAdapter(bookmarkAdapter);
+		listView.setAdapter(bookmarkAdapter);
 	}
 
-	public void onPause()
+	@Override public void onPause()
 	{
 		super.onPause();
-		getListView().setAdapter(null);
+		listView.setAdapter(null);
 	}
 
-	/**
-	 * This function creates a shortcut and returns it to the caller.  There are actually two
-	 * intents that you will send back.
-	 * <p>
-	 * The first intent serves as a container for the shortcut and is returned to the launcher by
-	 * setResult().  This intent must contain three fields:
-	 * <p>
-	 * <ul>
-	 * <li>{@link android.content.Intent#EXTRA_SHORTCUT_INTENT} The shortcut intent.</li>
-	 * <li>{@link android.content.Intent#EXTRA_SHORTCUT_NAME} The text that will be displayed with
-	 * the shortcut.</li>
-	 * <li>{@link android.content.Intent#EXTRA_SHORTCUT_ICON} The shortcut's icon, if provided as a
-	 * bitmap, <i>or</i> {@link android.content.Intent#EXTRA_SHORTCUT_ICON_RESOURCE} if provided as
-	 * a drawable resource.</li>
-	 * </ul>
-	 * <p>
-	 * If you use a simple drawable resource, note that you must wrapper it using
-	 * {@link android.content.Intent.ShortcutIconResource}, as shown below.  This is required so
-	 * that the launcher can access resources that are stored in your application's .apk file.  If
-	 * you return a bitmap, such as a thumbnail, you can simply put the bitmap into the extras
-	 * bundle using {@link android.content.Intent#EXTRA_SHORTCUT_ICON}.
-	 * <p>
-	 * The shortcut intent can be any intent that you wish the launcher to send, when the user
-	 * clicks on the shortcut.  Typically this will be {@link android.content.Intent#ACTION_VIEW}
-	 * with an appropriate Uri for your content, but any Intent will work here as long as it
-	 * triggers the desired action within your Activity.
-	 */
+	@Override public boolean onSupportNavigateUp()
+	{
+		finish();
+		return true;
+	}
 
 	private void setupShortcut(String strRef, String defaultLabel)
 	{
 		final String paramStrRef = strRef;
 		final String paramDefaultLabel = defaultLabel;
-		final Context paramContext = this;
 
 		// display edit dialog to the user so he can specify the shortcut name
 		final EditText input = new EditText(this);
 		input.setText(defaultLabel);
 
-		AlertDialog.Builder builder = new AlertDialog.Builder(this);
-		builder.setTitle(R.string.dlg_title_create_shortcut)
+		new AlertDialog.Builder(this)
+		    .setTitle(R.string.dlg_title_create_shortcut)
 		    .setMessage(R.string.dlg_msg_create_shortcut)
 		    .setView(input)
 		    .setPositiveButton(
 		        android.R.string.ok,
-		        new DialogInterface.OnClickListener() {
-			        @Override public void onClick(DialogInterface dialog, int which)
-			        {
-				        String label = input.getText().toString();
-				        if (label.length() == 0)
-					        label = paramDefaultLabel;
+		        (dialog, which) -> {
+			        String label = input.getText().toString();
+			        if (label.length() == 0)
+				        label = paramDefaultLabel;
 
-				        Intent shortcutIntent = new Intent(Intent.ACTION_VIEW);
-				        shortcutIntent.setClassName(paramContext,
-				                                    SessionRequestHandlerActivity.class.getName());
-				        shortcutIntent.setData(Uri.parse(paramStrRef));
+			        Intent shortcutIntent = new Intent(Intent.ACTION_VIEW);
+			        shortcutIntent.setClassName(this,
+			                                    SessionRequestHandlerActivity.class.getName());
+			        shortcutIntent.setData(Uri.parse(paramStrRef));
 
-				        // Then, set up the container intent (the response to the caller)
-				        Intent intent = new Intent();
-				        intent.putExtra(Intent.EXTRA_SHORTCUT_INTENT, shortcutIntent);
-				        intent.putExtra(Intent.EXTRA_SHORTCUT_NAME, label);
-				        Parcelable iconResource = Intent.ShortcutIconResource.fromContext(
-				            paramContext, R.drawable.icon_launcher_freerdp);
-				        intent.putExtra(Intent.EXTRA_SHORTCUT_ICON_RESOURCE, iconResource);
+			        // Use ShortcutManagerCompat for modern Android compatibility
+			        ShortcutInfoCompat shortcutInfo =
+			            new ShortcutInfoCompat.Builder(this, "shortcut_" + paramStrRef.hashCode())
+			                .setShortLabel(label)
+			                .setIcon(IconCompat.createWithResource(
+			                    this, R.drawable.icon_launcher_freerdp))
+			                .setIntent(shortcutIntent)
+			                .build();
 
-				        // Now, return the result to the launcher
-				        setResult(RESULT_OK, intent);
-				        finish();
-			        }
+			        // Now, return the result to the launcher
+			        Intent resultIntent =
+			            ShortcutManagerCompat.createShortcutResultIntent(this, shortcutInfo);
+			        setResult(RESULT_OK, resultIntent);
+			        finish();
 		        })
-		    .setNegativeButton(android.R.string.cancel,
-		                       new DialogInterface.OnClickListener() {
-			                       @Override public void onClick(DialogInterface dialog, int which)
-			                       {
-				                       dialog.dismiss();
-			                       }
-		                       })
-		    .create()
+		    .setNegativeButton(android.R.string.cancel, (dialog, which) -> dialog.dismiss())
 		    .show();
 	}
 }
