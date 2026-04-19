@@ -1431,6 +1431,11 @@ public class SessionActivity extends AppCompatActivity
 			// bind session
 			bindSession();
 
+			if (ApplicationSettingsActivity.getKeepScreenOnWhenConnected(context))
+			{
+				getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+			}
+
 			if (progressDialog != null)
 			{
 				progressDialog.dismiss();
@@ -1486,6 +1491,11 @@ public class SessionActivity extends AppCompatActivity
 
 			// remove pending move events
 			uiHandler.removeMessages(UIHandler.SEND_MOVE_EVENT);
+
+			if (ApplicationSettingsActivity.getKeepScreenOnWhenConnected(context))
+			{
+				getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+			}
 
 			if (progressDialog != null)
 			{
