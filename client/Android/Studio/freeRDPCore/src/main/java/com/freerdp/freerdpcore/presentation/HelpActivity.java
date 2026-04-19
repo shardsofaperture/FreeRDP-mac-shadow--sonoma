@@ -16,19 +16,24 @@ import androidx.appcompat.app.AppCompatActivity;
 import android.util.Log;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
+import android.webkit.WebViewClient;
 
 import com.freerdp.freerdpcore.R;
 
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.util.Locale;
 
 public class HelpActivity extends AppCompatActivity
 {
 
 	private static final String TAG = HelpActivity.class.toString();
+
+	@Override public boolean onSupportNavigateUp()
+	{
+		finish();
+		return true;
+	}
 
 	@Override public void onCreate(Bundle savedInstanceState)
 	{
@@ -75,10 +80,22 @@ public class HelpActivity extends AppCompatActivity
 		}
 		catch (IOException e)
 		{
-			Log.e(TAG, "Missing localized asset " + file, e);
+			Log.d(TAG, "No localized asset " + file + ", falling back to default");
 			dir = baseName + "/";
 			file = dir + filename;
 		}
+
+		webview.setWebViewClient(new WebViewClient() {
+			@Override public boolean shouldOverrideUrlLoading(WebView view, String url)
+			{
+				if (url.startsWith("file:///android_asset/"))
+				{
+					view.loadUrl(url);
+					return true;
+				}
+				return false;
+			}
+		});
 
 		webview.loadUrl(base + file);
 	}

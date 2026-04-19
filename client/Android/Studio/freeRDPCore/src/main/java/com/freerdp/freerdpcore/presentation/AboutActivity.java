@@ -40,6 +40,12 @@ public class AboutActivity extends AppCompatActivity
 		mWebView = findViewById(R.id.activity_about_webview);
 	}
 
+	@Override public boolean onSupportNavigateUp()
+	{
+		finish();
+		return true;
+	}
+
 	@Override protected void onResume()
 	{
 		populate();
@@ -69,7 +75,7 @@ public class AboutActivity extends AppCompatActivity
 		}
 		catch (IOException e)
 		{
-			Log.e(TAG, "Missing localized asset " + file, e);
+			Log.d(TAG, "No localized asset " + file + ", falling back to default");
 			dir = "about_page/";
 			file = dir + filename;
 		}
