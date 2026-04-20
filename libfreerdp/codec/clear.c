@@ -1059,7 +1059,7 @@ static inline BOOL updateContextFormat(CLEAR_CONTEXT* WINPR_RESTRICT clear, UINT
 	{
 		if (clear->formatSet)
 		{
-			if (clear->format != DstFormat)
+			if (!FreeRDPAreColorFormatsEqualNoAlpha(clear->format, DstFormat))
 			{
 				WLog_Print(
 				    clear->log, WLOG_ERROR,
