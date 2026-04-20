@@ -159,6 +159,9 @@ static BOOL pf_config_get_uint16(wIniFile* ini, const char* section, const char*
 		WLog_ERR(TAG, "key '%s.%s' does not exist.", section, key);
 		return FALSE;
 	}
+	else if (!strval)
+		goto out;
+
 	val = IniFile_GetKeyValueInt(ini, section, key);
 	if ((val <= 0) || (val > UINT16_MAX))
 	{
@@ -166,6 +169,7 @@ static BOOL pf_config_get_uint16(wIniFile* ini, const char* section, const char*
 		return FALSE;
 	}
 
+out:
 	*result = (UINT16)val;
 	return TRUE;
 }
@@ -303,16 +307,15 @@ static BOOL pf_config_load_target(wIniFile* ini, proxyConfig* config)
 	WINPR_ASSERT(config);
 	config->FixedTarget = pf_config_get_bool(ini, section_target, key_target_fixed, FALSE);
 
-	if (!pf_config_get_uint16(ini, section_target, key_port, &config->TargetPort,
-	                          config->FixedTarget))
-		return FALSE;
-
 	if (!pf_config_get_uint32(ini, section_target, key_target_tls_seclevel,
 	                          &config->TargetTlsSecLevel, FALSE))
 		return FALSE;
 
 	if (config->FixedTarget)
 	{
+		if (!pf_config_get_uint16(ini, section_target, key_port, &config->TargetPort, TRUE))
+			return FALSE;
+
 		target_value = pf_config_get_str(ini, section_target, key_host, TRUE);
 		if (!target_value)
 			return FALSE;

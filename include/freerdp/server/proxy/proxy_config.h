@@ -157,7 +157,6 @@ extern "C"
 	 * @return A proxyConfig or nullptr in case of failure.
 	 */
 	WINPR_ATTR_MALLOC(pf_server_config_free, 1)
-	WINPR_ATTR_NODISCARD
 	FREERDP_API proxyConfig* server_config_load_ini(wIniFile* ini);
 	/**
 	 * @brief pf_server_config_load_file Create a proxyConfig from a INI file found at path.
@@ -167,7 +166,6 @@ extern "C"
 	 * @return A proxyConfig or nullptr in case of failure.
 	 */
 	WINPR_ATTR_MALLOC(pf_server_config_free, 1)
-	WINPR_ATTR_NODISCARD
 	FREERDP_API proxyConfig* pf_server_config_load_file(const char* path);
 
 	/**
@@ -179,7 +177,6 @@ extern "C"
 	 * @return A proxyConfig or nullptr in case of failure.
 	 */
 	WINPR_ATTR_MALLOC(pf_server_config_free, 1)
-	WINPR_ATTR_NODISCARD
 	FREERDP_API proxyConfig* pf_server_config_load_buffer(const char* buffer);
 
 	/**
