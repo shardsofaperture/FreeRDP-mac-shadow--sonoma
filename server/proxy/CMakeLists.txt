@@ -125,3 +125,7 @@ option(WITH_PROXY_MODULES "Compile proxy modules" ON)
 if(WITH_PROXY_MODULES)
   add_subdirectory("modules")
 endif()
+
+if(BUILD_TESTING_INTERNAL OR BUILD_TESTING)
+  add_subdirectory(test)
+endif()
