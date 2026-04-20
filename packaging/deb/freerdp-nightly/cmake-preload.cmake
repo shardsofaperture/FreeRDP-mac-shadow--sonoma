@@ -1,5 +1,5 @@
-find_package(libcbor 0.10.2 REQUIRED)
-find_package(libfido2 1.14.0 REQUIRED)
+find_package(libcbor 0.10.2)
+find_package(libfido2 1.14.0)
 
 if(LIBCBOR_FOUND AND LIBFIDO2_FOUND)
   set(CHANNEL_RDPEWA ON CACHE BOOL "preload")
