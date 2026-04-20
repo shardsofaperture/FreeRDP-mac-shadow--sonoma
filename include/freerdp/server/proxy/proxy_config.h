@@ -130,7 +130,9 @@ extern "C"
 		/* target smartcard */
 		BOOL TargetSmartcardAuth;  /** @since version 3.25.0 */
 		char* TargetSmartcardCert; /** @since version 3.25.0 */
+		size_t TargetSmartcardCertLength; /** @since version 3.25.0 */
 		char* TargetSmartcardKey;  /** @since version 3.25.0 */
+		size_t TargetSmartcardKeyLength; /** @since version 3.25.0 */
 	};
 
 	/**
