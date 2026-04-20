@@ -4,10 +4,10 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fitsSystemWindows="true"
-    tools:context="com.freerdp.freerdpcore.presentation.AboutActivity">
+    tools:context="com.freerdp.freerdpcore.presentation.HelpActivity">
 
     <WebView
-        android:id="@+id/activity_about_webview"
+        android:id="@+id/activity_help_webview"
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
 </LinearLayout>

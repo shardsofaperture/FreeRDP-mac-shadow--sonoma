@@ -76,7 +76,7 @@
             android:name="com.freerdp.freerdpcore.services.SessionRequestHandlerActivity"
             android:excludeFromRecents="true"
             android:noHistory="true"
-            android:theme="@android:style/Theme.NoDisplay">
+            android:theme="@style/Theme.Main">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
             </intent-filter>

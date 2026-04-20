@@ -10,170 +10,151 @@
 
 package com.freerdp.freerdpcore.presentation;
 
-import android.annotation.TargetApi;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.SharedPreferences;
-import android.content.res.Configuration;
-import android.os.Build;
 import android.os.Bundle;
-import android.preference.EditTextPreference;
-import android.preference.Preference;
-import android.preference.PreferenceFragment;
-import android.preference.PreferenceManager;
-import android.preference.PreferenceScreen;
-import androidx.appcompat.app.AlertDialog;
+import androidx.preference.PreferenceManager;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.preference.Preference;
+import androidx.preference.PreferenceFragmentCompat;
+
 import com.freerdp.freerdpcore.R;
-import com.freerdp.freerdpcore.utils.AppCompatPreferenceActivity;
 
 import java.io.File;
-import java.util.List;
 import java.util.UUID;
 
-public class ApplicationSettingsActivity extends AppCompatPreferenceActivity
+public class ApplicationSettingsActivity
+    extends AppCompatActivity implements PreferenceFragmentCompat.OnPreferenceStartFragmentCallback
 {
-	private static boolean isXLargeTablet(Context context)
-	{
-		return (context.getResources().getConfiguration().screenLayout &
-		        Configuration.SCREENLAYOUT_SIZE_MASK) >= Configuration.SCREENLAYOUT_SIZE_XLARGE;
-	}
-
 	@Override protected void onCreate(Bundle savedInstanceState)
 	{
 		super.onCreate(savedInstanceState);
-		setupActionBar();
-	}
+		setContentView(R.layout.activity_settings);
 
-	private void setupActionBar()
-	{
-		android.app.ActionBar actionBar = getActionBar();
-		if (actionBar != null)
+		// Ensure app setting defaults are initialised and the client name is set.
+		get(this);
+
+		if (getSupportActionBar() != null)
 		{
-			actionBar.setDisplayHomeAsUpEnabled(true);
+			getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+		}
+
+		if (savedInstanceState == null)
+		{
+			getSupportFragmentManager()
+			    .beginTransaction()
+			    .replace(R.id.settings_fragment_container, new MainFragment())
+			    .commit();
 		}
 	}
 
-	@Override public boolean onIsMultiPane()
+	@Override public boolean onSupportNavigateUp()
 	{
-		return isXLargeTablet(this);
+		if (getSupportFragmentManager().getBackStackEntryCount() > 0)
+		{
+			getSupportFragmentManager().popBackStack();
+		}
+		else
+		{
+			finish();
+		}
+		return true;
 	}
 
 	@Override
-	@TargetApi(Build.VERSION_CODES.HONEYCOMB)
-	public void onBuildHeaders(List<Header> target)
+	public boolean onPreferenceStartFragment(PreferenceFragmentCompat caller, Preference pref)
 	{
-		loadHeadersFromResource(R.xml.settings_app_headers, target);
+		PreferenceFragmentCompat fragment =
+		    (PreferenceFragmentCompat)getSupportFragmentManager().getFragmentFactory().instantiate(
+		        getClassLoader(), pref.getFragment());
+		fragment.setArguments(pref.getExtras());
+
+		getSupportFragmentManager()
+		    .beginTransaction()
+		    .replace(R.id.settings_fragment_container, fragment)
+		    .addToBackStack(null)
+		    .commit();
+		return true;
 	}
 
-	protected boolean isValidFragment(String fragmentName)
+	// =========================================================================
+	// Inner PreferenceFragmentCompat classes — one per settings category.
+	// The app:fragment attribute in settings_app_headers.xml references these
+	// using the $ notation, e.g. "...ApplicationSettingsActivity$ClientFragment".
+	// =========================================================================
+
+	/** Root screen listing all settings categories. */
+	public static class MainFragment extends PreferenceFragmentCompat
 	{
-		return PreferenceFragment.class.getName().equals(fragmentName) ||
-		    ClientPreferenceFragment.class.getName().equals(fragmentName) ||
-		    UiPreferenceFragment.class.getName().equals(fragmentName) ||
-		    PowerPreferenceFragment.class.getName().equals(fragmentName) ||
-		    SecurityPreferenceFragment.class.getName().equals(fragmentName);
-	}
-
-	@TargetApi(Build.VERSION_CODES.HONEYCOMB)
-	public static class ClientPreferenceFragment
-	    extends PreferenceFragment implements SharedPreferences.OnSharedPreferenceChangeListener
-	{
-		@Override public void onCreate(Bundle savedInstanceState)
+		@Override public void onCreatePreferences(Bundle savedInstanceState, String rootKey)
 		{
-			super.onCreate(savedInstanceState);
-			addPreferencesFromResource(R.xml.settings_app_client);
-			SharedPreferences preferences = get(getActivity());
-			preferences.registerOnSharedPreferenceChangeListener(this);
-		}
-
-		@Override
-		public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key)
-		{
-			if (isAdded())
-			{
-				final String clientNameKey = getString(R.string.preference_key_client_name);
-
-				get(getActivity());
-				if (key.equals(clientNameKey))
-				{
-					final String clientNameValue = sharedPreferences.getString(clientNameKey, "");
-					EditTextPreference pref = (EditTextPreference)findPreference(clientNameKey);
-					pref.setText(clientNameValue);
-				}
-			}
+			setPreferencesFromResource(R.xml.settings_app_headers, rootKey);
 		}
 	}
 
-	@TargetApi(Build.VERSION_CODES.HONEYCOMB)
-	public static class UiPreferenceFragment extends PreferenceFragment
+	// -------------------------------------------------------------------------
+
+	public static class ClientFragment extends PreferenceFragmentCompat
 	{
-		@Override public void onCreate(Bundle savedInstanceState)
+		@Override public void onCreatePreferences(Bundle savedInstanceState, String rootKey)
 		{
-			super.onCreate(savedInstanceState);
-			addPreferencesFromResource(R.xml.settings_app_ui);
+			setPreferencesFromResource(R.xml.settings_app_client, rootKey);
 		}
 	}
 
-	@TargetApi(Build.VERSION_CODES.HONEYCOMB)
-	public static class PowerPreferenceFragment extends PreferenceFragment
+	// -------------------------------------------------------------------------
+
+	public static class UiFragment extends PreferenceFragmentCompat
 	{
-		@Override public void onCreate(Bundle savedInstanceState)
+		@Override public void onCreatePreferences(Bundle savedInstanceState, String rootKey)
 		{
-			super.onCreate(savedInstanceState);
-			addPreferencesFromResource(R.xml.settings_app_power);
+			setPreferencesFromResource(R.xml.settings_app_ui, rootKey);
 		}
 	}
 
-	@TargetApi(Build.VERSION_CODES.HONEYCOMB)
-	public static class SecurityPreferenceFragment extends PreferenceFragment
+	// -------------------------------------------------------------------------
+
+	public static class PowerFragment extends PreferenceFragmentCompat
 	{
-		@Override public void onCreate(Bundle savedInstanceState)
+		@Override public void onCreatePreferences(Bundle savedInstanceState, String rootKey)
 		{
-			super.onCreate(savedInstanceState);
-			addPreferencesFromResource(R.xml.settings_app_security);
+			setPreferencesFromResource(R.xml.settings_app_power, rootKey);
+		}
+	}
+
+	// -------------------------------------------------------------------------
+
+	public static class SecurityFragment extends PreferenceFragmentCompat
+	{
+		@Override public void onCreatePreferences(Bundle savedInstanceState, String rootKey)
+		{
+			setPreferencesFromResource(R.xml.settings_app_security, rootKey);
+
+			Preference clearCache =
+			    findPreference(getString(R.string.preference_key_security_clear_certificate_cache));
+			if (clearCache != null)
+				clearCache.setOnPreferenceClickListener(pref -> {
+					showClearCacheDialog();
+					return true;
+				});
 		}
 
-		@Override
-		public boolean onPreferenceTreeClick(PreferenceScreen preferenceScreen,
-		                                     Preference preference)
+		private void showClearCacheDialog()
 		{
-			final String clear =
-			    getString(R.string.preference_key_security_clear_certificate_cache);
-			if (preference.getKey().equals(clear))
-			{
-				showDialog();
-				return true;
-			}
-			else
-			{
-				return super.onPreferenceTreeClick(preferenceScreen, preference);
-			}
-		}
-
-		private void showDialog()
-		{
-			new AlertDialog.Builder(getActivity())
+			new AlertDialog
+			    .Builder(requireContext()) // TODO: DialogFragment with ViewModel to survive config
+			                               // changes
 			    .setTitle(R.string.dlg_title_clear_cert_cache)
 			    .setMessage(R.string.dlg_msg_clear_cert_cache)
 			    .setPositiveButton(android.R.string.ok,
-			                       new DialogInterface.OnClickListener() {
-				                       @Override
-				                       public void onClick(DialogInterface dialog, int which)
-				                       {
-					                       clearCertificateCache();
-					                       dialog.dismiss();
-				                       }
+			                       (d, w) -> {
+				                       clearCertificateCache();
+				                       d.dismiss();
 			                       })
-			    .setNegativeButton(android.R.string.cancel,
-			                       new DialogInterface.OnClickListener() {
-				                       @Override
-				                       public void onClick(DialogInterface dialog, int which)
-				                       {
-					                       dialog.dismiss();
-				                       }
-			                       })
+			    .setNegativeButton(android.R.string.cancel, (d, w) -> d.dismiss())
 			    .setIcon(android.R.drawable.ic_delete)
 			    .show();
 		}
@@ -194,16 +175,19 @@ public class ApplicationSettingsActivity extends AppCompatPreferenceActivity
 
 		private void clearCertificateCache()
 		{
-			Context context = getActivity();
-			if ((new File(context.getFilesDir() + "/.freerdp")).exists())
+			Context context = requireContext();
+			File dir = new File(context.getFilesDir() + "/.freerdp");
+			if (dir.exists())
 			{
-				if (deleteDirectory(new File(context.getFilesDir() + "/.freerdp")))
+				if (deleteDirectory(dir))
 					Toast.makeText(context, R.string.info_reset_success, Toast.LENGTH_LONG).show();
 				else
 					Toast.makeText(context, R.string.info_reset_failed, Toast.LENGTH_LONG).show();
 			}
 			else
+			{
 				Toast.makeText(context, R.string.info_reset_success, Toast.LENGTH_LONG).show();
+			}
 		}
 	}
 

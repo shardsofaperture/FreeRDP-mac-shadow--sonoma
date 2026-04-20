@@ -4,25 +4,24 @@ File file = new File('release.properties')
 if (file.canRead()) {
     releaseProperties.load(new FileInputStream(file))
 }
-   
-if (!hasProperty('RELEASE_STORE_FILE')) {
-    RELEASE_STORE_FILE=releaseProperties.get('RELEASE_STORE_FILE', '~/.android/debug.keystore')
-}
-if (!hasProperty('RELEASE_KEY_ALIAS')) {
-    RELEASE_KEY_ALIAS=releaseProperties.get('RELEASE_KEY_ALIAS', 'androiddebugkey')
-}
-if (!hasProperty('RELEASE_KEY_PASSWORD')) {
-    RELEASE_KEY_PASSWORD=releaseProperties.get('RELEASE_KEY_PASSWORD', 'android')
-}
-if (!hasProperty('RELEASE_STORE_PASSWORD')) {
-    RELEASE_STORE_PASSWORD=releaseProperties.get('RELEASE_STORE_PASSWORD', 'android')
-}
-
 ext {
-    compileApi = releaseProperties.get('COMPILE_API', 35)
-    targetApi = releaseProperties.get('TARGET_API', 35)
+    if (!hasProperty('RELEASE_STORE_FILE')) {
+        RELEASE_STORE_FILE=releaseProperties.get('RELEASE_STORE_FILE', '~/.android/debug.keystore')
+    }
+    if (!hasProperty('RELEASE_KEY_ALIAS')) {
+        RELEASE_KEY_ALIAS=releaseProperties.get('RELEASE_KEY_ALIAS', 'androiddebugkey')
+    }
+    if (!hasProperty('RELEASE_KEY_PASSWORD')) {
+        RELEASE_KEY_PASSWORD=releaseProperties.get('RELEASE_KEY_PASSWORD', 'android')
+    }
+    if (!hasProperty('RELEASE_STORE_PASSWORD')) {
+        RELEASE_STORE_PASSWORD=releaseProperties.get('RELEASE_STORE_PASSWORD', 'android')
+    }
+
+    compileApi = releaseProperties.get('COMPILE_API', 36)
+    targetApi = releaseProperties.get('TARGET_API', 36)
     minApi = releaseProperties.get('MIN_API', 23)
-    toolsVersion = releaseProperties.get('TOOLS_VERSION', '35.0.0')
+    toolsVersion = releaseProperties.get('TOOLS_VERSION', '36.0.0')
 
     println '----------------- Project configuration -------------------'
     println 'RELEASE_STORE_FILE: ' + RELEASE_STORE_FILE

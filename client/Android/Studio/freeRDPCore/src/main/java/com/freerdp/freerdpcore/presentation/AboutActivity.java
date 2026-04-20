@@ -31,7 +31,19 @@ public class AboutActivity extends AppCompatActivity
 	{
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_about);
+
+		if (getSupportActionBar() != null)
+		{
+			getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+		}
+
 		mWebView = findViewById(R.id.activity_about_webview);
+	}
+
+	@Override public boolean onSupportNavigateUp()
+	{
+		finish();
+		return true;
 	}
 
 	@Override protected void onResume()
@@ -63,7 +75,7 @@ public class AboutActivity extends AppCompatActivity
 		}
 		catch (IOException e)
 		{
-			Log.e(TAG, "Missing localized asset " + file, e);
+			Log.d(TAG, "No localized asset " + file + ", falling back to default");
 			dir = "about_page/";
 			file = dir + filename;
 		}
