@@ -313,15 +313,15 @@ static BOOL pf_config_load_target(wIniFile* ini, proxyConfig* config)
 
 	if (config->FixedTarget)
 	{
-		if (!pf_config_get_uint16(ini, section_target, key_port, &config->TargetPort, TRUE))
+		if (!pf_config_get_uint16(ini, section_target, key_port, &config->TargetPort, FALSE))
 			return FALSE;
 
-		target_value = pf_config_get_str(ini, section_target, key_host, TRUE);
-		if (!target_value)
-			return FALSE;
-
-		if (!pf_config_free_and_copy_string(&config->TargetHost, target_value))
-			return FALSE;
+		target_value = pf_config_get_str(ini, section_target, key_host, FALSE);
+		if (target_value)
+		{
+			if (!pf_config_free_and_copy_string(&config->TargetHost, target_value))
+				return FALSE;
+		}
 	}
 
 	target_value = pf_config_get_str(ini, section_target, key_target_user, FALSE);
@@ -351,11 +351,13 @@ static BOOL pf_config_load_target(wIniFile* ini, proxyConfig* config)
 	target_value = pf_config_get_str(ini, section_target, key_target_scard_cert, FALSE);
 	if (target_value)
 	{
-		char* pem = crypto_read_pem(target_value, nullptr);
+		size_t len = 0;
+		char* pem = crypto_read_pem(target_value, &len);
 		if (!pem)
 			return FALSE;
-		free(config->TargetSmartcardCert);
+		znfree(config->TargetSmartcardCert, config->TargetSmartcardCertLength);
 		config->TargetSmartcardCert = pem;
+		config->TargetSmartcardCertLength = len;
 	}
 
 	{
@@ -367,21 +369,24 @@ static BOOL pf_config_load_target(wIniFile* ini, proxyConfig* config)
 				WLog_WARN(TAG, "In section [%s] both, '%s' and '%s' are provided. Ignoring %s",
 				          section_target, key_target_scard_cert, key_target_scard_pem_cert,
 				          key_target_scard_cert);
-			free(config->TargetSmartcardCert);
+			znfree(config->TargetSmartcardCert, config->TargetSmartcardCertLength);
 			size_t len = 0;
 			config->TargetSmartcardCert =
 			    pf_config_decode_base64(pem_value, key_target_scard_pem_cert, &len);
 			if (!config->TargetSmartcardCert)
 				return FALSE;
+			config->TargetSmartcardCertLength = len;
 		}
 	}
 
 	target_value = pf_config_get_str(ini, section_target, key_target_scard_key, FALSE);
 	if (target_value)
 	{
-		char* pem = crypto_read_pem(target_value, nullptr);
-		free(config->TargetSmartcardKey);
+		size_t len = 0;
+		char* pem = crypto_read_pem(target_value, &len);
+		znfree(config->TargetSmartcardKey, config->TargetSmartcardKeyLength);
 		config->TargetSmartcardKey = pem;
+		config->TargetSmartcardKeyLength = len;
 	}
 
 	{
@@ -393,13 +398,14 @@ static BOOL pf_config_load_target(wIniFile* ini, proxyConfig* config)
 				WLog_WARN(TAG, "In section [%s] both, '%s' and '%s' are provided. Ignoring %s",
 				          section_target, key_target_scard_key, key_target_scard_pem_key,
 				          key_target_scard_key);
-			free(config->TargetSmartcardKey);
+			znfree(config->TargetSmartcardKey, config->TargetSmartcardKeyLength);
 
 			size_t len = 0;
 			config->TargetSmartcardKey =
 			    pf_config_decode_base64(pem_value, key_target_scard_pem_key, &len);
 			if (!config->TargetSmartcardKey)
 				return FALSE;
+			config->TargetSmartcardKeyLength = len;
 		}
 	}
 
@@ -1032,8 +1038,8 @@ void pf_server_config_free(proxyConfig* config)
 	zfree(config->TargetUser);
 	zfree(config->TargetDomain);
 	zfree(config->TargetPassword);
-	zfree(config->TargetSmartcardCert);
-	zfree(config->TargetSmartcardKey);
+	znfree(config->TargetSmartcardCert, config->TargetSmartcardCertLength);
+	znfree(config->TargetSmartcardKey, config->TargetSmartcardKeyLength);
 
 	CommandLineParserFree(config->Passthrough);
 	CommandLineParserFree(config->Intercept);
@@ -1148,9 +1154,11 @@ BOOL pf_config_clone(proxyConfig** dst, const proxyConfig* config)
 		goto fail;
 	if (!pf_config_copy_string(&tmp->TargetPassword, config->TargetPassword))
 		goto fail;
-	if (!pf_config_copy_string(&tmp->TargetSmartcardCert, config->TargetSmartcardCert))
+	if (!pf_config_copy_string_n(&tmp->TargetSmartcardCert, config->TargetSmartcardCert,
+	                             config->TargetSmartcardCertLength))
 		goto fail;
-	if (!pf_config_copy_string(&tmp->TargetSmartcardKey, config->TargetSmartcardKey))
+	if (!pf_config_copy_string_n(&tmp->TargetSmartcardKey, config->TargetSmartcardKey,
+	                             config->TargetSmartcardKeyLength))
 		goto fail;
 	if (!pf_config_copy_string_list(&tmp->Passthrough, &tmp->PassthroughCount, config->Passthrough,
 	                                config->PassthroughCount))

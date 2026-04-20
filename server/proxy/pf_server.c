@@ -187,8 +187,9 @@ static BOOL pf_server_get_target_info(rdpContext* context, rdpSettings* settings
 			{
 				if (!freerdp_settings_set_bool(settings, FreeRDP_SmartcardEmulation, TRUE))
 					return FALSE;
-				if (!freerdp_settings_set_string(settings, FreeRDP_SmartcardCertificate,
-				                                 config->TargetSmartcardCert))
+				if (!freerdp_settings_set_string_len(settings, FreeRDP_SmartcardCertificate,
+				                                     config->TargetSmartcardCert,
+				                                     config->TargetSmartcardCertLength))
 					return FALSE;
 			}
 
@@ -196,8 +197,9 @@ static BOOL pf_server_get_target_info(rdpContext* context, rdpSettings* settings
 			{
 				if (!freerdp_settings_set_bool(settings, FreeRDP_SmartcardEmulation, TRUE))
 					return FALSE;
-				if (!freerdp_settings_set_string(settings, FreeRDP_SmartcardPrivateKey,
-				                                 config->TargetSmartcardKey))
+				if (!freerdp_settings_set_string_len(settings, FreeRDP_SmartcardPrivateKey,
+				                                     config->TargetSmartcardKey,
+				                                     config->TargetSmartcardKeyLength))
 					return FALSE;
 			}
 
