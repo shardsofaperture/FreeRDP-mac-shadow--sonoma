@@ -313,15 +313,15 @@ static BOOL pf_config_load_target(wIniFile* ini, proxyConfig* config)
 
 	if (config->FixedTarget)
 	{
-		if (!pf_config_get_uint16(ini, section_target, key_port, &config->TargetPort, TRUE))
+		if (!pf_config_get_uint16(ini, section_target, key_port, &config->TargetPort, FALSE))
 			return FALSE;
 
-		target_value = pf_config_get_str(ini, section_target, key_host, TRUE);
-		if (!target_value)
-			return FALSE;
-
-		if (!pf_config_free_and_copy_string(&config->TargetHost, target_value))
-			return FALSE;
+		target_value = pf_config_get_str(ini, section_target, key_host, FALSE);
+		if (target_value)
+		{
+			if (!pf_config_free_and_copy_string(&config->TargetHost, target_value))
+				return FALSE;
+		}
 	}
 
 	target_value = pf_config_get_str(ini, section_target, key_target_user, FALSE);
