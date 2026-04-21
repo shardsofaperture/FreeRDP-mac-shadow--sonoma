@@ -869,13 +869,14 @@ static void xf_clipboard_formats_free(xfClipboard* clipboard)
 {
 	WINPR_ASSERT(clipboard);
 
-	/* Synchronize RDP/X11 thread with channel thread */
+	/* Synchronize RDP/X11 thread with channel thread.
+	 * Reset the pointer and count inside the lock so that
+	 * xf_clipboard_changed cannot observe a freed-but-non-NULL pointer. */
 	xf_lock_x11(clipboard->xfc);
 	xf_cliprdr_free_formats(clipboard->lastSentFormats, clipboard->lastSentNumFormats);
-	xf_unlock_x11(clipboard->xfc);
-
 	clipboard->lastSentFormats = nullptr;
 	clipboard->lastSentNumFormats = 0;
+	xf_unlock_x11(clipboard->xfc);
 }
 
 static BOOL xf_clipboard_copy_formats(xfClipboard* clipboard, const CLIPRDR_FORMAT* formats,
