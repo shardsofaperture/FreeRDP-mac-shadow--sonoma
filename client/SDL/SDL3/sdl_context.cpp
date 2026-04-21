@@ -1117,6 +1117,8 @@ bool SdlContext::handleEvent(const SDL_WindowEvent& ev)
 		case SDL_EVENT_WINDOW_MOUSE_ENTER:
 			return restoreCursor();
 		case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED:
+			if (!resizeToScale(window))
+				return false;
 			if (isConnected())
 			{
 				if (!window->fill())
@@ -1128,6 +1130,8 @@ bool SdlContext::handleEvent(const SDL_WindowEvent& ev)
 			}
 			break;
 		case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+			if (!resizeToScale(window))
+				return false;
 			if (!window->fill())
 				return false;
 			if (!drawToWindow(*window))
@@ -1452,6 +1456,17 @@ int SdlContext::argumentHandler(const COMMAND_LINE_ARGUMENT_A* arg, void* custom
 		}
 	}
 	return 0;
+}
+
+bool SdlContext::resizeToScale(SdlWindow* window)
+{
+	if (freerdp_settings_get_bool(context()->settings, FreeRDP_SmartSizing))
+		return true;
+	if (!useLocalScale())
+		return true;
+	if (!window)
+		return false;
+	return window->resizeToScale();
 }
 
 bool SdlContext::useLocalScale() const

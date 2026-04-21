@@ -150,6 +150,7 @@ class SdlContext
 	[[nodiscard]] static int argumentHandler(const COMMAND_LINE_ARGUMENT_A* arg, void* custom);
 
   private:
+	[[nodiscard]] bool resizeToScale(SdlWindow* window);
 	[[nodiscard]] bool useLocalScale() const;
 
 	[[nodiscard]] static BOOL preConnect(freerdp* instance);

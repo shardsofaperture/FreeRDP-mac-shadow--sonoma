@@ -67,7 +67,7 @@ class SdlWindow
 	void fullscreen(bool enter, bool forceOriginalDisplay);
 	void minimize();
 
-	[[nodiscard]] bool resizeToPixelSize(const SDL_Point& size);
+	[[nodiscard]] bool resizeToScale();
 	[[nodiscard]] bool resize(const SDL_Point& size);
 
 	[[nodiscard]] bool drawRect(SDL_Surface* surface, SDL_Point offset, const SDL_Rect& srcRect);
@@ -114,6 +114,8 @@ class SdlWindow
 	SDL_Texture* _gdiTexture = nullptr;
 	int _gdiTextureW = 0;
 	int _gdiTextureH = 0;
+	int _initialW = 0;
+	int _initialH = 0;
 	SDL_DisplayID _displayID = 0;
 	Sint32 _offset_x = 0;
 	Sint32 _offset_y = 0;
