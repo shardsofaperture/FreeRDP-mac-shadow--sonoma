@@ -1049,9 +1049,17 @@ static int fail_at_(const COMMAND_LINE_ARGUMENT_A* arg, int rc, const char* file
 	const DWORD level = WLOG_ERROR;
 	wLog* log = WLog_Get(TAG);
 	if (WLog_IsLevelActive(log, level))
+	{
+		const char* val = arg->Value;
+		if ((arg->Flags & COMMAND_LINE_VALUE_FLAG) != 0)
+			val = arg->Value == nullptr ? "Disable" : "Enable";
+		if ((arg->Flags & COMMAND_LINE_VALUE_BOOL) != 0)
+			val = arg->Value == nullptr ? "Disable" : "Enable";
+
 		WLog_PrintTextMessage(log, level, line, file, fkt,
-		                      "Command line parsing failed at '%s' value '%s' [%d]", arg->Name,
-		                      arg->Value, rc);
+		                      "Command line parsing failed at '%s' value '%s' [%d]", arg->Name, val,
+		                      rc);
+	}
 	return rc;
 }
 
