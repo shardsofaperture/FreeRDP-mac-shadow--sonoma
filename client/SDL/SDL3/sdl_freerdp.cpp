@@ -654,20 +654,28 @@ int main(int argc, char* argv[])
 		return rc;
 	}
 
+	if (!SDL_SetHint(SDL_HINT_ALLOW_ALT_TAB_WHILE_GRABBED, "0"))
+		return -1;
+	if (!SDL_SetHint(SDL_HINT_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR, "0"))
+		return -1;
+	if (!SDL_SetHint(SDL_HINT_PEN_MOUSE_EVENTS, "0"))
+		return -1;
+	if (!SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0"))
+		return -1;
+	if (!SDL_SetHint(SDL_HINT_PEN_TOUCH_EVENTS, "1"))
+		return -1;
+	if (!SDL_SetHint(SDL_HINT_TRACKPAD_IS_TOUCH_ONLY, "1"))
+		return -1;
+	if (!SDL_SetHint(SDL_HINT_SCREENSAVER_INHIBIT_ACTIVITY_NAME, "RDP session running"))
+		return -1;
+#if SDL_VERSION_ATLEAST(3, 4, 0)
+	if (!SDL_SetHint(SDL_HINT_MOUSE_DPI_SCALE_CURSORS, "1"))
+		return -1;
+#endif
+
 	/* Basic SDL initialization */
 	if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS))
 		return -1;
-
-	SDL_SetHint(SDL_HINT_ALLOW_ALT_TAB_WHILE_GRABBED, "0");
-	SDL_SetHint(SDL_HINT_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR, "0");
-	SDL_SetHint(SDL_HINT_PEN_MOUSE_EVENTS, "0");
-	SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
-	SDL_SetHint(SDL_HINT_PEN_TOUCH_EVENTS, "1");
-	SDL_SetHint(SDL_HINT_TRACKPAD_IS_TOUCH_ONLY, "1");
-	SDL_SetHint(SDL_HINT_SCREENSAVER_INHIBIT_ACTIVITY_NAME, "RDP session running");
-#if SDL_VERSION_ATLEAST(3, 4, 0)
-	SDL_SetHint(SDL_HINT_MOUSE_DPI_SCALE_CURSORS, "1");
-#endif
 
 	/* Redirect SDL log messages to wLog */
 	SDL_SetLogOutputFunction(winpr_LogOutputFunction, sdl);
