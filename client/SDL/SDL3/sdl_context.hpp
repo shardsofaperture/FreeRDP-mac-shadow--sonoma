@@ -144,6 +144,11 @@ class SdlContext
 
 	[[nodiscard]] bool handleEvent(const SDL_Event& ev);
 
+	[[nodiscard]] COMMAND_LINE_ARGUMENT_A* args();
+	[[nodiscard]] size_t argsCount() const;
+
+	[[nodiscard]] static int argumentHandler(const COMMAND_LINE_ARGUMENT_A* arg, void* custom);
+
   private:
 	[[nodiscard]] bool useLocalScale() const;
 
@@ -229,4 +234,5 @@ class SdlContext
 	uint32_t _windowHeigth = 0;
 	WinPREvent _windowsCreatedEvent;
 	std::thread _thread;
+	std::vector<COMMAND_LINE_ARGUMENT_A> _args;
 };
