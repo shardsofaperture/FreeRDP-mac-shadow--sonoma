@@ -36,6 +36,8 @@
 #include <aad/sdl_webview.hpp>
 #endif
 
+static constexpr auto sdl_allow_screensaver = "sdl-allow-screensaver";
+
 static void sdl_PointerFreeCopyAll(rdpPointer* pointer)
 {
 	sdl_Pointer_FreeCopy(pointer);
@@ -71,6 +73,12 @@ SdlContext::SdlContext(rdpContext* context)
 	instance->GetAccessToken = client_cli_get_access_token;
 #endif
 	/* TODO: Client display set up */
+
+	_args.push_back({ sdl_allow_screensaver, COMMAND_LINE_VALUE_BOOL, nullptr, BoolValueFalse,
+	                  nullptr, -1, nullptr, "Allow local screensaver to activate" });
+
+	/* Push a null element used as abort when iterating the array */
+	_args.push_back({ nullptr, 0, nullptr, nullptr, nullptr, -1, nullptr, nullptr });
 }
 
 void SdlContext::setHasCursor(bool val)
@@ -453,7 +461,7 @@ bool SdlContext::updateWindowList()
 	// none of the kept windows cover the original primary.
 	if (!list.empty() &&
 	    std::none_of(list.cbegin(), list.cend(), [](const rdpMonitor& m) { return m.is_primary; }))
-		list[0].is_primary = true;
+		list.at(0).is_primary = true;
 
 	return freerdp_settings_set_monitor_def_array_sorted(context()->settings, list.data(),
 	                                                     list.size());
@@ -1407,6 +1415,43 @@ bool SdlContext::handleEvent(const SDL_Event& ev)
 		default:
 			return true;
 	}
+}
+
+COMMAND_LINE_ARGUMENT_A* SdlContext::args()
+{
+	return _args.data();
+}
+
+size_t SdlContext::argsCount() const
+{
+	if (_args.size() <= 1)
+		return 0;
+	return _args.size() - 1;
+}
+
+int SdlContext::argumentHandler(const COMMAND_LINE_ARGUMENT_A* arg, void* custom)
+{
+	auto sdl = static_cast<SdlContext*>(custom);
+	if (!sdl)
+		return -1;
+
+	if (arg->Name)
+	{
+		if (strcmp(arg->Name, sdl_allow_screensaver) == 0)
+		{
+			if (arg->Value != nullptr)
+			{
+				if (!SDL_SetHint(SDL_HINT_VIDEO_ALLOW_SCREENSAVER, "1"))
+				{
+					SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+					             "SDL_SetHint(SDL_HINT_VIDEO_ALLOW_SCREENSAVER) failed with %s",
+					             SDL_GetError());
+					return -2;
+				}
+			}
+		}
+	}
+	return 0;
 }
 
 bool SdlContext::useLocalScale() const

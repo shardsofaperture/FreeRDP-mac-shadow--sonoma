@@ -495,8 +495,8 @@ bool SdlWindow::blit(SDL_Surface* surface, const SDL_Rect& srcRect, SDL_Rect& ds
 	/* Upload only the dirty region */
 	const auto* details = SDL_GetPixelFormatDetails(surface->format);
 	const int bpp = details ? details->bytes_per_pixel : 4;
-	const auto* pixels =
-	    static_cast<const uint8_t*>(surface->pixels) + srcRect.y * surface->pitch + srcRect.x * bpp;
+	const auto* pixels = static_cast<const uint8_t*>(surface->pixels) +
+	                     (1ll * srcRect.y * surface->pitch) + (1ll * srcRect.x * bpp);
 	if (!SDL_UpdateTexture(_gdiTexture, &srcRect, pixels, surface->pitch))
 	{
 		SDL_LogError(SDL_LOG_CATEGORY_RENDER, "SDL_UpdateTexture: %s", SDL_GetError());

@@ -625,12 +625,14 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	auto status = freerdp_client_settings_parse_command_line(
-	    settings, WINPR_ASSERTING_INT_CAST(int, args.size()), args.data(), FALSE);
+	auto status = freerdp_client_settings_parse_command_line_ex(
+	    settings, WINPR_ASSERTING_INT_CAST(int, args.size()), args.data(), FALSE, sdl->args(),
+	    sdl->argsCount(), &SdlContext::argumentHandler, sdl);
 	sdl_rdp->sdl->setMetadata();
 	if (status)
 	{
-		rc = freerdp_client_settings_command_line_status_print(settings, status, argc, argv);
+		rc = freerdp_client_settings_command_line_status_print_ex(settings, status, argc, argv,
+		                                                          sdl->args());
 		if (freerdp_settings_get_bool(settings, FreeRDP_ListMonitors))
 		{
 			if (!sdl_list_monitors(sdl))

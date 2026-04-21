@@ -25,6 +25,7 @@ static bool runtest(const char* filename)
 int TestFreeRDPProxyConfig(WINPR_ATTR_UNUSED int argc, WINPR_ATTR_UNUSED char* argv[])
 {
 	int rc = -1;
+	HANDLE hFind = INVALID_HANDLE_VALUE;
 	char* tests = GetCombinedPath(CMAKE_CURRENT_SOURCE_DIR, "conf");
 	if (!tests)
 		return -1;
@@ -35,7 +36,7 @@ int TestFreeRDPProxyConfig(WINPR_ATTR_UNUSED int argc, WINPR_ATTR_UNUSED char* a
 
 	WIN32_FIND_DATAA FindData = WINPR_C_ARRAY_INIT;
 
-	HANDLE hFind = FindFirstFileA(search, &FindData);
+	hFind = FindFirstFileA(search, &FindData);
 	free(search);
 
 	if (hFind == INVALID_HANDLE_VALUE)
