@@ -96,21 +96,9 @@ static void pf_client_on_error_info(void* ctx, const ErrorInfoEventArgs* e)
 	}
 }
 
-static void pf_client_on_activated(void* ctx, WINPR_ATTR_UNUSED const ActivatedEventArgs* e)
+static void pf_client_on_activated(WINPR_ATTR_UNUSED void* ctx,
+                                   WINPR_ATTR_UNUSED const ActivatedEventArgs* e)
 {
-	pClientContext* pc = (pClientContext*)ctx;
-	pServerContext* ps = nullptr;
-	freerdp_peer* peer = nullptr;
-
-	WINPR_ASSERT(pc);
-	WINPR_ASSERT(pc->pdata);
-	WINPR_ASSERT(e);
-
-	ps = pc->pdata->ps;
-	WINPR_ASSERT(ps);
-	peer = ps->context.peer;
-	WINPR_ASSERT(peer);
-	WINPR_ASSERT(peer->context);
 }
 
 WINPR_ATTR_NODISCARD
