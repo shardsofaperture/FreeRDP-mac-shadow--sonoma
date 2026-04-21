@@ -93,8 +93,8 @@
 #define CommandLineSwitchDefault(_arg) else
 #define CommandLineSwitchEnd(_arg)
 
-#define BoolValueTrue ((LPSTR)1)
-#define BoolValueFalse ((LPSTR)0)
+#define BoolValueTrue WINPR_CXX_COMPAT_CAST(LPSTR, 1)
+#define BoolValueFalse WINPR_CXX_COMPAT_CAST(LPSTR, 0)
 
 typedef struct
 {
