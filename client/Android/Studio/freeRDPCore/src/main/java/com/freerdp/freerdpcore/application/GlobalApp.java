@@ -20,8 +20,8 @@ import android.util.Log;
 
 import com.freerdp.freerdpcore.domain.BookmarkBase;
 import com.freerdp.freerdpcore.presentation.ApplicationSettingsActivity;
-import com.freerdp.freerdpcore.services.BookmarkDB;
-import com.freerdp.freerdpcore.services.HistoryDB;
+import com.freerdp.freerdpcore.data.AppDatabase;
+import com.freerdp.freerdpcore.data.HistoryDatabase;
 import com.freerdp.freerdpcore.services.LibFreeRDP;
 import com.freerdp.freerdpcore.services.ManualBookmarkGateway;
 import com.freerdp.freerdpcore.services.QuickConnectHistoryGateway;
@@ -48,10 +48,7 @@ public class GlobalApp extends Application implements LibFreeRDP.EventListener
 	private static final String TAG = "GlobalApp";
 	public static boolean IsMeteredNetwork = false;
 	private static Map<Long, SessionState> sessionMap;
-	private static BookmarkDB bookmarkDB;
 	private static ManualBookmarkGateway manualBookmarkGateway;
-
-	private static HistoryDB historyDB;
 	private static QuickConnectHistoryGateway quickConnectHistoryGateway;
 
 	// timer for disconnecting sessions after the screen was turned off
@@ -136,12 +133,11 @@ public class GlobalApp extends Application implements LibFreeRDP.EventListener
 
 		LibFreeRDP.setEventListener(this);
 
-		bookmarkDB = new BookmarkDB(this);
+		AppDatabase appDb = AppDatabase.getInstance(this);
+		manualBookmarkGateway = new ManualBookmarkGateway(appDb.bookmarkDao());
 
-		manualBookmarkGateway = new ManualBookmarkGateway(bookmarkDB);
-
-		historyDB = new HistoryDB(this);
-		quickConnectHistoryGateway = new QuickConnectHistoryGateway(historyDB);
+		HistoryDatabase historyDb = HistoryDatabase.getInstance(this);
+		quickConnectHistoryGateway = new QuickConnectHistoryGateway(historyDb.historyDao());
 
 		IsMeteredNetwork = NetworkStateReceiver.isMeteredNetwork(this);
 		NetworkStateReceiver.registerNetworkCallback(this);
