@@ -208,7 +208,7 @@ int sdl_list_monitors([[maybe_unused]] SdlContext* sdl)
 	// when none is marked.
 	if (!monitors.empty() && std::none_of(monitors.cbegin(), monitors.cend(),
 	                                      [](const rdpMonitor& m) { return m.is_primary; }))
-		monitors[0].is_primary = true;
+		monitors.at(0).is_primary = true;
 	return freerdp_settings_set_monitor_def_array_sorted(settings, monitors.data(),
 	                                                     monitors.size());
 }
