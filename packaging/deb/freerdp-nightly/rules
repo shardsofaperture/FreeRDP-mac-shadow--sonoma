@@ -16,7 +16,7 @@ else
 endif
 SANITIZE_ADDRESS = -DWITH_SANITIZE_ADDRESS=ON
 
-DEB_CMAKE_EXTRA_FLAGS :=  -GNinja \
+DEB_CMAKE_EXTRA_FLAGS := \
 						  -DCMAKE_BUILD_TYPE="Debug" \
 						  -DCMAKE_INSTALL_PREFIX=/opt/freerdp-nightly/ \
 						  -DCMAKE_C_FLAGS="-O1" \
@@ -33,7 +33,7 @@ DEB_CMAKE_EXTRA_FLAGS :=  -GNinja \
 	dh $@ --parallel
 
 override_dh_auto_configure:
-	dh_auto_configure -- -DCMAKE_MODULE_PATH=$(PWD)/cmake $(DEB_CMAKE_EXTRA_FLAGS) -C $(PWD)/packaging/deb/freerdp-nightly/cmake-preload.cmake
+	dh_auto_configure -- -DCMAKE_MODULE_PATH=$(PWD)/cmake -GNinja -C $(PWD)/packaging/deb/freerdp-nightly/cmake-preload.cmake $(DEB_CMAKE_EXTRA_FLAGS)
 
 override_dh_shlibdeps:
 	dh_shlibdeps -l /opt/freerdp-nightly/lib/
