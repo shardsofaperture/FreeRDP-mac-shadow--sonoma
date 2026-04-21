@@ -28,7 +28,7 @@
 
 SdlWindow::SdlWindow(SDL_DisplayID id, const std::string& title, const SDL_Rect& rect,
                      [[maybe_unused]] Uint32 flags)
-    : _displayID(id)
+    : _initialW(rect.w), _initialH(rect.h), _displayID(id)
 {
 	auto props = SDL_CreateProperties();
 	SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, title.c_str());
@@ -36,6 +36,7 @@ SdlWindow::SdlWindow(SDL_DisplayID id, const std::string& title, const SDL_Rect&
 	SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_Y_NUMBER, rect.y);
 	SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, rect.w);
 	SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, rect.h);
+	SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, true);
 
 	if (flags & SDL_WINDOW_HIGH_PIXEL_DENSITY)
 		SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_HIGH_PIXEL_DENSITY_BOOLEAN, true);
@@ -48,12 +49,12 @@ SdlWindow::SdlWindow(SDL_DisplayID id, const std::string& title, const SDL_Rect&
 
 	_window = SDL_CreateWindowWithProperties(props);
 	SDL_DestroyProperties(props);
-
-	std::ignore = resizeToPixelSize({ rect.w, rect.h });
 	SDL_SetHint(SDL_HINT_APP_NAME, "");
 	std::ignore = SDL_SyncWindow(_window);
 
 	_renderer = SDL_CreateRenderer(_window, nullptr);
+
+	std::ignore = resizeToScale();
 
 	_monitor = query(_window, id, true);
 }
@@ -61,8 +62,9 @@ SdlWindow::SdlWindow(SDL_DisplayID id, const std::string& title, const SDL_Rect&
 SdlWindow::SdlWindow(SdlWindow&& other) noexcept
     : _window(other._window), _renderer(other._renderer), _renderTarget(other._renderTarget),
       _gdiTexture(other._gdiTexture), _gdiTextureW(other._gdiTextureW),
-      _gdiTextureH(other._gdiTextureH), _displayID(other._displayID), _offset_x(other._offset_x),
-      _offset_y(other._offset_y), _monitor(other._monitor)
+      _gdiTextureH(other._gdiTextureH), _initialW(other._initialW), _initialH(other._initialH),
+      _displayID(other._displayID), _offset_x(other._offset_x), _offset_y(other._offset_y),
+      _monitor(other._monitor)
 {
 	other._window = nullptr;
 	other._renderer = nullptr;
@@ -228,13 +230,29 @@ void SdlWindow::minimize()
 	std::ignore = SDL_SyncWindow(_window);
 }
 
-bool SdlWindow::resizeToPixelSize(const SDL_Point& size)
+bool SdlWindow::resizeToScale()
 {
-	auto sc = scale();
-	const int iscale = static_cast<int>(sc * 100.0f);
-	auto w = 100 * size.x / iscale;
-	auto h = 100 * size.y / iscale;
-	return resize({ w, h });
+	if (!_window || _initialW <= 0 || _initialH <= 0)
+		return false;
+	if ((SDL_GetWindowFlags(_window) & SDL_WINDOW_FULLSCREEN) != 0)
+		return true;
+
+	float pd = SDL_GetWindowPixelDensity(_window);
+	if (pd <= 0.0f)
+		pd = 1.0f;
+
+	const int targetW = static_cast<int>(std::ceil(static_cast<float>(_initialW) / pd));
+	const int targetH = static_cast<int>(std::ceil(static_cast<float>(_initialH) / pd));
+
+	int curW = 0;
+	int curH = 0;
+	if (!SDL_GetWindowSize(_window, &curW, &curH))
+		return false;
+
+	if (curW == targetW && curH == targetH)
+		return true;
+
+	return resize({ targetW, targetH });
 }
 
 bool SdlWindow::resize(const SDL_Point& size)
@@ -551,7 +569,7 @@ SdlWindow SdlWindow::create(SDL_DisplayID id, const std::string& title, Uint32 f
 
 	SdlWindow window{ id, title, rect, flags };
 
-	if ((flags & (SDL_WINDOW_FULLSCREEN)) != 0)
+	if ((flags & SDL_WINDOW_FULLSCREEN) != 0)
 	{
 		window.setOffsetX(rect.x);
 		window.setOffsetY(rect.y);
