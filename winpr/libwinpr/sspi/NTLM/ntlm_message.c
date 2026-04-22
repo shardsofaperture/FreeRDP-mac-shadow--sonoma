@@ -340,7 +340,7 @@ static BOOL ntlm_read_message_fields_buffer(wStream* s, NTLM_MESSAGE_FIELDS* fie
 	ntlm_free_message_fields_buffer(fields);
 	if (fields->Len > 0)
 	{
-		const UINT32 offset = fields->BufferOffset + fields->Len;
+		const size_t offset = 1ull * fields->BufferOffset + fields->Len;
 
 		if (fields->BufferOffset > UINT32_MAX - fields->Len)
 		{
@@ -354,7 +354,7 @@ static BOOL ntlm_read_message_fields_buffer(wStream* s, NTLM_MESSAGE_FIELDS* fie
 		if (offset > Stream_Length(s))
 		{
 			WLog_ERR(TAG,
-			         "NTLM_MESSAGE_FIELDS::Buffer offset %" PRIu32 " beyond received data %" PRIuz,
+			         "NTLM_MESSAGE_FIELDS::Buffer offset %" PRIuz " beyond received data %" PRIuz,
 			         offset, Stream_Length(s));
 			return FALSE;
 		}
@@ -369,7 +369,10 @@ static BOOL ntlm_read_message_fields_buffer(wStream* s, NTLM_MESSAGE_FIELDS* fie
 		}
 
 		if (!Stream_SetPosition(s, fields->BufferOffset))
+		{
+			ntlm_free_message_fields_buffer(fields);
 			return FALSE;
+		}
 		Stream_Read(s, fields->Buffer, fields->Len);
 	}
 
