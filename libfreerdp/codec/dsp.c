@@ -327,8 +327,8 @@ static inline void dsp_ima_clamp_step(ADPCM* WINPR_RESTRICT adpcm, unsigned int 
 		adpcm->ima.last_step[channel] = 0;
 
 	const size_t size = ARRAYSIZE(ima_step_size_table);
-	if (adpcm->ima.last_step[channel] > size)
-		adpcm->ima.last_step[channel] = size;
+	if ((size_t)adpcm->ima.last_step[channel] >= size)
+		adpcm->ima.last_step[channel] = (INT16)(size - 1);
 }
 
 static UINT16 dsp_decode_ima_adpcm_sample(ADPCM* WINPR_RESTRICT adpcm, unsigned int channel,
