@@ -396,6 +396,19 @@ rdpBitmapCache* bitmap_cache_new(rdpContext* context)
 		cell->number = nr;
 	}
 
+	/* initialize the overallocated extra slot for old RDP servers that send
+	 * cacheId == maxCells; use a minimal allocation since no protocol-negotiated
+	 * capacity exists for this slot */
+	{
+		BITMAP_V2_CELL* extra = &bitmapCache->cells[bitmapCache->maxCells];
+		/* allocate an extra entry for BITMAP_CACHE_WAITING_LIST_INDEX */
+		extra->entries = (rdpBitmap**)calloc(1, sizeof(rdpBitmap*));
+
+		if (!extra->entries)
+			goto fail;
+		extra->number = 0;
+	}
+
 	return bitmapCache;
 fail:
 	WINPR_PRAGMA_DIAG_PUSH
@@ -414,7 +427,8 @@ void bitmap_cache_free(rdpBitmapCache* bitmapCache)
 
 	if (bitmapCache->cells)
 	{
-		for (UINT32 i = 0; i < bitmapCache->maxCells; i++)
+		/* iterate through maxCells + 1 to also free the overallocated extra slot */
+		for (UINT32 i = 0; i <= bitmapCache->maxCells; i++)
 		{
 			UINT32 j = 0;
 			BITMAP_V2_CELL* cell = &bitmapCache->cells[i];
