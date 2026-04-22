@@ -21,7 +21,7 @@ err:
 	freerdp_assistance_file_free(file);
 	free(buf);
 
-	return status >= 0 ? TRUE : FALSE;
+	return status >= 0;
 }
 
 int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)

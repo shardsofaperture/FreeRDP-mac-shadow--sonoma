@@ -351,6 +351,8 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 		case 2:
 			fuzz_ntlm_authenticate(data + 1, size - 1);
 			break;
+		default:
+			break;
 	}
 
 	return 0;
