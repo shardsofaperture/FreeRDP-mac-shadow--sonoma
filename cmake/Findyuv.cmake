@@ -9,7 +9,7 @@
 
 if(UNIX AND NOT ANDROID)
   find_package(PkgConfig QUIET)
-  pkg_check_modules(PC_YUV QUIET yuv)
+  pkg_check_modules(PC_YUV QUIET libyuv)
 endif(UNIX AND NOT ANDROID)
 
 if(YUV_INCLUDE_DIR AND YUV_LIBRARY)
