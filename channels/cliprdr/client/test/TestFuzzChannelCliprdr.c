@@ -14,7 +14,7 @@
 
 #include "../../cliprdr_common.h"
 
-static wLog* g_Log = NULL;
+static wLog* g_Log = nullptr;
 
 static UINT32 fuzz_stream_len_u32(wStream* s)
 {
@@ -78,7 +78,7 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 	if (!g_Log)
 		g_Log = WLog_Get("fuzz.cliprdr");
 
-	BOOL longNames = (data[1] & 0x1) ? TRUE : FALSE;
+	BOOL longNames = (data[1] & 0x1) != 0;
 	const uint8_t* body = data + 2;
 	wStream* s = Stream_New((BYTE*)body, size - 2);
 	if (!s)
@@ -103,6 +103,8 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 			break;
 		case 5:
 			fuzz_unlock(s);
+			break;
+		default:
 			break;
 	}
 

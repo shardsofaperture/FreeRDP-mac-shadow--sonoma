@@ -402,6 +402,9 @@ static BOOL RunTestPlanar(BITMAP_PLANAR_CONTEXT* planar, const BYTE* srcBitmap,
 	WINPR_UNUSED(srcFormat);
 	if (Size > UINT32_MAX)
 		return FALSE;
+	if ((width == 0) || (height == 0))
+		return FALSE;
+
 	UINT32 dstSize = (UINT32)Size;
 	const BYTE* compressedBitmap = Data;
 	BYTE* decompressedBitmap =
