@@ -1481,6 +1481,13 @@ public class SessionActivity extends AppCompatActivity
 		{
 			Log.v(TAG, "OnConnectionSuccess");
 
+			if (connectCancelledByUser)
+			{
+				LibFreeRDP.disconnect(session.getInstance());
+				closeSessionActivity(RESULT_CANCELED);
+				return;
+			}
+
 			// bind session
 			bindSession();
 

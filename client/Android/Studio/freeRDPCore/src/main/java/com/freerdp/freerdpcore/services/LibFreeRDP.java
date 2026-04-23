@@ -214,14 +214,7 @@ public class LibFreeRDP
 
 	public static boolean cancelConnection(long inst)
 	{
-		synchronized (mInstanceState)
-		{
-			if (mInstanceState.get(inst, false))
-			{
-				return freerdp_disconnect(inst);
-			}
-			return true;
-		}
+		return freerdp_disconnect(inst);
 	}
 
 	private static String addFlag(String name, boolean enabled)
