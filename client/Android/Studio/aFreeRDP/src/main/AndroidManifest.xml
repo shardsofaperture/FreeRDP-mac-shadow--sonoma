@@ -82,23 +82,6 @@
             </intent-filter>
         </activity>
 
-        <activity-alias
-            android:exported="true"
-            android:name=".services.SessionRequestHandlerActivity"
-            android:targetActivity="com.freerdp.freerdpcore.services.SessionRequestHandlerActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.SEARCH" />
-            </intent-filter>
-            <meta-data
-                android:name="android.app.searchable"
-                android:resource="@xml/searchable" />
-        </activity-alias>
-
-        <provider
-            android:name="com.freerdp.freerdpcore.services.FreeRDPSuggestionProvider"
-            android:authorities="com.freerdp.afreerdp.services.freerdpsuggestionprovider"
-            android:exported="false"></provider>
-
         <meta-data android:name="com.samsung.android.keepalive.density" android:value="true"/>
 
     </application>
