@@ -594,7 +594,8 @@ public class SessionActivity extends AppCompatActivity
 
 		if (state)
 		{
-			mgr.showSoftInput(sessionView, InputMethodManager.SHOW_FORCED);
+			sessionView.requestFocus();
+			mgr.showSoftInput(sessionView, InputMethodManager.SHOW_IMPLICIT);
 		}
 		else
 		{

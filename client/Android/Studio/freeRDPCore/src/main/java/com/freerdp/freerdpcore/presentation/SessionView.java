@@ -25,6 +25,7 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
+import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 
@@ -82,6 +83,10 @@ public class SessionView extends View
 
 	private void initSessionView(Context context)
 	{
+		// Ensure the view is focusable so the soft keyboard can attach to it (required for API 30+)
+		setFocusable(true);
+		setFocusableInTouchMode(true);
+
 		invalidRegions = new Stack<>();
 		gestureDetector = new GestureDetector(context, new SessionGestureListener(), null, true);
 		doubleGestureDetector =
@@ -426,8 +431,10 @@ public class SessionView extends View
 
 	@Override public InputConnection onCreateInputConnection(EditorInfo outAttrs)
 	{
-		super.onCreateInputConnection(outAttrs);
-		outAttrs.inputType = InputType.TYPE_CLASS_TEXT;
-		return null;
+		outAttrs.actionLabel = null;
+		outAttrs.inputType = InputType.TYPE_NULL;
+		outAttrs.imeOptions = EditorInfo.IME_ACTION_NONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI |
+		                      EditorInfo.IME_FLAG_NO_FULLSCREEN;
+		return new BaseInputConnection(this, false);
 	}
 }
