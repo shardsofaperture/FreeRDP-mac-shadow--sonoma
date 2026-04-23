@@ -8,6 +8,7 @@
     <string name="login">Log in</string>
     <string name="logout">Log out</string>
     <!-- Home menu items -->
+    <string name="menu_search">Search</string>
     <string name="menu_exit">Exit</string>
     <string name="menu_about">About</string>
     <string name="menu_help">Help</string>
@@ -29,6 +30,7 @@
     <string name="section_active_sessions">Active Sessions</string>
     <!-- Search strings -->
     <string name="search_hint">Connect to Computer</string>
+    <string name="quick_connect_to">Connect to: %s</string>
     <!-- List placeholder labels -->
     <string name="list_placeholder_login">Log in</string>
     <string name="list_placeholder_no_servers">No Servers</string>

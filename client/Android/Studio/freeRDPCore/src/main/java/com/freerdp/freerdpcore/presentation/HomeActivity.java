@@ -12,69 +12,44 @@ package com.freerdp.freerdpcore.presentation;
 
 import androidx.appcompat.app.AlertDialog;
 import android.content.Intent;
-import android.content.res.Configuration;
 import android.net.Uri;
 import android.os.Bundle;
 import androidx.appcompat.app.AppCompatActivity;
 import android.util.Log;
-import android.view.ContextMenu;
-import android.view.ContextMenu.ContextMenuInfo;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
-import android.view.View;
-import android.view.View.OnCreateContextMenuListener;
-import android.widget.AdapterView;
-import android.widget.AdapterView.AdapterContextMenuInfo;
-import android.widget.ListView;
 
 import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.widget.SearchView;
+import androidx.lifecycle.ViewModelProvider;
+import androidx.recyclerview.widget.LinearLayoutManager;
 
 import com.freerdp.freerdpcore.R;
-import com.freerdp.freerdpcore.application.GlobalApp;
-import com.freerdp.freerdpcore.domain.BookmarkBase;
+import com.freerdp.freerdpcore.databinding.HomeBinding;
 import com.freerdp.freerdpcore.domain.ConnectionReference;
-import com.freerdp.freerdpcore.domain.PlaceholderBookmark;
-import com.freerdp.freerdpcore.domain.QuickConnectBookmark;
-import com.freerdp.freerdpcore.utils.BookmarkArrayAdapter;
-import com.freerdp.freerdpcore.utils.SeparatedListAdapter;
-
-import java.util.ArrayList;
+import com.freerdp.freerdpcore.utils.BookmarkListAdapter;
 
 public class HomeActivity extends AppCompatActivity
 {
-	private final static String ADD_BOOKMARK_PLACEHOLDER = "add_bookmark";
 	private static final String TAG = "HomeActivity";
 	private static final String PARAM_SEARCH_QUERY = "search_query";
 
-	private ListView listViewBookmarks;
-	private BookmarkArrayAdapter manualBookmarkAdapter;
-	private SeparatedListAdapter separatedListAdapter;
-	private PlaceholderBookmark addBookmarkPlaceholder;
-	private String sectionLabelBookmarks;
-	private String currentSearchQuery = "";
+	private HomeBinding binding;
+	private HomeViewModel viewModel;
+	private BookmarkListAdapter bookmarkListAdapter;
 	private MenuItem searchMenuItem;
 	private SearchView searchView;
 
 	@Override public void onCreate(Bundle savedInstanceState)
 	{
-		setTitle(R.string.title_home);
 		super.onCreate(savedInstanceState);
-		setContentView(R.layout.home);
+		binding = HomeBinding.inflate(getLayoutInflater());
+		setContentView(binding.getRoot());
 
 		long heapSize = Runtime.getRuntime().maxMemory();
 		Log.i(TAG, "Max HeapSize: " + heapSize);
 		Log.i(TAG, "App data folder: " + getFilesDir().toString());
-
-		// load strings
-		sectionLabelBookmarks = getResources().getString(R.string.section_bookmarks);
-
-		// create add bookmark/quick connect bookmark placeholder
-		addBookmarkPlaceholder = new PlaceholderBookmark();
-		addBookmarkPlaceholder.setName(ADD_BOOKMARK_PLACEHOLDER);
-		addBookmarkPlaceholder.setLabel(
-		    getResources().getString(R.string.list_placeholder_add_bookmark));
 
 		// check for passed .rdp file and open it in a new bookmark
 		Intent caller = getIntent();
@@ -92,71 +67,56 @@ public class HomeActivity extends AppCompatActivity
 			startActivity(bookmarkIntent);
 		}
 
-		// load views
-		listViewBookmarks = findViewById(R.id.listViewBookmarks);
+		viewModel = new ViewModelProvider(this).get(HomeViewModel.class);
 
-		// set listeners for the list view
-		listViewBookmarks.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-			public void onItemClick(AdapterView<?> parent, View view, int position, long id)
+		bookmarkListAdapter = new BookmarkListAdapter();
+		bookmarkListAdapter.setCallbacks(new BookmarkListAdapter.Callbacks() {
+			@Override public void onItemClick(String refStr)
 			{
-				String curSection = separatedListAdapter.getSectionForPosition(position);
-				Log.v(TAG, "Clicked on item id " + separatedListAdapter.getItemId(position) +
-				               " in section " + curSection);
-				if (curSection.equals(sectionLabelBookmarks))
+				if (ConnectionReference.isManualBookmarkReference(refStr) ||
+				    ConnectionReference.isHostnameReference(refStr))
 				{
-					String refStr = view.getTag().toString();
-					if (ConnectionReference.isManualBookmarkReference(refStr) ||
-					    ConnectionReference.isHostnameReference(refStr))
-					{
-						Bundle bundle = new Bundle();
-						bundle.putString(SessionActivity.PARAM_CONNECTION_REFERENCE, refStr);
+					Bundle bundle = new Bundle();
+					bundle.putString(SessionActivity.PARAM_CONNECTION_REFERENCE, refStr);
 
-						Intent sessionIntent = new Intent(view.getContext(), SessionActivity.class);
-						sessionIntent.putExtras(bundle);
-						startActivity(sessionIntent);
+					Intent sessionIntent = new Intent(HomeActivity.this, SessionActivity.class);
+					sessionIntent.putExtras(bundle);
+					startActivity(sessionIntent);
 
-						currentSearchQuery = "";
-						if (searchView != null)
-						{
-							searchView.setQuery("", false);
-							searchView.setIconified(true);
-						}
-						if (searchMenuItem != null)
-						{
-							searchMenuItem.collapseActionView();
-						}
-					}
-					else if (ConnectionReference.isPlaceholderReference(refStr))
+					if (searchView != null)
 					{
-						// is this the add bookmark placeholder?
-						if (ConnectionReference.getPlaceholder(refStr).equals(
-						        ADD_BOOKMARK_PLACEHOLDER))
-						{
-							Intent bookmarkIntent =
-							    new Intent(view.getContext(), BookmarkActivity.class);
-							startActivity(bookmarkIntent);
-						}
+						searchView.setQuery("", false);
+						searchView.setIconified(true);
 					}
+					if (searchMenuItem != null)
+					{
+						searchMenuItem.collapseActionView();
+					}
+					viewModel.loadBookmarks("");
 				}
+			}
+
+			@Override public void onDelete(long id)
+			{
+				viewModel.deleteBookmark(id);
 			}
 		});
 
-		listViewBookmarks.setOnCreateContextMenuListener(new OnCreateContextMenuListener() {
-			@Override
-			public void onCreateContextMenu(ContextMenu menu, View v, ContextMenuInfo menuInfo)
+		binding.recyclerViewBookmarks.setLayoutManager(new LinearLayoutManager(this));
+		binding.recyclerViewBookmarks.setAdapter(bookmarkListAdapter);
+
+		viewModel.getBookmarks().observe(this,
+		                                 bookmarks -> bookmarkListAdapter.setItems(bookmarks));
+
+		// restore search query after process death
+		if (savedInstanceState != null)
+		{
+			String query = savedInstanceState.getString(PARAM_SEARCH_QUERY);
+			if (query != null && !query.isEmpty() && viewModel.getCurrentQuery().isEmpty())
 			{
-				// if the selected item is not a session item (tag == null) and not a quick connect
-				// entry (not a hostname connection reference) inflate the context menu
-				View itemView = ((AdapterContextMenuInfo)menuInfo).targetView;
-				String refStr = itemView.getTag() != null ? itemView.getTag().toString() : null;
-				if (refStr != null && !ConnectionReference.isHostnameReference(refStr) &&
-				    !ConnectionReference.isPlaceholderReference(refStr))
-				{
-					getMenuInflater().inflate(R.menu.bookmark_context_menu, menu);
-					menu.setHeaderTitle(getResources().getString(R.string.menu_title_bookmark));
-				}
+				viewModel.loadBookmarks(query);
 			}
-		});
+		}
 
 		getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
 			@Override public void handleOnBackPressed()
@@ -178,138 +138,17 @@ public class HomeActivity extends AppCompatActivity
 		});
 	}
 
-	@Override public void onConfigurationChanged(Configuration newConfig)
-	{
-		// ignore orientation/keyboard change
-		super.onConfigurationChanged(newConfig);
-	}
-
-	@Override public boolean onSearchRequested()
-	{
-		return super.onSearchRequested();
-	}
-
-	@Override public boolean onContextItemSelected(MenuItem aItem)
-	{
-		// get connection reference
-		AdapterContextMenuInfo menuInfo = (AdapterContextMenuInfo)aItem.getMenuInfo();
-		String refStr = menuInfo.targetView.getTag().toString();
-
-		// refer to http://tools.android.com/tips/non-constant-fields why we can't use switch/case
-		// here ..
-		int itemId = aItem.getItemId();
-		if (itemId == R.id.bookmark_connect)
-		{
-			Bundle bundle = new Bundle();
-			bundle.putString(SessionActivity.PARAM_CONNECTION_REFERENCE, refStr);
-			Intent sessionIntent = new Intent(this, SessionActivity.class);
-			sessionIntent.putExtras(bundle);
-
-			startActivity(sessionIntent);
-			return true;
-		}
-		else if (itemId == R.id.bookmark_edit)
-		{
-			Bundle bundle = new Bundle();
-			bundle.putString(BookmarkActivity.PARAM_CONNECTION_REFERENCE, refStr);
-
-			Intent bookmarkIntent =
-			    new Intent(this.getApplicationContext(), BookmarkActivity.class);
-			bookmarkIntent.putExtras(bundle);
-			startActivity(bookmarkIntent);
-			return true;
-		}
-		else if (itemId == R.id.bookmark_delete)
-		{
-			if (ConnectionReference.isManualBookmarkReference(refStr))
-			{
-				long id = ConnectionReference.getManualBookmarkId(refStr);
-				GlobalApp.getManualBookmarkGateway().delete(id);
-				manualBookmarkAdapter.remove(id);
-				separatedListAdapter.notifyDataSetChanged();
-			}
-			else
-			{
-				assert false;
-			}
-
-			return true;
-		}
-
-		return false;
-	}
-
-	private void performSearch(String query)
-	{
-		if (separatedListAdapter == null || manualBookmarkAdapter == null)
-			return;
-
-		if (query != null && query.length() > 0)
-		{
-			ArrayList<BookmarkBase> computers_list =
-			    GlobalApp.getQuickConnectHistoryGateway().findHistory(query);
-			computers_list.addAll(
-			    GlobalApp.getManualBookmarkGateway().findByLabelOrHostnameLike(query));
-
-			manualBookmarkAdapter.replaceItems(computers_list);
-			QuickConnectBookmark qcBm = new QuickConnectBookmark();
-			qcBm.setLabel(query);
-			qcBm.setHostname(query);
-			manualBookmarkAdapter.insert(qcBm, 0);
-			separatedListAdapter.notifyDataSetChanged();
-		}
-		else
-		{
-			manualBookmarkAdapter.replaceItems(GlobalApp.getManualBookmarkGateway().findAll());
-			manualBookmarkAdapter.insert(addBookmarkPlaceholder, 0);
-			separatedListAdapter.notifyDataSetChanged();
-		}
-	}
-
 	@Override protected void onResume()
 	{
 		super.onResume();
 		Log.v(TAG, "HomeActivity.onResume");
-
-		// create bookmark cursor adapter
-		manualBookmarkAdapter = new BookmarkArrayAdapter(
-		    this, R.layout.bookmark_list_item, GlobalApp.getManualBookmarkGateway().findAll());
-
-		// add add bookmark item to manual adapter
-		manualBookmarkAdapter.insert(addBookmarkPlaceholder, 0);
-
-		// attach all adapters to the separatedListView adapter and assign it to the list view
-		separatedListAdapter = new SeparatedListAdapter(this);
-		separatedListAdapter.addSection(sectionLabelBookmarks, manualBookmarkAdapter);
-		listViewBookmarks.setAdapter(separatedListAdapter);
-
-		performSearch(currentSearchQuery);
-	}
-
-	@Override protected void onPause()
-	{
-		super.onPause();
-		Log.v(TAG, "HomeActivity.onPause");
-
-		// reset adapters
-		listViewBookmarks.setAdapter(null);
-		separatedListAdapter = null;
-		manualBookmarkAdapter = null;
+		viewModel.loadBookmarks(viewModel.getCurrentQuery());
 	}
 
 	@Override protected void onSaveInstanceState(Bundle outState)
 	{
 		super.onSaveInstanceState(outState);
-		outState.putString(PARAM_SEARCH_QUERY, currentSearchQuery);
-	}
-
-	@Override protected void onRestoreInstanceState(Bundle inState)
-	{
-		super.onRestoreInstanceState(inState);
-		if (inState.getString(PARAM_SEARCH_QUERY) != null)
-		{
-			currentSearchQuery = inState.getString(PARAM_SEARCH_QUERY);
-		}
+		outState.putString(PARAM_SEARCH_QUERY, viewModel.getCurrentQuery());
 	}
 
 	@Override public boolean onCreateOptionsMenu(Menu menu)
@@ -356,10 +195,11 @@ public class HomeActivity extends AppCompatActivity
 		{
 			searchView = (SearchView)searchMenuItem.getActionView();
 
-			if (currentSearchQuery != null && currentSearchQuery.length() > 0)
+			String currentQuery = viewModel.getCurrentQuery();
+			if (currentQuery != null && !currentQuery.isEmpty())
 			{
 				searchMenuItem.expandActionView();
-				searchView.setQuery(currentSearchQuery, false);
+				searchView.setQuery(currentQuery, false);
 				searchView.clearFocus();
 			}
 
@@ -371,8 +211,7 @@ public class HomeActivity extends AppCompatActivity
 
 				@Override public boolean onQueryTextChange(String s)
 				{
-					currentSearchQuery = s;
-					performSearch(s);
+					viewModel.loadBookmarks(s);
 					return true;
 				}
 			});

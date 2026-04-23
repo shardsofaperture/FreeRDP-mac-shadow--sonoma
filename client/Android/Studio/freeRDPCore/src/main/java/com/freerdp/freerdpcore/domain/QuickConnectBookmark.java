@@ -10,7 +10,6 @@
 
 package com.freerdp.freerdpcore.domain;
 
-import android.content.SharedPreferences;
 import android.os.Parcel;
 import android.os.Parcelable;
 
@@ -42,29 +41,15 @@ public class QuickConnectBookmark extends ManualBookmark
 		type = TYPE_QUICKCONNECT;
 	}
 
-	@Override public int describeContents()
+	private boolean directConnect = false;
+
+	public boolean isDirectConnect()
 	{
-		return 0;
+		return directConnect;
 	}
 
-	@Override public void writeToParcel(Parcel out, int flags)
+	public void setDirectConnect(boolean directConnect)
 	{
-		super.writeToParcel(out, flags);
-	}
-
-	@Override public void writeToSharedPreferences(SharedPreferences sharedPrefs)
-	{
-		super.writeToSharedPreferences(sharedPrefs);
-	}
-
-	@Override public void readFromSharedPreferences(SharedPreferences sharedPrefs)
-	{
-		super.readFromSharedPreferences(sharedPrefs);
-	}
-
-	// Cloneable
-	public Object clone()
-	{
-		return super.clone();
+		this.directConnect = directConnect;
 	}
 }

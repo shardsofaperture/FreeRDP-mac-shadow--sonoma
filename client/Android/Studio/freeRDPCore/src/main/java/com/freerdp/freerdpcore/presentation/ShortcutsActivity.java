@@ -14,74 +14,65 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.widget.EditText;
-import android.widget.ListView;
-import android.widget.TextView;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.pm.ShortcutInfoCompat;
 import androidx.core.content.pm.ShortcutManagerCompat;
 import androidx.core.graphics.drawable.IconCompat;
+import androidx.lifecycle.ViewModelProvider;
+import androidx.recyclerview.widget.LinearLayoutManager;
 
 import com.freerdp.freerdpcore.R;
-import com.freerdp.freerdpcore.application.GlobalApp;
+import com.freerdp.freerdpcore.databinding.ActivityShortcutsBinding;
 import com.freerdp.freerdpcore.domain.BookmarkBase;
+import com.freerdp.freerdpcore.domain.ConnectionReference;
 import com.freerdp.freerdpcore.services.SessionRequestHandlerActivity;
-import com.freerdp.freerdpcore.utils.BookmarkArrayAdapter;
-
-import java.util.ArrayList;
+import com.freerdp.freerdpcore.utils.BookmarkListAdapter;
 
 public class ShortcutsActivity extends AppCompatActivity
 {
-
-	public static final String TAG = "ShortcutsActivity";
-	private ListView listView;
-
 	@Override public void onCreate(Bundle savedInstanceState)
 	{
-
 		super.onCreate(savedInstanceState);
 
-		Intent intent = getIntent();
-		if (Intent.ACTION_CREATE_SHORTCUT.equals(intent.getAction()))
+		if (!Intent.ACTION_CREATE_SHORTCUT.equals(getIntent().getAction()))
 		{
-			// set listeners for the list view
-			listView = new ListView(this);
-			setContentView(listView);
+			finish();
+			return;
+		}
 
-			if (getSupportActionBar() != null)
+		ActivityShortcutsBinding binding = ActivityShortcutsBinding.inflate(getLayoutInflater());
+		setContentView(binding.getRoot());
+
+		if (getSupportActionBar() != null)
+			getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+
+		ShortcutsViewModel viewModel = new ViewModelProvider(this).get(ShortcutsViewModel.class);
+
+		BookmarkListAdapter adapter = new BookmarkListAdapter();
+		adapter.setActionsEnabled(false);
+		adapter.setCallbacks(new BookmarkListAdapter.Callbacks() {
+			@Override public void onItemClick(String refStr)
 			{
-				getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+				if (!ConnectionReference.isManualBookmarkReference(refStr))
+					return;
+				BookmarkBase bookmark = findBookmark(adapter, refStr);
+				String label = bookmark != null ? bookmark.getLabel() : refStr;
+				setupShortcut(refStr, label);
 			}
 
-			listView.setOnItemClickListener((parent, view, position, id) -> {
-				String refStr = view.getTag().toString();
-				String defLabel =
-				    ((TextView)(view.findViewById(R.id.bookmark_text1))).getText().toString();
-				setupShortcut(refStr, defLabel);
-			});
-		}
-		else
-		{
-			// just exit
-			finish();
-		}
-	}
+			@Override public void onDelete(long id)
+			{
+			}
+		});
 
-	@Override public void onResume()
-	{
-		super.onResume();
-		// create bookmark cursor adapter
-		ArrayList<BookmarkBase> bookmarks = GlobalApp.getManualBookmarkGateway().findAll();
-		BookmarkArrayAdapter bookmarkAdapter =
-		    new BookmarkArrayAdapter(this, android.R.layout.simple_list_item_2, bookmarks);
-		listView.setAdapter(bookmarkAdapter);
-	}
+		binding.recyclerViewShortcuts.setLayoutManager(new LinearLayoutManager(this));
+		binding.recyclerViewShortcuts.setAdapter(adapter);
 
-	@Override public void onPause()
-	{
-		super.onPause();
-		listView.setAdapter(null);
+		viewModel.getBookmarks().observe(this, adapter::setItems);
+
+		viewModel.loadBookmarks();
 	}
 
 	@Override public boolean onSupportNavigateUp()
@@ -90,12 +81,18 @@ public class ShortcutsActivity extends AppCompatActivity
 		return true;
 	}
 
+	private static BookmarkBase findBookmark(BookmarkListAdapter adapter, String refStr)
+	{
+		for (BookmarkBase b : adapter.getItems())
+		{
+			if (ConnectionReference.getManualBookmarkReference(b.getId()).equals(refStr))
+				return b;
+		}
+		return null;
+	}
+
 	private void setupShortcut(String strRef, String defaultLabel)
 	{
-		final String paramStrRef = strRef;
-		final String paramDefaultLabel = defaultLabel;
-
-		// display edit dialog to the user so he can specify the shortcut name
 		final EditText input = new EditText(this);
 		input.setText(defaultLabel);
 
@@ -107,27 +104,24 @@ public class ShortcutsActivity extends AppCompatActivity
 		        android.R.string.ok,
 		        (dialog, which) -> {
 			        String label = input.getText().toString();
-			        if (label.length() == 0)
-				        label = paramDefaultLabel;
+			        if (label.isEmpty())
+				        label = defaultLabel;
 
 			        Intent shortcutIntent = new Intent(Intent.ACTION_VIEW);
 			        shortcutIntent.setClassName(this,
 			                                    SessionRequestHandlerActivity.class.getName());
-			        shortcutIntent.setData(Uri.parse(paramStrRef));
+			        shortcutIntent.setData(Uri.parse(strRef));
 
-			        // Use ShortcutManagerCompat for modern Android compatibility
 			        ShortcutInfoCompat shortcutInfo =
-			            new ShortcutInfoCompat.Builder(this, "shortcut_" + paramStrRef.hashCode())
+			            new ShortcutInfoCompat.Builder(this, "shortcut_" + strRef.hashCode())
 			                .setShortLabel(label)
 			                .setIcon(IconCompat.createWithResource(
 			                    this, R.drawable.icon_launcher_freerdp))
 			                .setIntent(shortcutIntent)
 			                .build();
 
-			        // Now, return the result to the launcher
-			        Intent resultIntent =
-			            ShortcutManagerCompat.createShortcutResultIntent(this, shortcutInfo);
-			        setResult(RESULT_OK, resultIntent);
+			        setResult(RESULT_OK,
+			                  ShortcutManagerCompat.createShortcutResultIntent(this, shortcutInfo));
 			        finish();
 		        })
 		    .setNegativeButton(android.R.string.cancel, (dialog, which) -> dialog.dismiss())

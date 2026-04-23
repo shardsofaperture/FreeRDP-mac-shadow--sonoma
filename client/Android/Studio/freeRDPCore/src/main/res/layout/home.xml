@@ -13,11 +13,9 @@
     android:layout_height="match_parent"
     android:fitsSystemWindows="true">
 
-    <ListView
-        android:id="@+id/listViewBookmarks"
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerViewBookmarks"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:divider="@android:drawable/divider_horizontal_dark"
-        android:dividerHeight="1dp" />
+        android:layout_height="match_parent" />
 
 </RelativeLayout>
