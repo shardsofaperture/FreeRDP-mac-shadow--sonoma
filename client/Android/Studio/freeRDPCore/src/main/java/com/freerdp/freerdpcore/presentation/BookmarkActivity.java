@@ -12,6 +12,9 @@ package com.freerdp.freerdpcore.presentation;
 
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 
 import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AlertDialog;
@@ -94,6 +97,36 @@ public class BookmarkActivity
 	{
 		getOnBackPressedDispatcher().onBackPressed();
 		return true;
+	}
+
+	@Override public boolean onCreateOptionsMenu(Menu menu)
+	{
+		MenuInflater inflater = getMenuInflater();
+		inflater.inflate(R.menu.bookmark_menu, menu);
+		return true;
+	}
+
+	@Override public boolean onOptionsItemSelected(MenuItem item)
+	{
+		if (item.getItemId() == R.id.action_save)
+		{
+			SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+			if (!verifySettings(prefs))
+			{
+				new AlertDialog.Builder(this)
+				    .setTitle(R.string.error_bookmark_incomplete_title)
+				    .setMessage(R.string.error_bookmark_incomplete)
+				    .setPositiveButton(R.string.cancel, (d, w) -> finish())
+				    .setNegativeButton(R.string.cont, (d, w) -> d.cancel())
+				    .show();
+			}
+			else
+			{
+				viewModel.saveBookmark(prefs);
+			}
+			return true;
+		}
+		return super.onOptionsItemSelected(item);
 	}
 
 	@Override
