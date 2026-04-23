@@ -241,16 +241,6 @@ public class SessionView extends View
 		canvas.restore();
 	}
 
-	// dirty hack: we call back to our activity and call onBackPressed as this doesn't reach us when
-	// the soft keyboard is shown ...
-	@Override public boolean dispatchKeyEventPreIme(KeyEvent event)
-	{
-		if (event.getKeyCode() == KeyEvent.KEYCODE_BACK &&
-		    event.getAction() == KeyEvent.ACTION_DOWN)
-			((SessionActivity)this.getContext()).onBackPressed();
-		return super.dispatchKeyEventPreIme(event);
-	}
-
 	// perform mapping on the touch event's coordinates according to the current scaling
 	private MotionEvent mapTouchEvent(MotionEvent event)
 	{

@@ -35,6 +35,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.view.WindowCompat;
@@ -118,6 +119,7 @@ public class SessionActivity extends AppCompatActivity
 	private boolean connectCancelledByUser = false;
 	private boolean sessionRunning = false;
 	private boolean toggleMouseButtons = false;
+	private long backPressedTime = 0;
 
 	private LibFreeRDPBroadcastReceiver libFreeRDPBroadcastReceiver;
 	private ScrollView2D scrollView;
@@ -197,43 +199,64 @@ public class SessionActivity extends AppCompatActivity
 		        .create();
 	}
 
-	private boolean hasHardwareMenuButton()
-	{
-		if (Build.VERSION.SDK_INT <= 10)
-			return true;
-
-		if (Build.VERSION.SDK_INT >= 14)
-		{
-			boolean rc = false;
-			final ViewConfiguration cfg = ViewConfiguration.get(this);
-
-			return cfg.hasPermanentMenuKey();
-		}
-
-		return false;
-	}
-
 	private void hideSystemBars()
 	{
-		WindowInsetsControllerCompat controller =
-		    WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
-		controller.hide(WindowInsetsCompat.Type.systemBars());
-		controller.setSystemBarsBehavior(
-		    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+		boolean hideStatusBar = ApplicationSettingsActivity.getHideStatusBar(this);
+		boolean hideNavBar = ApplicationSettingsActivity.getHideNavigationBar(this);
+		boolean hideActionBar = ApplicationSettingsActivity.getHideActionBar(this);
+
+		// Action bar is independent of status bar and API level.
+		if (getSupportActionBar() != null)
+		{
+			if (hideActionBar)
+				getSupportActionBar().hide();
+			else
+				getSupportActionBar().show();
+		}
+
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
+		{
+			WindowInsetsControllerCompat controller =
+			    WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+			int toHide = 0;
+			if (hideStatusBar)
+				toHide |= WindowInsetsCompat.Type.statusBars();
+			if (hideNavBar)
+				toHide |= WindowInsetsCompat.Type.navigationBars();
+
+			if (toHide != 0)
+			{
+				controller.hide(toHide);
+				controller.setSystemBarsBehavior(
+				    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+			}
+			else
+			{
+				controller.show(WindowInsetsCompat.Type.systemBars());
+			}
+		}
+		else
+		{
+			// API < 30: use deprecated setSystemUiVisibility.
+			int flags = 0;
+			if (hideStatusBar)
+				flags |= View.SYSTEM_UI_FLAG_FULLSCREEN;
+			if (hideNavBar)
+				flags |= View.SYSTEM_UI_FLAG_HIDE_NAVIGATION;
+			if (flags != 0)
+				flags |= View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
+
+			getWindow().getDecorView().setSystemUiVisibility(flags);
+		}
 	}
 
 	@Override public void onCreate(Bundle savedInstanceState)
 	{
 		super.onCreate(savedInstanceState);
-		WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+
+		hideSystemBars();
 
 		this.setContentView(R.layout.session);
-		if (hasHardwareMenuButton() || ApplicationSettingsActivity.getHideActionBar(this))
-		{
-			this.getSupportActionBar().hide();
-		}
-		else
-			this.getSupportActionBar().show();
 
 		Log.v(TAG, "Session.onCreate");
 
@@ -325,12 +348,21 @@ public class SessionActivity extends AppCompatActivity
 		mClipboardManager = ClipboardManagerProxy.getClipboardManager(this);
 		mClipboardManager.addClipboardChangedListener(this);
 
+		getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+			@Override public void handleOnBackPressed()
+			{
+				handleBackPressed();
+			}
+		});
+
 		hideSystemBars();
 	}
 
 	@Override public void onWindowFocusChanged(boolean hasFocus)
 	{
 		super.onWindowFocusChanged(hasFocus);
+		if (hasFocus)
+			hideSystemBars();
 		mClipboardManager.getPrimaryClipManually();
 	}
 
@@ -724,14 +756,27 @@ public class SessionActivity extends AppCompatActivity
 		return true;
 	}
 
-	@Override public void onBackPressed()
+	public void handleBackPressed()
 	{
 		// hide keyboards (if any visible) or send alt+f4 to the session
 		if (sysKeyboardVisible || extKeyboardVisible)
+		{
 			showKeyboard(false, false);
-		else if (ApplicationSettingsActivity.getUseBackAsAltf4(this))
+			return;
+		}
+		if (ApplicationSettingsActivity.getUseBackAsAltf4(this))
 		{
 			keyboardMapper.sendAltF4();
+			return;
+		}
+		if (System.currentTimeMillis() - backPressedTime < 2000)
+		{
+			LibFreeRDP.disconnect(session.getInstance());
+		}
+		else
+		{
+			backPressedTime = System.currentTimeMillis();
+			Toast.makeText(this, R.string.session_double_back_to_exit, Toast.LENGTH_SHORT).show();
 		}
 	}
 
@@ -753,11 +798,15 @@ public class SessionActivity extends AppCompatActivity
 	// combinations (like Win + E to open the explorer).
 	@Override public boolean onKeyDown(int keycode, KeyEvent event)
 	{
+		if (keycode == KeyEvent.KEYCODE_BACK)
+			return super.onKeyDown(keycode, event);
 		return keyboardMapper.processAndroidKeyEvent(event);
 	}
 
 	@Override public boolean onKeyUp(int keycode, KeyEvent event)
 	{
+		if (keycode == KeyEvent.KEYCODE_BACK)
+			return super.onKeyUp(keycode, event);
 		return keyboardMapper.processAndroidKeyEvent(event);
 	}
 

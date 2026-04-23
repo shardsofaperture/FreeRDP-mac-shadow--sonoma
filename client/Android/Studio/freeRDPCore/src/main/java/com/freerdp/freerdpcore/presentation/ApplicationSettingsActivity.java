@@ -234,6 +234,13 @@ public class ApplicationSettingsActivity
 		                              false);
 	}
 
+	public static boolean getHideNavigationBar(Context context)
+	{
+		SharedPreferences preferences = get(context);
+		return preferences.getBoolean(
+		    context.getString(R.string.preference_key_ui_hide_navigation_bar), false);
+	}
+
 	public static boolean getHideActionBar(Context context)
 	{
 		SharedPreferences preferences = get(context);
