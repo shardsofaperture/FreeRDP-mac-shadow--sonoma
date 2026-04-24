@@ -18,6 +18,7 @@ jobs:
         usesh: true
         copyback: false
         prepare: |
+          pkg update && \
           pkg install -y \
             cmake \
             ninja \
