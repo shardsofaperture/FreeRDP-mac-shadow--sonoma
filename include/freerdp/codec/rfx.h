@@ -113,7 +113,6 @@ extern "C"
 	                                     const BYTE* WINPR_RESTRICT data, UINT32 width,
 	                                     UINT32 height, UINT32 scanline);
 
-	WINPR_ATTR_MALLOC(rfx_message_free, 2)
 	WINPR_ATTR_NODISCARD
 	FREERDP_API RFX_MESSAGE* rfx_encode_message(RFX_CONTEXT* WINPR_RESTRICT context,
 	                                            const RFX_RECT* WINPR_RESTRICT rects,
