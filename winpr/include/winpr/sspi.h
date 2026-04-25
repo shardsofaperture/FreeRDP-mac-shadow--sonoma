@@ -853,6 +853,25 @@ typedef SecBufferDesc* PSecBufferDesc;
 
 #endif /* !defined(_WIN32) || defined(_UWP) || defined(__MINGW32__) */
 
+/** @brief Function pointer type for NTLM callback implementations
+ *
+ *  @param client An opaque pointer passed as context
+ *  @param authIdentity A pointer to the identity to generate the hash for. Must not be \b nullptr
+ *  @param ntproffvale A buffer containing the proof value. Must not be \b nullptr. Must be able to
+ * hold 16 bytes.
+ *  @param randkey A pointer to a buffer containing random data. Must not be \b nullptr. Must be
+ * able to hold 16 bytes.
+ *  @param mic A pointer to a buffer containing the message integrity code. Must not be \b nullptr.
+ * Must be able to hold 16 bytes.
+ *  @param micvalue . Must not be \b nullptr. Must be able to hold 16 bytes.
+ *  @param ntlmhash A pointer to a buffer to write the resulting hash. Must not be \b nullptr. Must
+ * be able to hold 16 bytes.
+ *
+ *  @return \ref SEC_E_OK for success, a fitting SEC_E_* failure otherwise.
+ *
+ *  @bug Before 3.24.0 the return value was incorrectly checked. 1 was accepted for success, 0 for
+ * failure.
+ */
 typedef SECURITY_STATUS (*psSspiNtlmHashCallback)(void* client,
                                                   const SEC_WINNT_AUTH_IDENTITY* authIdentity,
                                                   const SecBuffer* ntproofvalue,
@@ -861,9 +880,10 @@ typedef SECURITY_STATUS (*psSspiNtlmHashCallback)(void* client,
 
 typedef struct
 {
-	char* samFile;
-	WINPR_ATTR_NODISCARD psSspiNtlmHashCallback hashCallback;
-	void* hashCallbackArg;
+	char* samFile; /**< File name (with path) of a SAM file */
+	WINPR_ATTR_NODISCARD psSspiNtlmHashCallback
+	    hashCallback;      /**< Callback to be called to generate a NTLM hash. */
+	void* hashCallbackArg; /**< A pointer passed to \ref hashCallback */
 } SEC_WINPR_NTLM_SETTINGS;
 
 typedef struct
