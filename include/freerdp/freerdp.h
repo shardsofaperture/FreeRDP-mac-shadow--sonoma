@@ -95,6 +95,7 @@ extern "C"
 	typedef BOOL (*pConnectCallback)(freerdp* instance);
 	typedef void (*pPostDisconnect)(freerdp* instance);
 
+#if !defined(WITHOUT_FREERDP_3x_DEPRECATED)
 	/** \brief Authentication callback function pointer definition
 	 *
 	 * \param instance A pointer to the instance to work on
@@ -110,6 +111,7 @@ extern "C"
 
 	typedef BOOL (*pAuthenticate)(freerdp* instance, char** username, char** password,
 	                              char** domain);
+#endif
 
 	/** @brief Extended authentication callback function pointer definition
 	 *
@@ -220,7 +222,7 @@ extern "C"
 	 *  @return 1 to accept and store a certificate, 2 to accept
 	 *          a certificate only for this session, 0 otherwise.
 	 */
-#if defined(WITH_FREERDP_DEPRECATED)
+#if !defined(WITHOUT_FREERDP_3x_DEPRECATED)
 	WINPR_DEPRECATED_VAR("Use pVerifyCertificateEx",
 	                     typedef DWORD (*pVerifyCertificate)(
 	                         freerdp* instance, const char* common_name, const char* subject,
@@ -261,7 +263,7 @@ extern "C"
 	 *  @return 1 to accept and store a certificate, 2 to accept
 	 *          a certificate only for this session, 0 otherwise.
 	 */
-#if defined(WITH_FREERDP_DEPRECATED)
+#if !defined(WITHOUT_FREERDP_3x_DEPRECATED)
 	WINPR_DEPRECATED_VAR("Use pVerifyChangedCertificateEx",
 	                     typedef DWORD (*pVerifyChangedCertificate)(
 	                         freerdp* instance, const char* common_name, const char* subject,
@@ -504,7 +506,7 @@ owned by rdpRdp */
 		              Can be set before calling freerdp_connect() to have it executed after the
 		              actual connection has succeeded. Must be set to nullptr if not needed. */
 
-#if defined(WITH_FREERDP_DEPRECATED)
+#if !defined(WITHOUT_FREERDP_3x_DEPRECATED)
 		WINPR_DEPRECATED_VAR("[since 3.25.0] Use AuthenticateEx instead",
 		                     WINPR_ATTR_NODISCARD ALIGN64 pAuthenticate
 		                         Authenticate); /**< (offset 50)
@@ -537,7 +539,7 @@ owned by rdpRdp */
 		                       This will be called before disconnecting and cleaning up the
 		                       channels.
  */
-#if defined(WITH_FREERDP_DEPRECATED)
+#if !defined(WITHOUT_FREERDP_3x_DEPRECATED)
 		WINPR_DEPRECATED_VAR("[since 3.25.0] Use AuthenticateEx instead",
 		                     WINPR_ATTR_NODISCARD ALIGN64 pAuthenticate
 		                         GatewayAuthenticate); /**< (offset 56)
