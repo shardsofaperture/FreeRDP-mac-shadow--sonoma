@@ -4,6 +4,7 @@
 #include <winpr/sspi.h>
 #include <winpr/print.h>
 #include <winpr/wlog.h>
+#include <winpr/ntlm.h>
 
 struct test_input_t
 {
@@ -29,6 +30,7 @@ typedef struct
 	BOOL haveContext;
 	BOOL haveInputBuffer;
 	BOOL UseNtlmV2Hash;
+	BOOL UseCallback;
 	LPTSTR ServicePrincipalName;
 	SecBufferDesc inputBufferDesc;
 	SecBufferDesc outputBufferDesc;
@@ -36,7 +38,8 @@ typedef struct
 	BOOL confidentiality;
 	SecPkgInfo* pPackageInfo;
 	SecurityFunctionTable* table;
-	SEC_WINNT_AUTH_IDENTITY identity;
+	SEC_WINNT_AUTH_IDENTITY_WINPR authData;
+	SEC_WINPR_NTLM_SETTINGS settings;
 } TEST_NTLM_SERVER;
 
 static BYTE TEST_NTLM_TIMESTAMP[8] = { 0x33, 0x57, 0xbd, 0xb1, 0x07, 0x8b, 0xcf, 0x01 };
@@ -137,6 +140,27 @@ typedef struct
 	SecurityFunctionTable* table;
 	SEC_WINNT_AUTH_IDENTITY identity;
 } TEST_NTLM_CLIENT;
+
+WINPR_ATTR_NODISCARD
+static void* getServerAuthData(TEST_NTLM_SERVER* ntlm, const struct test_input_t* arg,
+                               psSspiNtlmHashCallback fkt)
+{
+
+	if (fkt)
+	{
+		ntlm->authData.identity.Version = SEC_WINNT_AUTH_IDENTITY_VERSION;
+		ntlm->authData.identity.Length = sizeof(SEC_WINNT_AUTH_IDENTITY_EX);
+		ntlm->authData.identity.Flags |=
+		    SEC_WINNT_AUTH_IDENTITY_EXTENDED | SEC_WINNT_AUTH_IDENTITY_UNICODE;
+		ntlm->settings.hashCallback = fkt;
+		ntlm->settings.hashCallbackArg = arg;
+		ntlm->authData.ntlmSettings = &ntlm->settings;
+		ntlm->UseCallback = TRUE;
+		return &ntlm->authData;
+	}
+	ntlm->UseCallback = FALSE;
+	return nullptr;
+}
 
 static int test_ntlm_client_init(TEST_NTLM_CLIENT* ntlm, const char* user, const char* domain,
                                  const char* password)
@@ -351,6 +375,16 @@ static int test_ntlm_client_authenticate(TEST_NTLM_CLIENT* ntlm)
 	return (status == SEC_I_CONTINUE_NEEDED) ? 1 : 0;
 }
 
+static void test_ntlm_client_free(TEST_NTLM_CLIENT* ntlm)
+{
+	if (!ntlm)
+		return;
+
+	test_ntlm_client_uninit(ntlm);
+	free(ntlm);
+}
+
+WINPR_ATTR_MALLOC(test_ntlm_client_free, 1)
 static TEST_NTLM_CLIENT* test_ntlm_client_new(void)
 {
 	TEST_NTLM_CLIENT* ntlm = (TEST_NTLM_CLIENT*)calloc(1, sizeof(TEST_NTLM_CLIENT));
@@ -361,16 +395,8 @@ static TEST_NTLM_CLIENT* test_ntlm_client_new(void)
 	return ntlm;
 }
 
-static void test_ntlm_client_free(TEST_NTLM_CLIENT* ntlm)
-{
-	if (!ntlm)
-		return;
-
-	test_ntlm_client_uninit(ntlm);
-	free(ntlm);
-}
-
-static int test_ntlm_server_init(TEST_NTLM_SERVER* ntlm)
+static int test_ntlm_server_init(TEST_NTLM_SERVER* ntlm, const struct test_input_t* arg,
+                                 psSspiNtlmHashCallback fkt)
 {
 	SECURITY_STATUS status = SEC_E_INTERNAL_ERROR;
 
@@ -391,9 +417,10 @@ static int test_ntlm_server_init(TEST_NTLM_SERVER* ntlm)
 		return -1;
 	}
 
+	void* authData = getServerAuthData(ntlm, arg, fkt);
 	ntlm->cbMaxToken = ntlm->pPackageInfo->cbMaxToken;
 	status = ntlm->table->AcquireCredentialsHandle(nullptr, NTLM_PACKAGE_NAME, SECPKG_CRED_INBOUND,
-	                                               nullptr, nullptr, nullptr, nullptr,
+	                                               nullptr, authData, nullptr, nullptr,
 	                                               &ntlm->credentials, &ntlm->expiration);
 
 	if (status != SEC_E_OK)
@@ -430,9 +457,6 @@ static void test_ntlm_server_uninit(TEST_NTLM_SERVER* ntlm)
 		ntlm->outputBuffer[0].pvBuffer = nullptr;
 	}
 
-	free(ntlm->identity.User);
-	free(ntlm->identity.Domain);
-	free(ntlm->identity.Password);
 	free(ntlm->ServicePrincipalName);
 
 	if (ntlm->table)
@@ -476,20 +500,23 @@ static int test_ntlm_server_authenticate(const struct test_input_t* targ, TEST_N
 	{
 		SecPkgContext_AuthNtlmHash AuthNtlmHash = WINPR_C_ARRAY_INIT;
 
-		if (ntlm->UseNtlmV2Hash)
+		if (!ntlm->UseCallback)
 		{
-			AuthNtlmHash.Version = 2;
-			CopyMemory(AuthNtlmHash.NtlmHash, targ->ntlmv2, 16);
-		}
-		else
-		{
-			AuthNtlmHash.Version = 1;
-			CopyMemory(AuthNtlmHash.NtlmHash, targ->ntlm, 16);
-		}
+			if (ntlm->UseNtlmV2Hash)
+			{
+				AuthNtlmHash.Version = 2;
+				CopyMemory(AuthNtlmHash.NtlmHash, targ->ntlmv2, 16);
+			}
+			else
+			{
+				AuthNtlmHash.Version = 1;
+				CopyMemory(AuthNtlmHash.NtlmHash, targ->ntlm, 16);
+			}
 
-		status =
-		    ntlm->table->SetContextAttributes(&ntlm->context, SECPKG_ATTR_AUTH_NTLM_HASH,
-		                                      &AuthNtlmHash, sizeof(SecPkgContext_AuthNtlmHash));
+			status = ntlm->table->SetContextAttributes(&ntlm->context, SECPKG_ATTR_AUTH_NTLM_HASH,
+			                                           &AuthNtlmHash,
+			                                           sizeof(SecPkgContext_AuthNtlmHash));
+		}
 	}
 
 	if ((status != SEC_E_OK) && (status != SEC_I_CONTINUE_NEEDED))
@@ -503,6 +530,16 @@ static int test_ntlm_server_authenticate(const struct test_input_t* targ, TEST_N
 	return (status == SEC_I_CONTINUE_NEEDED) ? 1 : 0;
 }
 
+static void test_ntlm_server_free(TEST_NTLM_SERVER* ntlm)
+{
+	if (!ntlm)
+		return;
+
+	test_ntlm_server_uninit(ntlm);
+	free(ntlm);
+}
+
+WINPR_ATTR_MALLOC(test_ntlm_server_free, 1)
 static TEST_NTLM_SERVER* test_ntlm_server_new(void)
 {
 	TEST_NTLM_SERVER* ntlm = (TEST_NTLM_SERVER*)calloc(1, sizeof(TEST_NTLM_SERVER));
@@ -513,16 +550,7 @@ static TEST_NTLM_SERVER* test_ntlm_server_new(void)
 	return ntlm;
 }
 
-static void test_ntlm_server_free(TEST_NTLM_SERVER* ntlm)
-{
-	if (!ntlm)
-		return;
-
-	test_ntlm_server_uninit(ntlm);
-	free(ntlm);
-}
-
-static BOOL test_default(const struct test_input_t* arg)
+static BOOL test_default(const struct test_input_t* arg, psSspiNtlmHashCallback fkt)
 {
 	BOOL rc = FALSE;
 	PSecBuffer pSecBuffer = nullptr;
@@ -556,7 +584,7 @@ static BOOL test_default(const struct test_input_t* arg)
 	 * Server Initialization
 	 */
 
-	status = test_ntlm_server_init(server);
+	status = test_ntlm_server_init(server, arg, fkt);
 
 	if (status < 0)
 	{
@@ -764,6 +792,70 @@ fail:
 	return rc;
 }
 
+static SECURITY_STATUS testCallback(void* client, const SEC_WINNT_AUTH_IDENTITY* authIdentity,
+                                    const SecBuffer* ntproofvalue, const BYTE* randkey,
+                                    const BYTE* mic, const SecBuffer* micvalue, BYTE* ntlmhash)
+{
+	const struct test_input_t* arg = client;
+	WINPR_ASSERT(arg);
+	WINPR_ASSERT(authIdentity);
+	WINPR_ASSERT(ntproofvalue);
+	WINPR_ASSERT(randkey);
+	WINPR_ASSERT(mic);
+	WINPR_ASSERT(micvalue);
+	WINPR_ASSERT(ntlmhash);
+
+	if ((authIdentity->Flags & SEC_WINNT_AUTH_IDENTITY_UNICODE) != 0)
+	{
+		if (!NTOWFv2FromHashW(arg->ntlm, authIdentity->User, authIdentity->UserLength * 2,
+		                      authIdentity->Domain, authIdentity->DomainLength * 2, ntlmhash))
+			return SEC_E_ENCRYPT_FAILURE;
+	}
+	else
+	{
+		if (!NTOWFv2FromHashA(arg->ntlm, (char*)authIdentity->User, authIdentity->UserLength,
+		                      (char*)authIdentity->Domain, authIdentity->DomainLength, ntlmhash))
+			return SEC_E_ENCRYPT_FAILURE;
+	}
+
+	if (memcmp(ntlmhash, arg->ntlmv2, 16) != 0)
+		return SEC_E_DECRYPT_FAILURE;
+
+	return SEC_E_OK;
+}
+
+static SECURITY_STATUS testFailCallback(void* client, const SEC_WINNT_AUTH_IDENTITY* authIdentity,
+                                        const SecBuffer* ntproofvalue, const BYTE* randkey,
+                                        const BYTE* mic, const SecBuffer* micvalue, BYTE* ntlmhash)
+{
+	const struct test_input_t* arg = client;
+	WINPR_ASSERT(arg);
+	WINPR_ASSERT(authIdentity);
+	WINPR_ASSERT(ntproofvalue);
+	WINPR_ASSERT(randkey);
+	WINPR_ASSERT(mic);
+	WINPR_ASSERT(micvalue);
+	WINPR_ASSERT(ntlmhash);
+
+	if ((authIdentity->Flags & SEC_WINNT_AUTH_IDENTITY_UNICODE) != 0)
+	{
+		if (!NTOWFv2FromHashW(arg->ntlm, authIdentity->User, authIdentity->UserLength * 2,
+		                      authIdentity->Domain, authIdentity->DomainLength * 2, ntlmhash))
+			return SEC_E_ENCRYPT_FAILURE;
+	}
+	else
+	{
+		if (!NTOWFv2FromHashA(arg->ntlm, (char*)authIdentity->User, authIdentity->UserLength,
+		                      (char*)authIdentity->Domain, authIdentity->DomainLength, ntlmhash))
+			return SEC_E_ENCRYPT_FAILURE;
+	}
+
+	if (memcmp(ntlmhash, arg->ntlmv2, 16) != 0)
+		return SEC_E_DECRYPT_FAILURE;
+
+	return SEC_E_DECRYPT_FAILURE;
+}
+
 int TestNTLM(int argc, char* argv[])
 {
 	WINPR_UNUSED(argc);
@@ -780,13 +872,28 @@ int TestNTLM(int argc, char* argv[])
 		  TEST_EMPTY_PWD_NTLM_V2_HASH, TRUE, FALSE }
 	};
 
-	int rc = 0;
 	for (size_t x = 0; x < ARRAYSIZE(inputs); x++)
 	{
 		const struct test_input_t* cur = &inputs[x];
-		const BOOL res = test_default(cur);
+		const BOOL res = test_default(cur, nullptr);
 		if (res != cur->expected)
-			rc = -1;
+		{
+			printf("%s [%" PRIuz "] fail 1!\n", __func__, x);
+			return -1;
+		}
+		const BOOL res2 = test_default(cur, testCallback);
+		if (res2 != cur->expected)
+		{
+			printf("%s [%" PRIuz "] fail 2!\n", __func__, x);
+			return -2;
+		}
+		const BOOL res3 = test_default(cur, testFailCallback);
+		if (res3 != FALSE)
+		{
+			printf("%s [%" PRIuz "] fail 2!\n", __func__, x);
+			return -2;
+		}
 	}
-	return rc;
+	printf("%s success!\n", __func__);
+	return 0;
 }
