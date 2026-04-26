@@ -473,8 +473,8 @@ static DWORD WINAPI cam_v4l_stream_capture_thread(LPVOID param)
 			buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 			buf.memory = V4L2_MEMORY_MMAP;
 
-			/* dequeue buffers until empty */
-			while (ioctl(fd, VIDIOC_DQBUF, &buf) != -1)
+			/* dequeue buffers until empty, or until we are asked to stop */
+			while (stream->streaming && ioctl(fd, VIDIOC_DQBUF, &buf) != -1)
 			{
 				const UINT error =
 				    stream->sampleCallback(stream->dev, stream->streamIndex,
