@@ -1179,8 +1179,9 @@ public class SessionActivity extends AppCompatActivity
 		                           Mouse.getLeftButtonEvent(this, down));
 	}
 
-		if (!down)
-			toggleMouseButtons = false;
+	@Override public void onSessionViewMiddleTouch(int x, int y, boolean down)
+	{
+		LibFreeRDP.sendCursorEvent(session.getInstance(), x, y, Mouse.getMiddleButtonEvent(down));
 	}
 
 	@Override public void onSessionViewRightTouch(int x, int y, boolean down)
@@ -1202,6 +1203,11 @@ public class SessionActivity extends AppCompatActivity
 	@Override public void onSessionViewScroll(boolean down)
 	{
 		LibFreeRDP.sendCursorEvent(session.getInstance(), 0, 0, Mouse.getScrollEvent(this, down));
+	}
+
+	@Override public void onSessionViewHScroll(boolean right)
+	{
+		LibFreeRDP.sendCursorEvent(session.getInstance(), 0, 0, Mouse.getHScrollEvent(this, right));
 	}
 
 	// ****************************************************************************

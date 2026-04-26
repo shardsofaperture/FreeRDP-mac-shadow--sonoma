@@ -295,6 +295,8 @@ public class SessionView extends View
 	// Handle all physical mouse buttons here; finger taps come via onSingleTapUp.
 	@Override public boolean onGenericMotionEvent(MotionEvent event)
 	{
+		if (!event.isFromSource(InputDevice.SOURCE_MOUSE))
+			return false;
 
 		int action = event.getActionMasked();
 
@@ -321,9 +323,23 @@ public class SessionView extends View
 						sessionViewListener.onSessionViewBeginTouch();
 					sessionViewListener.onSessionViewRightTouch(x, y, down);
 					return true;
+				case MotionEvent.BUTTON_TERTIARY:
+					sessionViewListener.onSessionViewMiddleTouch(x, y, down);
+					return true;
 				default:
-					break;
+					return true; // consume unknown buttons silently
 			}
+		}
+
+		if (action == MotionEvent.ACTION_SCROLL)
+		{
+			float vScroll = event.getAxisValue(MotionEvent.AXIS_VSCROLL);
+			float hScroll = event.getAxisValue(MotionEvent.AXIS_HSCROLL);
+			if (vScroll != 0)
+				sessionViewListener.onSessionViewScroll(vScroll > 0);
+			if (hScroll != 0)
+				sessionViewListener.onSessionViewHScroll(hScroll > 0);
+			return true;
 		}
 
 		return false;
@@ -337,6 +353,8 @@ public class SessionView extends View
 
 		void onSessionViewLeftTouch(int x, int y, boolean down);
 
+		void onSessionViewMiddleTouch(int x, int y, boolean down);
+
 		void onSessionViewRightTouch(int x, int y, boolean down);
 
 		void onSessionViewMove(int x, int y);
@@ -344,6 +362,8 @@ public class SessionView extends View
 		void onSessionViewMouseMove(int x, int y);
 
 		void onSessionViewScroll(boolean down);
+
+		void onSessionViewHScroll(boolean right);
 	}
 
 	private class SessionGestureListener extends GestureDetector.SimpleOnGestureListener
