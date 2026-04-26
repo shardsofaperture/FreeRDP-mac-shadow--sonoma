@@ -1864,7 +1864,7 @@ int tls_verify_certificate(rdpTls* tls, const rdpCertificate* cert, const char* 
 					if (!use_pem)
 						free(fp);
 				}
-#if defined(WITH_FREERDP_DEPRECATED)
+#if !defined(WITHOUT_FREERDP_3x_DEPRECATED)
 				else if (instance->VerifyCertificate)
 				{
 					char* fp = freerdp_certificate_get_fingerprint(cert);
@@ -1939,7 +1939,7 @@ int tls_verify_certificate(rdpTls* tls, const rdpCertificate* cert, const char* 
 					if (fpIsAllocated)
 						free(fp);
 				}
-#if defined(WITH_FREERDP_DEPRECATED)
+#if !defined(WITHOUT_FREERDP_3x_DEPRECATED)
 				else if (instance->VerifyChangedCertificate)
 				{
 					char* fp = freerdp_certificate_get_fingerprint(cert);
