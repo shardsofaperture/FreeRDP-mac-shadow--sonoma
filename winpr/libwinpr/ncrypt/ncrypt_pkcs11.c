@@ -91,6 +91,27 @@ static const piv_cert_tags_t piv_cert_tags[] = {
 	{ "Certificate for Digital Signature", { 0x5F, 0xC1, 0x0A } },
 	{ "Certificate for Key Management", { 0x5F, 0xC1, 0x0B } },
 	{ "Certificate for Card Authentication", { 0x5F, 0xC1, 0x01 } },
+
+	{ "Retired Certificate for Key Management 1", { 0x5F, 0xC1, 0x0D } },
+	{ "Retired Certificate for Key Management 2", { 0x5F, 0xC1, 0x0E } },
+	{ "Retired Certificate for Key Management 3", { 0x5F, 0xC1, 0x0F } },
+	{ "Retired Certificate for Key Management 4", { 0x5F, 0xC1, 0x10 } },
+	{ "Retired Certificate for Key Management 5", { 0x5F, 0xC1, 0x11 } },
+	{ "Retired Certificate for Key Management 6", { 0x5F, 0xC1, 0x12 } },
+	{ "Retired Certificate for Key Management 7", { 0x5F, 0xC1, 0x13 } },
+	{ "Retired Certificate for Key Management 8", { 0x5F, 0xC1, 0x14 } },
+	{ "Retired Certificate for Key Management 9", { 0x5F, 0xC1, 0x15 } },
+	{ "Retired Certificate for Key Management 10", { 0x5F, 0xC1, 0x16 } },
+	{ "Retired Certificate for Key Management 11", { 0x5F, 0xC1, 0x17 } },
+	{ "Retired Certificate for Key Management 12", { 0x5F, 0xC1, 0x18 } },
+	{ "Retired Certificate for Key Management 13", { 0x5F, 0xC1, 0x19 } },
+	{ "Retired Certificate for Key Management 14", { 0x5F, 0xC1, 0x1A } },
+	{ "Retired Certificate for Key Management 15", { 0x5F, 0xC1, 0x1B } },
+	{ "Retired Certificate for Key Management 16", { 0x5F, 0xC1, 0x1C } },
+	{ "Retired Certificate for Key Management 17", { 0x5F, 0xC1, 0x1D } },
+	{ "Retired Certificate for Key Management 18", { 0x5F, 0xC1, 0x1E } },
+	{ "Retired Certificate for Key Management 19", { 0x5F, 0xC1, 0x1F } },
+	{ "Retired Certificate for Key Management 20", { 0x5F, 0xC1, 0x20 } },
 };
 
 static const BYTE APDU_PIV_SELECT_AID[] = { 0x00, 0xA4, 0x04, 0x00, 0x09, 0xA0, 0x00, 0x00,
@@ -1322,7 +1343,10 @@ static SECURITY_STATUS NCryptP11KeyGetProperties(NCryptP11KeyHandle* keyHandle,
 					if (size < 0)
 						ret = ERROR_CONVERT_TO_LARGE;
 					else
+					{
+						*pcbResult = (UINT32)size * sizeof(WCHAR);
 						ret = ERROR_SUCCESS;
+					}
 				}
 			}
 
