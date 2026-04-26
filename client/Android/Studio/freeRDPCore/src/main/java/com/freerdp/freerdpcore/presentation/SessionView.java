@@ -18,9 +18,11 @@ import android.graphics.Matrix;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.drawable.BitmapDrawable;
+import android.os.Build;
 import android.text.InputType;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
@@ -269,9 +271,62 @@ public class SessionView extends View
 
 	@Override public boolean onTouchEvent(MotionEvent event)
 	{
+		// Physical mouse events: bypass gesture detector entirely.
+		// Buttons are handled in onGenericMotionEvent; hover moves in onHoverEvent.
+		// Only ACTION_MOVE with a button held (drag) needs handling here.
+		if (event.isFromSource(InputDevice.SOURCE_MOUSE))
+		{
+			int action = event.getActionMasked();
+			if (action == MotionEvent.ACTION_MOVE && event.getButtonState() != 0)
+			{
+				MotionEvent mapped = mapTouchEvent(event);
+				sessionViewListener.onSessionViewMouseMove((int)mapped.getX(), (int)mapped.getY());
+				mapped.recycle();
+				return true;
+			}
+			return true;
+		}
+
 		boolean res = gestureDetector.onTouchEvent(event);
 		res |= doubleGestureDetector.onTouchEvent(event);
 		return res;
+	}
+
+	// Handle all physical mouse buttons here; finger taps come via onSingleTapUp.
+	@Override public boolean onGenericMotionEvent(MotionEvent event)
+	{
+
+		int action = event.getActionMasked();
+
+		if (action == MotionEvent.ACTION_BUTTON_PRESS ||
+		    action == MotionEvent.ACTION_BUTTON_RELEASE)
+		{
+			boolean down = action == MotionEvent.ACTION_BUTTON_PRESS;
+			MotionEvent mapped = mapTouchEvent(event);
+			int x = (int)mapped.getX();
+			int y = (int)mapped.getY();
+			mapped.recycle();
+
+			switch (event.getActionButton())
+			{
+				case MotionEvent.BUTTON_PRIMARY:
+					if (down)
+						sessionViewListener.onSessionViewBeginTouch();
+					sessionViewListener.onSessionViewLeftTouch(x, y, down);
+					if (!down)
+						sessionViewListener.onSessionViewEndTouch();
+					return true;
+				case MotionEvent.BUTTON_SECONDARY:
+					if (down)
+						sessionViewListener.onSessionViewBeginTouch();
+					sessionViewListener.onSessionViewRightTouch(x, y, down);
+					return true;
+				default:
+					break;
+			}
+		}
+
+		return false;
 	}
 
 	public interface SessionViewListener
@@ -285,6 +340,8 @@ public class SessionView extends View
 		void onSessionViewRightTouch(int x, int y, boolean down);
 
 		void onSessionViewMove(int x, int y);
+
+		void onSessionViewMouseMove(int x, int y);
 
 		void onSessionViewScroll(boolean down);
 	}
@@ -348,28 +405,18 @@ public class SessionView extends View
 
 		public boolean onSingleTapUp(MotionEvent e)
 		{
-			// send single click
+			// Physical mouse buttons are handled via ACTION_BUTTON_PRESS in onGenericMotionEvent.
+			// If buttonState is non-zero this event came from a physical mouse button
+			if (e.getButtonState() != 0)
+				return false;
+
+			// Finger touch -> left click
 			MotionEvent mappedEvent = mapTouchEvent(e);
 			sessionViewListener.onSessionViewBeginTouch();
-			switch (e.getButtonState())
-			{
-				case MotionEvent.BUTTON_PRIMARY:
-					sessionViewListener.onSessionViewLeftTouch((int)mappedEvent.getX(),
-					                                           (int)mappedEvent.getY(), true);
-					sessionViewListener.onSessionViewLeftTouch((int)mappedEvent.getX(),
-					                                           (int)mappedEvent.getY(), false);
-					break;
-				case MotionEvent.BUTTON_SECONDARY:
-					sessionViewListener.onSessionViewRightTouch((int)mappedEvent.getX(),
-					                                            (int)mappedEvent.getY(), true);
-					sessionViewListener.onSessionViewRightTouch((int)mappedEvent.getX(),
-					                                            (int)mappedEvent.getY(), false);
-					sessionViewListener.onSessionViewLeftTouch((int)mappedEvent.getX(),
-					                                           (int)mappedEvent.getY(), true);
-					sessionViewListener.onSessionViewLeftTouch((int)mappedEvent.getX(),
-					                                           (int)mappedEvent.getY(), false);
-					break;
-			}
+			sessionViewListener.onSessionViewLeftTouch((int)mappedEvent.getX(),
+			                                           (int)mappedEvent.getY(), true);
+			sessionViewListener.onSessionViewLeftTouch((int)mappedEvent.getX(),
+			                                           (int)mappedEvent.getY(), false);
 			sessionViewListener.onSessionViewEndTouch();
 			return true;
 		}
