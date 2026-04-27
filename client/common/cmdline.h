@@ -180,7 +180,7 @@ static const COMMAND_LINE_ARGUMENT_A global_cmd_args[] = {
 	  nullptr, "Use default callbacks (console) for certificate/credential/..." },
 	{ "frame-ack", COMMAND_LINE_VALUE_REQUIRED, "<number>", nullptr, nullptr, -1, nullptr,
 	  "Number of frame acknowledgement" },
-	{ "args-from", COMMAND_LINE_VALUE_REQUIRED, "<file>|stdin|fd:<number>|env:<name>", nullptr,
+	{ "args-from", COMMAND_LINE_VALUE_REQUIRED, "file:<file>|stdin|fd:<number>|env:<name>", nullptr,
 	  nullptr, -1, nullptr,
 	  "Read command line from a file, stdin or file descriptor. This argument can not be combined "
 	  "with any other. "
