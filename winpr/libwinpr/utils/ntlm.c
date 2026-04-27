@@ -36,7 +36,7 @@ BOOL NTOWFv1W(LPCWSTR Password, UINT32 PasswordLengthInBytes, BYTE* NtHash)
 	if (!Password || !NtHash)
 		return FALSE;
 
-	if (!winpr_Digest(WINPR_MD_MD4, (BYTE*)Password, (size_t)PasswordLengthInBytes, NtHash,
+	if (!winpr_Digest(WINPR_MD_MD4, Password, PasswordLengthInBytes, NtHash,
 	                  WINPR_MD4_DIGEST_LENGTH))
 		return FALSE;
 
@@ -62,7 +62,8 @@ BOOL NTOWFv1A(LPCSTR Password, UINT32 PasswordLengthInBytes, BYTE* NtHash)
 			return FALSE;
 	}
 
-	if (!NTOWFv1W(PasswordW, (UINT32)pwdCharLength * sizeof(WCHAR), NtHash))
+	if (!NTOWFv1W(PasswordW, WINPR_ASSERTING_INT_CAST(UINT32, pwdCharLength * sizeof(WCHAR)),
+	              NtHash))
 		goto out_fail;
 
 	result = TRUE;
