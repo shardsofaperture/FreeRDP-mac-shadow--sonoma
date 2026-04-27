@@ -155,6 +155,11 @@ if(WITH_VIDEO_FFMPEG)
     warn_experimental("VAAPI encoder/decoder support for FFMPEG" "-DWITH_VAAPI=OFF")
   endif()
 
+  if(WITH_VIDEOTOOLBOX)
+    include(WarnExperimental)
+    warn_experimental("VideoToolbox H264 decoding support for FFMPEG" "-DWITH_VIDEOTOOLBOX=OFF")
+  endif()
+
   set(CODEC_SRCS ${CODEC_SRCS} h264_ffmpeg.c)
   include_directories(SYSTEM ${FFMPEG_INCLUDE_DIRS})
   list(APPEND CODEC_LIBS ${FFMPEG_LIBRARIES})

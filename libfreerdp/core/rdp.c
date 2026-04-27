@@ -2890,7 +2890,7 @@ static BOOL option_is_experimental(WINPR_ATTR_UNUSED wLog* log, const char* tok)
 		                           STR(WITH_MEDIACODEC),       STR(WITH_CLIENT_SDL2),
 		                           STR(WITH_OPENCL),           STR(WITH_LIBRESSL),
 		                           STR(WITH_MBEDTLS),          STR(WITH_MEDIA_FOUNDATION),
-		                           STR(WITH_KRB5_HEIMDAL) };
+		                           STR(WITH_KRB5_HEIMDAL),     STR(WITH_VIDEOTOOLBOX) };
 	for (size_t x = 0; x < ARRAYSIZE(experimental); x++)
 	{
 		const char* opt = experimental[x];

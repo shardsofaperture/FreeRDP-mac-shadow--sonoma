@@ -148,6 +148,9 @@ cmake_dependent_option(WITH_VAAPI "[experimental] Use FFMPEG VAAPI" OFF "WITH_VI
 cmake_dependent_option(
   WITH_VAAPI_H264_ENCODING "[experimental] Use FFMPEG VAAPI hardware H264 encoding" ON "WITH_VIDEO_FFMPEG" OFF
 )
+cmake_dependent_option(
+  WITH_VIDEOTOOLBOX "[experimental] Use FFMPEG VideoToolbox hardware H264 decoding" OFF "WITH_VIDEO_FFMPEG;APPLE" OFF
+)
 if(WITH_VAAPI_H264_ENCODING)
   include(WarnExperimental)
   warn_experimental("VAAPI H264 encoding" "-DWITH_VAAPI_H264_ENCODING=OFF")
