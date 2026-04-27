@@ -857,7 +857,7 @@ typedef SecBufferDesc* PSecBufferDesc;
  *
  *  @param client An opaque pointer passed as context
  *  @param authIdentity A pointer to the identity to generate the hash for. Must not be \b nullptr
- *  @param ntproffvale A buffer containing the proof value. Must not be \b nullptr. Must be able to
+ *  @param ntproofvalue A buffer containing the proof value. Must not be \b nullptr. Must be able to
  * hold 16 bytes.
  *  @param randkey A pointer to a buffer containing random data. Must not be \b nullptr. Must be
  * able to hold 16 bytes.
