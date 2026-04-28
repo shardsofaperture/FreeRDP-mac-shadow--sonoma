@@ -7,6 +7,10 @@
         android:title="@string/settings_ui_hide_status_bar" />
     <CheckBoxPreference
         android:defaultValue="true"
+        android:key="@string/preference_key_ui_hide_navigation_bar"
+        android:title="@string/settings_ui_hide_navigation_bar" />
+    <CheckBoxPreference
+        android:defaultValue="true"
         android:key="@string/preference_key_ui_hide_zoom_controls"
         android:title="@string/settings_ui_hide_zoom_controls" />
     <CheckBoxPreference

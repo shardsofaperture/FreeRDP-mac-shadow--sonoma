@@ -87,12 +87,14 @@
             android:exported="true"
             android:name=".presentation.AboutActivity"
             android:label="@string/title_about"
-            android:theme="@style/Theme.Main" />
+            android:theme="@style/Theme.Main"
+            android:configChanges="orientation|keyboardHidden|screenSize" />
         <activity
             android:exported="true"
             android:name=".presentation.HelpActivity"
             android:label="@string/title_help"
-            android:theme="@style/Theme.Main" />
+            android:theme="@style/Theme.Main"
+            android:configChanges="orientation|keyboardHidden|screenSize" />
 
     </application>
 
