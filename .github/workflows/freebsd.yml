@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         freebsd-version: ["15.0", "14.4"]
-        ssl: ["openssl111", "openssl36", "openssl40", "libressl-devel"]
+        ssl: ["openssl111", "openssl36", "openssl40"]
     name: Build on FreeBSD ${{ matrix.freebsd-version }} with ${{ matrix.ssl || 'openssl' }}
     env:
       SSL: ${{ matrix.ssl }}
@@ -72,6 +72,8 @@ jobs:
           if [ "$SSL" == "libressl-devel" ];
           then
             export CMAKE_SSL="-DWITH_LIBRESSL=ON"
+          else
+            export CMAKE_SSL="-DWITH_LIBRESSL=OFF"
           fi
 
           cmake -GNinja \
