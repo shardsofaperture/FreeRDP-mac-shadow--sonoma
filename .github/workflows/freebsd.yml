@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         freebsd-version: ["15.0", "14.4"]
-        ssl: ["openssl111", "openssl34",   "openssl35", "openssl36", "openssl40", "libressl"]
+        ssl: ["openssl111", "openssl36", "openssl40", "libressl"]
     name: Build on FreeBSD ${{ matrix.freebsd-version }} with ${{ matrix.ssl || 'openssl' }}
     env:
       SSL: ${{ matrix.ssl }}
