@@ -118,7 +118,6 @@ public class SessionActivity extends AppCompatActivity
 
 	private boolean connectCancelledByUser = false;
 	private boolean sessionRunning = false;
-	private boolean toggleMouseButtons = false;
 	private long backPressedTime = 0;
 
 	private LibFreeRDPBroadcastReceiver libFreeRDPBroadcastReceiver;
@@ -334,8 +333,6 @@ public class SessionActivity extends AppCompatActivity
 				zoomControls.setIsZoomInEnabled(true);
 			}
 		});
-
-		toggleMouseButtons = false;
 
 		createDialogs();
 
@@ -1179,17 +1176,18 @@ public class SessionActivity extends AppCompatActivity
 			cancelDelayedMoveEvent();
 
 		LibFreeRDP.sendCursorEvent(session.getInstance(), x, y,
-		                           toggleMouseButtons ? Mouse.getRightButtonEvent(this, down)
-		                                              : Mouse.getLeftButtonEvent(this, down));
-
-		if (!down)
-			toggleMouseButtons = false;
+		                           Mouse.getLeftButtonEvent(this, down));
 	}
 
-	public void onSessionViewRightTouch(int x, int y, boolean down)
+	@Override public void onSessionViewMiddleTouch(int x, int y, boolean down)
 	{
-		if (!down)
-			toggleMouseButtons = !toggleMouseButtons;
+		LibFreeRDP.sendCursorEvent(session.getInstance(), x, y, Mouse.getMiddleButtonEvent(down));
+	}
+
+	@Override public void onSessionViewRightTouch(int x, int y, boolean down)
+	{
+		LibFreeRDP.sendCursorEvent(session.getInstance(), x, y,
+		                           Mouse.getRightButtonEvent(this, down));
 	}
 
 	@Override public void onSessionViewMove(int x, int y)
@@ -1197,9 +1195,19 @@ public class SessionActivity extends AppCompatActivity
 		sendDelayedMoveEvent(x, y);
 	}
 
+	@Override public void onSessionViewMouseMove(int x, int y)
+	{
+		LibFreeRDP.sendCursorEvent(session.getInstance(), x, y, Mouse.getMoveEvent());
+	}
+
 	@Override public void onSessionViewScroll(boolean down)
 	{
 		LibFreeRDP.sendCursorEvent(session.getInstance(), 0, 0, Mouse.getScrollEvent(this, down));
+	}
+
+	@Override public void onSessionViewHScroll(boolean right)
+	{
+		LibFreeRDP.sendCursorEvent(session.getInstance(), 0, 0, Mouse.getHScrollEvent(this, right));
 	}
 
 	// ****************************************************************************
