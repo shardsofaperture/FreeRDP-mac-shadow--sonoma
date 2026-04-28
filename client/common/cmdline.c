@@ -5652,7 +5652,8 @@ static void warn_credential_args(const COMMAND_LINE_ARGUMENT_A* args)
 		WLog_WARN(TAG, "Passing credentials or secrets via command line might expose these in the "
 		               "process list");
 		WLog_WARN(TAG, "Consider using one of the following (more secure) alternatives:");
-		WLog_WARN(TAG, "  - /args-from: pipe in arguments from stdin, file or file descriptor");
+		WLog_WARN(TAG, "  - /args-from: pipe in arguments from stdin, file, file descriptor or "
+		               "environment variable");
 		WLog_WARN(TAG, "  - /from-stdin pass the credential via stdin");
 		WLog_WARN(TAG, "  - set environment variable FREERDP_ASKPASS to have a gui tool query for "
 		               "credentials");
@@ -6036,11 +6037,21 @@ int freerdp_client_settings_parse_command_line_arguments_ex(
 			const char* name = strchr(file, ':') + 1;
 			success = args_from_env(name, &aargc, &aargv, oargv[1], oargv[0]);
 		}
-		else if (strcmp(file, "stdin") != 0)
+		else if (strncmp(file, "file:", 5) != 0)
 		{
+			file = strchr(file, ':') + 1;
 			fp = winpr_fopen(file, "r");
 			success = args_from_fp(fp, &aargc, &aargv, file, oargv[0]);
 		}
+#if !defined(WITHOUT_FREERDP_3x_DEPRECATED)
+		else if (strcmp(file, "stdin") != 0)
+		{
+			fp = winpr_fopen(file, "r");
+			WLog_WARN(TAG, "/args-from:%s is deprecated, use /args-from:file:%s instead", file,
+			          file);
+			success = args_from_fp(fp, &aargc, &aargv, file, oargv[0]);
+		}
+#endif
 		else
 			success = args_from_fp(fp, &aargc, &aargv, file, oargv[0]);
 
