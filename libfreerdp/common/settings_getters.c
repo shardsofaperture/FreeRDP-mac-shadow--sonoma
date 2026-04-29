@@ -110,6 +110,9 @@ BOOL freerdp_settings_get_bool(WINPR_ATTR_UNUSED const rdpSettings* settings,
 		case FreeRDP_AutoReconnectionEnabled:
 			return settings->AutoReconnectionEnabled;
 
+		case FreeRDP_SessionHasBeenReconnected:
+			return settings->SessionHasBeenReconnected;
+
 		case FreeRDP_AutoReconnectionPacketSupported:
 			return settings->AutoReconnectionPacketSupported;
 
@@ -736,6 +739,10 @@ BOOL freerdp_settings_set_bool(WINPR_ATTR_UNUSED rdpSettings* settings,
 
 		case FreeRDP_AutoReconnectionEnabled:
 			settings->AutoReconnectionEnabled = cnv.c;
+			break;
+
+		case FreeRDP_SessionHasBeenReconnected:
+			settings->SessionHasBeenReconnected = cnv.c;
 			break;
 
 		case FreeRDP_AutoReconnectionPacketSupported:
