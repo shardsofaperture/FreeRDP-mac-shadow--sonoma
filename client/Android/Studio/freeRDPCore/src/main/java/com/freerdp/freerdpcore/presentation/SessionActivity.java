@@ -57,7 +57,6 @@ import android.view.inputmethod.InputMethodManager;
 import android.view.inputmethod.InputMethodSubtype;
 import android.widget.EditText;
 import android.widget.Toast;
-import android.widget.ZoomControls;
 
 import com.freerdp.freerdpcore.R;
 import com.freerdp.freerdpcore.application.GlobalApp;
@@ -75,14 +74,12 @@ import java.util.List;
 
 public class SessionActivity extends AppCompatActivity
     implements LibFreeRDP.UIEventListener, KeyboardView.OnKeyboardActionListener,
-               ScrollView2D.ScrollView2DListener, KeyboardMapper.KeyProcessingListener,
-               SessionView.SessionViewListener, TouchPointerView.TouchPointerListener,
+               KeyboardMapper.KeyProcessingListener, SessionView.SessionViewListener,
+               TouchPointerView.TouchPointerListener,
                ClipboardManagerProxy.OnClipboardChangedListener
 {
 	public static final String PARAM_CONNECTION_REFERENCE = "conRef";
 	public static final String PARAM_INSTANCE = "instance";
-	private static final float ZOOMING_STEP = 0.5f;
-	private static final int ZOOMCONTROLS_AUTOHIDE_TIMEOUT = 4000;
 	// timeout between subsequent scrolling requests when the touch-pointer is
 	// at the edge of the session view
 	private static final int SCROLLING_TIMEOUT = 50;
@@ -98,7 +95,6 @@ public class SessionActivity extends AppCompatActivity
 	private ProgressDialog progressDialog;
 	private KeyboardView keyboardView;
 	private KeyboardView modifiersKeyboardView;
-	private ZoomControls zoomControls;
 	private KeyboardMapper keyboardMapper;
 
 	private Keyboard specialkeysKeyboard;
@@ -310,28 +306,8 @@ public class SessionActivity extends AppCompatActivity
 		modifiersKeyboardView.setOnKeyboardActionListener(this);
 
 		scrollView = findViewById(R.id.sessionScrollView);
-		scrollView.setScrollViewListener(this);
 		uiHandler = new UIHandler();
 		libFreeRDPBroadcastReceiver = new LibFreeRDPBroadcastReceiver();
-
-		zoomControls = findViewById(R.id.zoomControls);
-		zoomControls.hide();
-		zoomControls.setOnZoomInClickListener(new View.OnClickListener() {
-			@Override public void onClick(View v)
-			{
-				resetZoomControlsAutoHideTimeout();
-				zoomControls.setIsZoomInEnabled(sessionView.zoomIn(ZOOMING_STEP));
-				zoomControls.setIsZoomOutEnabled(true);
-			}
-		});
-		zoomControls.setOnZoomOutClickListener(new View.OnClickListener() {
-			@Override public void onClick(View v)
-			{
-				resetZoomControlsAutoHideTimeout();
-				zoomControls.setIsZoomOutEnabled(sessionView.zoomOut(ZOOMING_STEP));
-				zoomControls.setIsZoomInEnabled(true);
-			}
-		});
 
 		createDialogs();
 
@@ -599,12 +575,6 @@ public class SessionActivity extends AppCompatActivity
 	// displays either the system or the extended keyboard or non of them
 	private void showKeyboard(final boolean showSystemKeyboard, final boolean showExtendedKeyboard)
 	{
-		// no matter what we are doing ... hide the zoom controls
-		// onScrollChange notification showing the control again ...
-		// i think check for "preference_key_ui_hide_zoom_controls" preference should be there
-		uiHandler.removeMessages(UIHandler.SHOW_ZOOMCONTROLS);
-		uiHandler.sendEmptyMessage(UIHandler.HIDE_ZOOMCONTROLS);
-
 		InputMethodManager mgr = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
 
 		if (showSystemKeyboard)
@@ -1131,30 +1101,6 @@ public class SessionActivity extends AppCompatActivity
 	}
 
 	// ****************************************************************************
-	// ScrollView2DListener implementation
-	private void resetZoomControlsAutoHideTimeout()
-	{
-		uiHandler.removeMessages(UIHandler.HIDE_ZOOMCONTROLS);
-		uiHandler.sendEmptyMessageDelayed(UIHandler.HIDE_ZOOMCONTROLS,
-		                                  ZOOMCONTROLS_AUTOHIDE_TIMEOUT);
-	}
-
-	@Override public void onScrollChanged(ScrollView2D scrollView, int x, int y, int oldx, int oldy)
-	{
-		zoomControls.setIsZoomInEnabled(!sessionView.isAtMaxZoom());
-		zoomControls.setIsZoomOutEnabled(!sessionView.isAtMinZoom());
-
-		if (sysKeyboardVisible || extKeyboardVisible)
-			return;
-
-		if (!ApplicationSettingsActivity.getHideZoomControls(this))
-		{
-			uiHandler.sendEmptyMessage(UIHandler.SHOW_ZOOMCONTROLS);
-			resetZoomControlsAutoHideTimeout();
-		}
-	}
-
-	// ****************************************************************************
 	// SessionView.SessionViewListener
 	@Override public void onSessionViewBeginTouch()
 	{
@@ -1311,12 +1257,10 @@ public class SessionActivity extends AppCompatActivity
 
 		public static final int REFRESH_SESSIONVIEW = 1;
 		public static final int DISPLAY_TOAST = 2;
-		public static final int HIDE_ZOOMCONTROLS = 3;
 		public static final int SEND_MOVE_EVENT = 4;
 		public static final int SHOW_DIALOG = 5;
 		public static final int GRAPHICS_CHANGED = 6;
 		public static final int SCROLLING_REQUESTED = 7;
-		public static final int SHOW_ZOOMCONTROLS = 8;
 
 		UIHandler()
 		{
@@ -1343,19 +1287,6 @@ public class SessionActivity extends AppCompatActivity
 					Toast errorToast = Toast.makeText(getApplicationContext(), msg.obj.toString(),
 					                                  Toast.LENGTH_LONG);
 					errorToast.show();
-					break;
-				}
-				case HIDE_ZOOMCONTROLS:
-				{
-					if (zoomControls.isShown())
-						zoomControls.hide();
-					break;
-				}
-				case SHOW_ZOOMCONTROLS:
-				{
-					if (!zoomControls.isShown())
-						zoomControls.show();
-
 					break;
 				}
 				case SEND_MOVE_EVENT:
