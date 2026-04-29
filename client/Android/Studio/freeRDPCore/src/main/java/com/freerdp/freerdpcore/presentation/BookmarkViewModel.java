@@ -90,10 +90,10 @@ public class BookmarkViewModel extends ViewModel
 			{
 				String refStr = bundle.getString(BookmarkActivity.PARAM_CONNECTION_REFERENCE);
 
-				if (ConnectionReference.isManualBookmarkReference(refStr))
+				if (ConnectionReference.isBookmarkReference(refStr))
 				{
 					bookmark = GlobalApp.getManualBookmarkGateway().findById(
-					    ConnectionReference.getManualBookmarkId(refStr));
+					    ConnectionReference.getBookmarkId(refStr));
 					isNew = false;
 				}
 				else if (ConnectionReference.isHostnameReference(refStr))

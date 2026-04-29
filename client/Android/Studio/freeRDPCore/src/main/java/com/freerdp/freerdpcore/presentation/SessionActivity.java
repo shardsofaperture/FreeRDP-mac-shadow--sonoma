@@ -470,11 +470,8 @@ public class SessionActivity extends AppCompatActivity
 			}
 			else if (ConnectionReference.isBookmarkReference(refStr))
 			{
-				if (ConnectionReference.isManualBookmarkReference(refStr))
-					bookmark = GlobalApp.getManualBookmarkGateway().findById(
-					    ConnectionReference.getManualBookmarkId(refStr));
-				else
-					assert false;
+				bookmark = GlobalApp.getManualBookmarkGateway().findById(
+				    ConnectionReference.getBookmarkId(refStr));
 			}
 
 			if (bookmark != null)

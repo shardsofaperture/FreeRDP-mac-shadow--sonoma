@@ -17,7 +17,7 @@ public class ConnectionReference
 	public static final String PATH_HOSTNAME = "HOST/";
 	public static final String PATH_FILE = "FILE/";
 
-	public static String getManualBookmarkReference(long bookmarkId)
+	public static String getBookmarkReference(long bookmarkId)
 	{
 		return (PATH_MANUAL_BOOKMARK_ID + bookmarkId);
 	}
@@ -37,11 +37,6 @@ public class ConnectionReference
 		return refStr.startsWith(PATH_MANUAL_BOOKMARK_ID);
 	}
 
-	public static boolean isManualBookmarkReference(String refStr)
-	{
-		return refStr.startsWith(PATH_MANUAL_BOOKMARK_ID);
-	}
-
 	public static boolean isHostnameReference(String refStr)
 	{
 		return refStr.startsWith(PATH_HOSTNAME);
@@ -52,7 +47,7 @@ public class ConnectionReference
 		return refStr.startsWith(PATH_FILE);
 	}
 
-	public static long getManualBookmarkId(String refStr)
+	public static long getBookmarkId(String refStr)
 	{
 		return Integer.parseInt(refStr.substring(PATH_MANUAL_BOOKMARK_ID.length()));
 	}

@@ -98,11 +98,6 @@ public class BookmarkBase implements Parcelable, Cloneable
 		directConnect = false;
 	}
 
-	@SuppressWarnings("unchecked") public <T extends BookmarkBase> T get()
-	{
-		return (T)this;
-	}
-
 	public int getType()
 	{
 		return type;

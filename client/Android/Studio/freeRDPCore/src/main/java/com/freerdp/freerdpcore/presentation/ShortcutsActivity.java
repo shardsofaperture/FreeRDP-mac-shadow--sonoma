@@ -55,7 +55,7 @@ public class ShortcutsActivity extends AppCompatActivity
 		adapter.setCallbacks(new BookmarkListAdapter.Callbacks() {
 			@Override public void onItemClick(String refStr)
 			{
-				if (!ConnectionReference.isManualBookmarkReference(refStr))
+				if (!ConnectionReference.isBookmarkReference(refStr))
 					return;
 				BookmarkBase bookmark = findBookmark(adapter, refStr);
 				String label = bookmark != null ? bookmark.getLabel() : refStr;
@@ -85,7 +85,7 @@ public class ShortcutsActivity extends AppCompatActivity
 	{
 		for (BookmarkBase b : adapter.getItems())
 		{
-			if (ConnectionReference.getManualBookmarkReference(b.getId()).equals(refStr))
+			if (ConnectionReference.getBookmarkReference(b.getId()).equals(refStr))
 				return b;
 		}
 		return null;

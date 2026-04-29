@@ -73,7 +73,7 @@ public class HomeActivity extends AppCompatActivity
 		bookmarkListAdapter.setCallbacks(new BookmarkListAdapter.Callbacks() {
 			@Override public void onItemClick(String refStr)
 			{
-				if (ConnectionReference.isManualBookmarkReference(refStr) ||
+				if (ConnectionReference.isBookmarkReference(refStr) ||
 				    ConnectionReference.isHostnameReference(refStr))
 				{
 					Bundle bundle = new Bundle();

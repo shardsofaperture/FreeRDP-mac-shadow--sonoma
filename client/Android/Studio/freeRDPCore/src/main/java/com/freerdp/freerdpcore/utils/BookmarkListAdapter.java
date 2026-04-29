@@ -77,7 +77,7 @@ public class BookmarkListAdapter extends RecyclerView.Adapter<BookmarkListAdapte
 			holder.binding.bookmarkIcon1.setVisibility(View.VISIBLE);
 			holder.binding.bookmarkText2.setVisibility(View.VISIBLE);
 			holder.binding.bookmarkText2.setText(bookmark.getHostname());
-			refStr = ConnectionReference.getManualBookmarkReference(bookmark.getId());
+			refStr = ConnectionReference.getBookmarkReference(bookmark.getId());
 
 			if (actionsEnabled)
 			{
