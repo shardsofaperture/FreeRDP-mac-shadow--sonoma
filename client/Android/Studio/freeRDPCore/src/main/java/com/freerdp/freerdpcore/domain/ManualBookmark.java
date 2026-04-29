@@ -32,6 +32,7 @@ public class ManualBookmark extends BookmarkBase
 	private int port;
 	private boolean enableGatewaySettings;
 	private GatewaySettings gatewaySettings;
+	private boolean directConnect = false;
 
 	public ManualBookmark(Parcel parcel)
 	{
@@ -57,6 +58,16 @@ public class ManualBookmark extends BookmarkBase
 		port = 3389;
 		enableGatewaySettings = false;
 		gatewaySettings = new GatewaySettings();
+	}
+
+	public boolean isDirectConnect()
+	{
+		return directConnect;
+	}
+
+	public void setDirectConnect(boolean directConnect)
+	{
+		this.directConnect = directConnect;
 	}
 
 	public String getHostname()

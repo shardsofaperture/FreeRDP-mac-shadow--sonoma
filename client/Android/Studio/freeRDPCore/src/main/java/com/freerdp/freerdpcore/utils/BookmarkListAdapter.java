@@ -20,7 +20,6 @@ import com.freerdp.freerdpcore.databinding.BookmarkListItemBinding;
 import com.freerdp.freerdpcore.domain.BookmarkBase;
 import com.freerdp.freerdpcore.domain.ConnectionReference;
 import com.freerdp.freerdpcore.domain.ManualBookmark;
-import com.freerdp.freerdpcore.domain.QuickConnectBookmark;
 import com.freerdp.freerdpcore.presentation.BookmarkActivity;
 
 import java.util.ArrayList;
@@ -104,7 +103,7 @@ public class BookmarkListAdapter extends RecyclerView.Adapter<BookmarkListAdapte
 		else if (bookmark.getType() == BookmarkBase.TYPE_QUICKCONNECT)
 		{
 			holder.binding.bookmarkText2.setVisibility(View.GONE);
-			QuickConnectBookmark qcBm = (QuickConnectBookmark)bookmark;
+			ManualBookmark qcBm = (ManualBookmark)bookmark;
 			refStr = ConnectionReference.getHostnameReference(qcBm.getHostname());
 			holder.itemView.setOnLongClickListener(null);
 

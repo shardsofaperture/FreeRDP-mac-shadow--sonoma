@@ -16,7 +16,6 @@ import com.freerdp.freerdpcore.R;
 import com.freerdp.freerdpcore.application.GlobalApp;
 import com.freerdp.freerdpcore.domain.BookmarkBase;
 import com.freerdp.freerdpcore.domain.ManualBookmark;
-import com.freerdp.freerdpcore.domain.QuickConnectBookmark;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -53,7 +52,7 @@ public class HomeViewModel extends AndroidViewModel
 			List<BookmarkBase> result = new ArrayList<>();
 			if (!currentQuery.isEmpty())
 			{
-				QuickConnectBookmark qcBm = new QuickConnectBookmark();
+				ManualBookmark qcBm = new ManualBookmark();
 				qcBm.setLabel(currentQuery);
 				qcBm.setHostname(currentQuery);
 				qcBm.setDirectConnect(true);
