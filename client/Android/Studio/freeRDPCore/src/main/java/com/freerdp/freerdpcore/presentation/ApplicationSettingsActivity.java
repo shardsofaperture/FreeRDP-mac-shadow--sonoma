@@ -252,7 +252,7 @@ public class ApplicationSettingsActivity
 	{
 		SharedPreferences preferences = get(context);
 		return preferences.getBoolean(
-		    context.getString(R.string.preference_key_ui_use_back_as_altf4), true);
+		    context.getString(R.string.preference_key_ui_use_back_as_altf4), false);
 	}
 
 	public static boolean getAcceptAllCertificates(Context context)
@@ -266,7 +266,7 @@ public class ApplicationSettingsActivity
 	{
 		SharedPreferences preferences = get(context);
 		return preferences.getBoolean(
-		    context.getString(R.string.preference_key_ui_hide_zoom_controls), false);
+		    context.getString(R.string.preference_key_ui_hide_zoom_controls), true);
 	}
 
 	public static boolean getSwapMouseButtons(Context context)
@@ -280,14 +280,14 @@ public class ApplicationSettingsActivity
 	{
 		SharedPreferences preferences = get(context);
 		return preferences.getBoolean(
-		    context.getString(R.string.preference_key_ui_invert_scrolling), true);
+		    context.getString(R.string.preference_key_ui_invert_scrolling), false);
 	}
 
 	public static boolean getAskOnExit(Context context)
 	{
 		SharedPreferences preferences = get(context);
 		return preferences.getBoolean(context.getString(R.string.preference_key_ui_ask_on_exit),
-		                              false);
+		                              true);
 	}
 
 	public static boolean getAutoScrollTouchPointer(Context context)
