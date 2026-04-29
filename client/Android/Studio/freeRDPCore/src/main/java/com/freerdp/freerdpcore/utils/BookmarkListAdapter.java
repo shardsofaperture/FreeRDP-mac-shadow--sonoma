@@ -20,7 +20,6 @@ import com.freerdp.freerdpcore.databinding.BookmarkListItemBinding;
 import com.freerdp.freerdpcore.domain.BookmarkBase;
 import com.freerdp.freerdpcore.domain.ConnectionReference;
 import com.freerdp.freerdpcore.domain.ManualBookmark;
-import com.freerdp.freerdpcore.domain.PlaceholderBookmark;
 import com.freerdp.freerdpcore.domain.QuickConnectBookmark;
 import com.freerdp.freerdpcore.presentation.BookmarkActivity;
 
@@ -135,16 +134,6 @@ public class BookmarkListAdapter extends RecyclerView.Adapter<BookmarkListAdapte
 					v.getContext().startActivity(intent);
 				});
 			}
-		}
-		else if (bookmark.getType() == BookmarkBase.TYPE_PLACEHOLDER)
-		{
-			holder.binding.bookmarkIcon1.setVisibility(View.GONE);
-			holder.binding.bookmarkText2.setVisibility(View.GONE);
-			refStr = ConnectionReference.getPlaceholderReference(
-			    bookmark.<PlaceholderBookmark>get().getName());
-			holder.binding.bookmarkIcon2.setVisibility(View.GONE);
-			holder.binding.bookmarkIcon2.setOnClickListener(null);
-			holder.itemView.setOnLongClickListener(null);
 		}
 		else
 		{

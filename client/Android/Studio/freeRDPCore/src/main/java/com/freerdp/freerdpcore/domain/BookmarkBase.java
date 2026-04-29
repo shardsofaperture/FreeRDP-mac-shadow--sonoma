@@ -23,8 +23,7 @@ public class BookmarkBase implements Parcelable, Cloneable
 	public static final int TYPE_INVALID = -1;
 	public static final int TYPE_MANUAL = 1;
 	public static final int TYPE_QUICKCONNECT = 2;
-	public static final int TYPE_PLACEHOLDER = 3;
-	public static final int TYPE_CUSTOM_BASE = 1000;
+public static final int TYPE_CUSTOM_BASE = 1000;
 	public static final Parcelable.Creator<BookmarkBase> CREATOR =
 	    new Parcelable.Creator<BookmarkBase>() {
 		    public BookmarkBase createFromParcel(Parcel in)
