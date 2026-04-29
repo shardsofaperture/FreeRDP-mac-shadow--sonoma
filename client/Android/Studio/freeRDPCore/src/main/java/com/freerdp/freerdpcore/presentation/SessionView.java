@@ -34,7 +34,6 @@ import android.view.inputmethod.InputConnection;
 import androidx.annotation.NonNull;
 
 import com.freerdp.freerdpcore.application.SessionState;
-import com.freerdp.freerdpcore.services.LibFreeRDP;
 import com.freerdp.freerdpcore.utils.DoubleGestureDetector;
 import com.freerdp.freerdpcore.utils.GestureDetector;
 import com.freerdp.freerdpcore.utils.Mouse;
@@ -110,8 +109,9 @@ public class SessionView extends View
 			float y = event.getY();
 			// Perform actions based on the hover position (x, y)
 			MotionEvent mappedEvent = mapTouchEvent(event);
-			LibFreeRDP.sendCursorEvent(currentSession.getInstance(), (int)mappedEvent.getX(),
-			                           (int)mappedEvent.getY(), Mouse.getMoveEvent());
+			sessionViewListener.onSessionViewMouseMove((int)mappedEvent.getX(),
+			                                           (int)mappedEvent.getY());
+			mappedEvent.recycle();
 		}
 		// Return true to indicate that you've handled the event
 		return true;

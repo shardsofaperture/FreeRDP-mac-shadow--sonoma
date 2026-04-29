@@ -24,7 +24,6 @@ import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.Config;
-import android.graphics.Point;
 import android.graphics.Rect;
 import android.graphics.drawable.BitmapDrawable;
 import android.inputmethodservice.Keyboard;
@@ -66,28 +65,17 @@ import com.freerdp.freerdpcore.domain.ConnectionReference;
 import com.freerdp.freerdpcore.services.LibFreeRDP;
 import com.freerdp.freerdpcore.utils.ClipboardManagerProxy;
 import com.freerdp.freerdpcore.utils.KeyboardMapper;
-import com.freerdp.freerdpcore.utils.Mouse;
 
 import java.util.Collection;
 import java.util.Iterator;
-import java.util.List;
 
 public class SessionActivity extends AppCompatActivity
-    implements LibFreeRDP.UIEventListener, KeyboardView.OnKeyboardActionListener,
-               KeyboardMapper.KeyProcessingListener, SessionView.SessionViewListener,
-               TouchPointerView.TouchPointerListener,
+    implements LibFreeRDP.UIEventListener, SessionInputManager.ActivityCallbacks,
                ClipboardManagerProxy.OnClipboardChangedListener
 {
 	public static final String PARAM_CONNECTION_REFERENCE = "conRef";
 	public static final String PARAM_INSTANCE = "instance";
-	// timeout between subsequent scrolling requests when the touch-pointer is
-	// at the edge of the session view
-	private static final int SCROLLING_TIMEOUT = 50;
-	private static final int SCROLLING_DISTANCE = 20;
 	private static final String TAG = "FreeRDP.SessionActivity";
-	// variables for delayed move event sending
-	private static final int MAX_DISCARDED_MOVE_EVENTS = 3;
-	private static final int SEND_MOVE_EVENT_TIMEOUT = 150;
 	private Bitmap bitmap;
 	private SessionState session;
 	private SessionView sessionView;
@@ -120,8 +108,8 @@ public class SessionActivity extends AppCompatActivity
 	// keyboard visibility flags
 	private boolean sysKeyboardVisible = false;
 	private boolean extKeyboardVisible = false;
-	private int discardedMoveEvents = 0;
 	private ClipboardManagerProxy mClipboardManager;
+	private SessionInputManager inputManager;
 	private boolean callbackDialogResult;
 
 	private void createDialogs()
@@ -279,17 +267,12 @@ public class SessionActivity extends AppCompatActivity
 		    });
 
 		sessionView = findViewById(R.id.sessionView);
-		sessionView.setScaleGestureDetector(
-		    new ScaleGestureDetector(this, new PinchZoomListener()));
-		sessionView.setSessionViewListener(this);
 		sessionView.requestFocus();
 
 		touchPointerView = findViewById(R.id.touchPointerView);
-		touchPointerView.setTouchPointerListener(this);
 
 		keyboardMapper = new KeyboardMapper();
 		keyboardMapper.init(this);
-		keyboardMapper.reset(this);
 
 		modifiersKeyboard = new Keyboard(getApplicationContext(), R.xml.modifiers_keyboard);
 		specialkeysKeyboard = new Keyboard(getApplicationContext(), R.xml.specialkeys_keyboard);
@@ -299,17 +282,27 @@ public class SessionActivity extends AppCompatActivity
 		// hide keyboard below the sessionView
 		keyboardView = findViewById(R.id.extended_keyboard);
 		keyboardView.setKeyboard(specialkeysKeyboard);
-		keyboardView.setOnKeyboardActionListener(this);
 
 		modifiersKeyboardView = findViewById(R.id.extended_keyboard_header);
 		modifiersKeyboardView.setKeyboard(modifiersKeyboard);
-		modifiersKeyboardView.setOnKeyboardActionListener(this);
 
 		scrollView = findViewById(R.id.sessionScrollView);
 		uiHandler = new UIHandler();
 		libFreeRDPBroadcastReceiver = new LibFreeRDPBroadcastReceiver();
 
 		createDialogs();
+
+		// Wire up the input manager (instance is attached later in bindSession()).
+		inputManager = new SessionInputManager(
+		    this, keyboardMapper, scrollView, sessionView, touchPointerView, keyboardView,
+		    modifiersKeyboardView, modifiersKeyboard, specialkeysKeyboard, numpadKeyboard,
+		    cursorKeyboard, this);
+		sessionView.setSessionViewListener(inputManager);
+		touchPointerView.setTouchPointerListener(inputManager);
+		keyboardView.setOnKeyboardActionListener(inputManager);
+		modifiersKeyboardView.setOnKeyboardActionListener(inputManager);
+		sessionView.setScaleGestureDetector(
+		    new ScaleGestureDetector(this, inputManager.getPinchZoomListener()));
 
 		// register freerdp events broadcast receiver
 		IntentFilter filter = new IntentFilter();
@@ -413,6 +406,9 @@ public class SessionActivity extends AppCompatActivity
 		// apply loaded keyboards
 		keyboardView.setKeyboard(specialkeysKeyboard);
 		modifiersKeyboardView.setKeyboard(modifiersKeyboard);
+
+		inputManager.updateKeyboards(modifiersKeyboard, specialkeysKeyboard, numpadKeyboard,
+		                             cursorKeyboard);
 
 		hideSystemBars();
 	}
@@ -553,7 +549,12 @@ public class SessionActivity extends AppCompatActivity
 		session.setUIEventListener(this);
 		sessionView.onSurfaceChange(session);
 		scrollView.requestLayout();
-		keyboardMapper.reset(this);
+
+		Bitmap surface =
+		    session.getSurface() != null ? session.getSurface().getBitmap() : null;
+		inputManager.attachSession(session.getInstance(), surface);
+		inputManager.setScreenSize(screen_width, screen_height);
+		keyboardMapper.reset(inputManager);
 		hideSystemBars();
 	}
 
@@ -619,63 +620,6 @@ public class SessionActivity extends AppCompatActivity
 		finish();
 	}
 
-	// update the state of our modifier keys
-	private void updateModifierKeyStates()
-	{
-		// check if any key is in the keycodes list
-
-		List<Keyboard.Key> keys = modifiersKeyboard.getKeys();
-		for (Keyboard.Key curKey : keys)
-		{
-			// if the key is a sticky key - just set it to off
-			if (curKey.sticky)
-			{
-				switch (keyboardMapper.getModifierState(curKey.codes[0]))
-				{
-					case KeyboardMapper.KEYSTATE_ON:
-						curKey.on = true;
-						curKey.pressed = false;
-						break;
-
-					case KeyboardMapper.KEYSTATE_OFF:
-						curKey.on = false;
-						curKey.pressed = false;
-						break;
-
-					case KeyboardMapper.KEYSTATE_LOCKED:
-						curKey.on = true;
-						curKey.pressed = true;
-						break;
-				}
-			}
-		}
-
-		// refresh image
-		modifiersKeyboardView.invalidateAllKeys();
-	}
-
-	private void sendDelayedMoveEvent(int x, int y)
-	{
-		if (uiHandler.hasMessages(UIHandler.SEND_MOVE_EVENT))
-		{
-			uiHandler.removeMessages(UIHandler.SEND_MOVE_EVENT);
-			discardedMoveEvents++;
-		}
-		else
-			discardedMoveEvents = 0;
-
-		if (discardedMoveEvents > MAX_DISCARDED_MOVE_EVENTS)
-			LibFreeRDP.sendCursorEvent(session.getInstance(), x, y, Mouse.getMoveEvent());
-		else
-			uiHandler.sendMessageDelayed(Message.obtain(null, UIHandler.SEND_MOVE_EVENT, x, y),
-			                             SEND_MOVE_EVENT_TIMEOUT);
-	}
-
-	private void cancelDelayedMoveEvent()
-	{
-		uiHandler.removeMessages(UIHandler.SEND_MOVE_EVENT);
-	}
-
 	@Override public boolean onCreateOptionsMenu(Menu menu)
 	{
 		getMenuInflater().inflate(R.menu.session_menu, menu);
@@ -690,18 +634,7 @@ public class SessionActivity extends AppCompatActivity
 
 		if (itemId == R.id.session_touch_pointer)
 		{
-			// toggle touch pointer
-			if (touchPointerView.getVisibility() == View.VISIBLE)
-			{
-				touchPointerView.setVisibility(View.INVISIBLE);
-				sessionView.setTouchPointerPadding(0, 0);
-			}
-			else
-			{
-				touchPointerView.setVisibility(View.VISIBLE);
-				sessionView.setTouchPointerPadding(touchPointerView.getPointerWidth(),
-				                                   touchPointerView.getPointerHeight());
-			}
+			inputManager.toggleTouchPointer();
 		}
 		else if (itemId == R.id.session_sys_keyboard)
 		{
@@ -728,9 +661,8 @@ public class SessionActivity extends AppCompatActivity
 			showKeyboard(false, false);
 			return;
 		}
-		if (ApplicationSettingsActivity.getUseBackAsAltf4(this))
+		if (inputManager.handleBackAsAltF4())
 		{
-			keyboardMapper.sendAltF4();
 			return;
 		}
 		if (System.currentTimeMillis() - backPressedTime < 2000)
@@ -746,11 +678,8 @@ public class SessionActivity extends AppCompatActivity
 
 	@Override public boolean onKeyLongPress(int keyCode, KeyEvent event)
 	{
-		if (keyCode == KeyEvent.KEYCODE_BACK)
-		{
-			LibFreeRDP.disconnect(session.getInstance());
+		if (inputManager.onAndroidKeyLongPress(keyCode))
 			return true;
-		}
 		return super.onKeyLongPress(keyCode, event);
 	}
 
@@ -764,96 +693,25 @@ public class SessionActivity extends AppCompatActivity
 	{
 		if (keycode == KeyEvent.KEYCODE_BACK)
 			return super.onKeyDown(keycode, event);
-		return keyboardMapper.processAndroidKeyEvent(event);
+		return inputManager.onAndroidKeyEvent(event);
 	}
 
 	@Override public boolean onKeyUp(int keycode, KeyEvent event)
 	{
 		if (keycode == KeyEvent.KEYCODE_BACK)
 			return super.onKeyUp(keycode, event);
-		return keyboardMapper.processAndroidKeyEvent(event);
+		return inputManager.onAndroidKeyEvent(event);
 	}
 
 	// onKeyMultiple is called for input of some special characters like umlauts
 	// and some symbol characters
 	@Override public boolean onKeyMultiple(int keyCode, int repeatCount, KeyEvent event)
 	{
-		return keyboardMapper.processAndroidKeyEvent(event);
+		return inputManager.onAndroidKeyEvent(event);
 	}
 
 	// ****************************************************************************
-	// KeyboardView.KeyboardActionEventListener
-	@Override public void onKey(int primaryCode, int[] keyCodes)
-	{
-		keyboardMapper.processCustomKeyEvent(primaryCode);
-	}
-
-	@Override public void onText(CharSequence text)
-	{
-	}
-
-	@Override public void swipeRight()
-	{
-	}
-
-	@Override public void swipeLeft()
-	{
-	}
-
-	@Override public void swipeDown()
-	{
-	}
-
-	@Override public void swipeUp()
-	{
-	}
-
-	@Override public void onPress(int primaryCode)
-	{
-	}
-
-	@Override public void onRelease(int primaryCode)
-	{
-	}
-
-	// ****************************************************************************
-	// KeyboardMapper.KeyProcessingListener implementation
-	@Override public void processVirtualKey(int virtualKeyCode, boolean down)
-	{
-		LibFreeRDP.sendKeyEvent(session.getInstance(), virtualKeyCode, down);
-	}
-
-	@Override public void processUnicodeKey(int unicodeKey)
-	{
-		LibFreeRDP.sendUnicodeKeyEvent(session.getInstance(), unicodeKey, true);
-		LibFreeRDP.sendUnicodeKeyEvent(session.getInstance(), unicodeKey, false);
-	}
-
-	@Override public void switchKeyboard(int keyboardType)
-	{
-		switch (keyboardType)
-		{
-			case KeyboardMapper.KEYBOARD_TYPE_FUNCTIONKEYS:
-				keyboardView.setKeyboard(specialkeysKeyboard);
-				break;
-
-			case KeyboardMapper.KEYBOARD_TYPE_NUMPAD:
-				keyboardView.setKeyboard(numpadKeyboard);
-				break;
-
-			case KeyboardMapper.KEYBOARD_TYPE_CURSOR:
-				keyboardView.setKeyboard(cursorKeyboard);
-				break;
-
-			default:
-				break;
-		}
-	}
-
-	@Override public void modifiersChanged()
-	{
-		updateModifierKeyStates();
-	}
+	// KeyboardMapper.KeyProcessingListener — delegated to SessionInputManager
 
 	// ****************************************************************************
 	// LibFreeRDP UI event listener implementation
@@ -867,12 +725,14 @@ public class SessionActivity extends AppCompatActivity
 
 		session.setSurface(new BitmapDrawable(getResources(), bitmap));
 
+		if (inputManager != null)
+			inputManager.setBitmap(bitmap);
+
 		if (session.getBookmark() == null)
 		{
 			// Return immediately if we launch from URI
 			return;
 		}
-
 		// check this settings and initial settings - if they are not equal the
 		// server doesn't support our settings
 		// FIXME: the additional check (settings.getWidth() != width + 1) is for
@@ -908,6 +768,9 @@ public class SessionActivity extends AppCompatActivity
 		else
 			bitmap = Bitmap.createBitmap(width, height, Config.RGB_565);
 		session.setSurface(new BitmapDrawable(getResources(), bitmap));
+
+		if (inputManager != null)
+			inputManager.setBitmap(bitmap);
 
 		/*
 		 * since sessionView can only be modified from the UI thread any
@@ -1101,147 +964,25 @@ public class SessionActivity extends AppCompatActivity
 	}
 
 	// ****************************************************************************
-	// SessionView.SessionViewListener
-	@Override public void onSessionViewBeginTouch()
-	{
-		scrollView.setScrollEnabled(false);
-	}
-
-	@Override public void onSessionViewEndTouch()
-	{
-		scrollView.setScrollEnabled(true);
-	}
-
-	@Override public void onSessionViewLeftTouch(int x, int y, boolean down)
-	{
-		if (!down)
-			cancelDelayedMoveEvent();
-
-		LibFreeRDP.sendCursorEvent(session.getInstance(), x, y,
-		                           Mouse.getLeftButtonEvent(this, down));
-	}
-
-	@Override public void onSessionViewMiddleTouch(int x, int y, boolean down)
-	{
-		LibFreeRDP.sendCursorEvent(session.getInstance(), x, y, Mouse.getMiddleButtonEvent(down));
-	}
-
-	@Override public void onSessionViewRightTouch(int x, int y, boolean down)
-	{
-		LibFreeRDP.sendCursorEvent(session.getInstance(), x, y,
-		                           Mouse.getRightButtonEvent(this, down));
-	}
-
-	@Override public void onSessionViewMove(int x, int y)
-	{
-		sendDelayedMoveEvent(x, y);
-	}
-
-	@Override public void onSessionViewMouseMove(int x, int y)
-	{
-		LibFreeRDP.sendCursorEvent(session.getInstance(), x, y, Mouse.getMoveEvent());
-	}
-
-	@Override public void onSessionViewScroll(boolean down)
-	{
-		LibFreeRDP.sendCursorEvent(session.getInstance(), 0, 0, Mouse.getScrollEvent(this, down));
-	}
-
-	@Override public void onSessionViewHScroll(boolean right)
-	{
-		LibFreeRDP.sendCursorEvent(session.getInstance(), 0, 0, Mouse.getHScrollEvent(this, right));
-	}
-
-	// ****************************************************************************
-	// TouchPointerView.TouchPointerListener
-	@Override public void onTouchPointerClose()
-	{
-		touchPointerView.setVisibility(View.INVISIBLE);
-		sessionView.setTouchPointerPadding(0, 0);
-	}
-
-	private Point mapScreenCoordToSessionCoord(int x, int y)
-	{
-		int mappedX = (int)((float)(x + scrollView.getScrollX()) / sessionView.getZoom());
-		int mappedY = (int)((float)(y + scrollView.getScrollY()) / sessionView.getZoom());
-		if (bitmap != null)
-		{
-			if (mappedX > bitmap.getWidth())
-				mappedX = bitmap.getWidth();
-			if (mappedY > bitmap.getHeight())
-				mappedY = bitmap.getHeight();
-		}
-		return new Point(mappedX, mappedY);
-	}
-
-	@Override public void onTouchPointerLeftClick(int x, int y, boolean down)
-	{
-		Point p = mapScreenCoordToSessionCoord(x, y);
-		LibFreeRDP.sendCursorEvent(session.getInstance(), p.x, p.y,
-		                           Mouse.getLeftButtonEvent(this, down));
-	}
-
-	@Override public void onTouchPointerRightClick(int x, int y, boolean down)
-	{
-		Point p = mapScreenCoordToSessionCoord(x, y);
-		LibFreeRDP.sendCursorEvent(session.getInstance(), p.x, p.y,
-		                           Mouse.getRightButtonEvent(this, down));
-	}
-
-	@Override public void onTouchPointerMove(int x, int y)
-	{
-		Point p = mapScreenCoordToSessionCoord(x, y);
-		LibFreeRDP.sendCursorEvent(session.getInstance(), p.x, p.y, Mouse.getMoveEvent());
-
-		if (ApplicationSettingsActivity.getAutoScrollTouchPointer(this) &&
-		    !uiHandler.hasMessages(UIHandler.SCROLLING_REQUESTED))
-		{
-			Log.v(TAG, "Starting auto-scroll");
-			uiHandler.sendEmptyMessageDelayed(UIHandler.SCROLLING_REQUESTED, SCROLLING_TIMEOUT);
-		}
-	}
-
-	@Override public void onTouchPointerScroll(boolean down)
-	{
-		LibFreeRDP.sendCursorEvent(session.getInstance(), 0, 0, Mouse.getScrollEvent(this, down));
-	}
-
-	@Override public void onTouchPointerToggleKeyboard()
-	{
-		showKeyboard(!sysKeyboardVisible, false);
-	}
-
-	@Override public void onTouchPointerToggleExtKeyboard()
-	{
-		showKeyboard(false, !extKeyboardVisible);
-	}
-
-	@Override public void onTouchPointerResetScrollZoom()
-	{
-		sessionView.setZoom(1.0f);
-		scrollView.scrollTo(0, 0);
-	}
+	// SessionView.SessionViewListener and TouchPointerView.TouchPointerListener
+	// — delegated to SessionInputManager
 
 	@Override public boolean onGenericMotionEvent(MotionEvent e)
 	{
 		super.onGenericMotionEvent(e);
-		switch (e.getAction())
-		{
-			case MotionEvent.ACTION_SCROLL:
-				final float vScroll = e.getAxisValue(MotionEvent.AXIS_VSCROLL);
-				if (vScroll < 0)
-				{
-					LibFreeRDP.sendCursorEvent(session.getInstance(), 0, 0,
-					                           Mouse.getScrollEvent(this, false));
-				}
-				if (vScroll > 0)
-				{
-					LibFreeRDP.sendCursorEvent(session.getInstance(), 0, 0,
-					                           Mouse.getScrollEvent(this, true));
-				}
-				break;
-		}
-		return true;
+		return inputManager != null && inputManager.onGenericMotionEvent(e);
+	}
+
+	// ****************************************************************************
+	// SessionInputManager.ActivityCallbacks
+	@Override public void toggleSystemKeyboard()
+	{
+		showKeyboard(!sysKeyboardVisible, false);
+	}
+
+	@Override public void toggleExtendedKeyboard()
+	{
+		showKeyboard(false, !extKeyboardVisible);
 	}
 
 	// ****************************************************************************
@@ -1257,10 +998,8 @@ public class SessionActivity extends AppCompatActivity
 
 		public static final int REFRESH_SESSIONVIEW = 1;
 		public static final int DISPLAY_TOAST = 2;
-		public static final int SEND_MOVE_EVENT = 4;
 		public static final int SHOW_DIALOG = 5;
 		public static final int GRAPHICS_CHANGED = 6;
-		public static final int SCROLLING_REQUESTED = 7;
 
 		UIHandler()
 		{
@@ -1289,99 +1028,14 @@ public class SessionActivity extends AppCompatActivity
 					errorToast.show();
 					break;
 				}
-				case SEND_MOVE_EVENT:
-				{
-					LibFreeRDP.sendCursorEvent(session.getInstance(), msg.arg1, msg.arg2,
-					                           Mouse.getMoveEvent());
-					break;
-				}
 				case SHOW_DIALOG:
 				{
 					// create and show the dialog
 					((Dialog)msg.obj).show();
 					break;
 				}
-				case SCROLLING_REQUESTED:
-				{
-					int scrollX = 0;
-					int scrollY = 0;
-					float[] pointerPos = touchPointerView.getPointerPosition();
 
-					if (pointerPos[0] > (screen_width - touchPointerView.getPointerWidth()))
-						scrollX = SCROLLING_DISTANCE;
-					else if (pointerPos[0] < 0)
-						scrollX = -SCROLLING_DISTANCE;
-
-					if (pointerPos[1] > (screen_height - touchPointerView.getPointerHeight()))
-						scrollY = SCROLLING_DISTANCE;
-					else if (pointerPos[1] < 0)
-						scrollY = -SCROLLING_DISTANCE;
-
-					scrollView.scrollBy(scrollX, scrollY);
-
-					// see if we reached the min/max scroll positions
-					if (scrollView.getScrollX() == 0 ||
-					    scrollView.getScrollX() == (sessionView.getWidth() - scrollView.getWidth()))
-						scrollX = 0;
-					if (scrollView.getScrollY() == 0 ||
-					    scrollView.getScrollY() ==
-					        (sessionView.getHeight() - scrollView.getHeight()))
-						scrollY = 0;
-
-					if (scrollX != 0 || scrollY != 0)
-						uiHandler.sendEmptyMessageDelayed(SCROLLING_REQUESTED, SCROLLING_TIMEOUT);
-					else
-						Log.v(TAG, "Stopping auto-scroll");
-					break;
-				}
 			}
-		}
-	}
-
-	private class PinchZoomListener extends ScaleGestureDetector.SimpleOnScaleGestureListener
-	{
-		private float scaleFactor = 1.0f;
-
-		@Override public boolean onScaleBegin(ScaleGestureDetector detector)
-		{
-			scrollView.setScrollEnabled(false);
-			return true;
-		}
-
-		@Override public boolean onScale(ScaleGestureDetector detector)
-		{
-
-			// calc scale factor
-			scaleFactor *= detector.getScaleFactor();
-			scaleFactor = Math.max(SessionView.MIN_SCALE_FACTOR,
-			                       Math.min(scaleFactor, SessionView.MAX_SCALE_FACTOR));
-			sessionView.setZoom(scaleFactor);
-
-			if (!sessionView.isAtMinZoom() && !sessionView.isAtMaxZoom())
-			{
-				// transform scroll origin to the new zoom space
-				float transOriginX = scrollView.getScrollX() * detector.getScaleFactor();
-				float transOriginY = scrollView.getScrollY() * detector.getScaleFactor();
-
-				// transform center point to the zoomed space
-				float transCenterX =
-				    (scrollView.getScrollX() + detector.getFocusX()) * detector.getScaleFactor();
-				float transCenterY =
-				    (scrollView.getScrollY() + detector.getFocusY()) * detector.getScaleFactor();
-
-				// scroll by the difference between the distance of the
-				// transformed center/origin point and their old distance
-				// (focusX/Y)
-				scrollView.scrollBy((int)((transCenterX - transOriginX) - detector.getFocusX()),
-				                    (int)((transCenterY - transOriginY) - detector.getFocusY()));
-			}
-
-			return true;
-		}
-
-		@Override public void onScaleEnd(ScaleGestureDetector de)
-		{
-			scrollView.setScrollEnabled(true);
 		}
 	}
 
@@ -1462,8 +1116,9 @@ public class SessionActivity extends AppCompatActivity
 		{
 			Log.v(TAG, "OnConnectionFailure");
 
-			// remove pending move events
-			uiHandler.removeMessages(UIHandler.SEND_MOVE_EVENT);
+			// cancel any pending input events
+			if (inputManager != null)
+				inputManager.cancelPendingEvents();
 
 			if (progressDialog != null)
 			{
@@ -1484,8 +1139,9 @@ public class SessionActivity extends AppCompatActivity
 		{
 			Log.v(TAG, "OnDisconnected");
 
-			// remove pending move events
-			uiHandler.removeMessages(UIHandler.SEND_MOVE_EVENT);
+			// cancel any pending input events
+			if (inputManager != null)
+				inputManager.cancelPendingEvents();
 
 			if (ApplicationSettingsActivity.getKeepScreenOnWhenConnected(context))
 			{
