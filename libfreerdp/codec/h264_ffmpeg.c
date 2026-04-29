@@ -95,9 +95,10 @@ typedef struct
 	AVBufferRef* hwctx;
 	AVFrame* hwVideoFrame;
 	enum AVPixelFormat hw_pix_fmt;
-#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(57, 80, 100)
+#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(57, 80, 100) || defined(WITH_VIDEOTOOLBOX)
 	AVBufferRef* hw_frames_ctx;
 #endif
+
 #endif
 } H264_CONTEXT_LIBAVCODEC;
 
@@ -309,11 +310,11 @@ static int libavcodec_decompress(H264_CONTEXT* WINPR_RESTRICT h264,
 #else
 	status = avcodec_receive_frame(sys->codecDecoderContext, sys->videoFrame);
 #endif
-	    if (status == AVERROR(EAGAIN))
-	    {
-		    rc = 0;
-		    goto fail;
-	    }
+	if (status == AVERROR(EAGAIN))
+	{
+		rc = 0;
+		goto fail;
+	}
 
 	gotFrame = (status == 0);
 #else
@@ -368,7 +369,6 @@ static int libavcodec_decompress(H264_CONTEXT* WINPR_RESTRICT h264,
 		iStride[0] = (UINT32)MAX(0, sys->videoFrame->linesize[0]);
 		iStride[1] = (UINT32)MAX(0, sys->videoFrame->linesize[1]);
 		iStride[2] = (UINT32)MAX(0, sys->videoFrame->linesize[2]);
-
 		rc = 1;
 	}
 	else
@@ -584,7 +584,7 @@ static void libavcodec_uninit(H264_CONTEXT* h264)
 	if (sys->hwctx)
 		av_buffer_unref(&sys->hwctx);
 
-#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(57, 80, 100)
+#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(57, 80, 100) || defined(WITH_VIDEOTOOLBOX)
 
 	if (sys->hw_frames_ctx)
 		av_buffer_unref(&sys->hw_frames_ctx);
@@ -627,7 +627,10 @@ static enum AVPixelFormat libavcodec_get_format(struct AVCodecContext* ctx,
 	{
 		if (*p == sys->hw_pix_fmt)
 		{
-#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(57, 80, 100)
+#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(57, 80, 100) || defined(WITH_VIDEOTOOLBOX)
+			if (sys->hw_frames_ctx)
+				av_buffer_unref(&sys->hw_frames_ctx);
+
 			sys->hw_frames_ctx = av_hwframe_ctx_alloc(sys->hwctx);
 
 			if (!sys->hw_frames_ctx)
@@ -640,9 +643,13 @@ static enum AVPixelFormat libavcodec_get_format(struct AVCodecContext* ctx,
 			frames->format = *p;
 			frames->height = sys->codecDecoderContext->coded_height;
 			frames->width = sys->codecDecoderContext->coded_width;
+#ifdef WITH_VIDEOTOOLBOX
+			frames->sw_format = AV_PIX_FMT_YUV420P;
+#else
 			frames->sw_format =
 			    (sys->codecDecoderContext->sw_pix_fmt == AV_PIX_FMT_YUV420P10 ? AV_PIX_FMT_P010
 			                                                                  : AV_PIX_FMT_NV12);
+#endif
 			frames->initial_pool_size = 20;
 
 			if (sys->codecDecoderContext->active_thread_type & FF_THREAD_FRAME)
