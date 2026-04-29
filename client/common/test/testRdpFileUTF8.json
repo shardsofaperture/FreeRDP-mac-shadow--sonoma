@@ -42,6 +42,7 @@
 		"FreeRDP_HiDefRemoteApp": true,
 		"FreeRDP_IPv6Enabled": false,
 		"FreeRDP_AutoReconnectionEnabled": true,
+		"FreeRDP_SessionHasBeenReconnected": false,
 		"FreeRDP_PrintReconnectCookie": false,
 		"FreeRDP_AutoReconnectionPacketSupported": false,
 		"FreeRDP_DynamicDaylightTimeDisabled": false,

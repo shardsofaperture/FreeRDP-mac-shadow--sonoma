@@ -700,12 +700,13 @@ BOOL rdp_client_redirect(rdpRdp* rdp)
 
 BOOL rdp_client_reconnect(rdpRdp* rdp)
 {
-	BOOL status = 0;
-
 	if (!rdp_client_disconnect_and_clear(rdp))
 		return FALSE;
 
-	status = rdp_client_connect(rdp);
+	if (!freerdp_settings_set_bool(rdp->settings, FreeRDP_SessionHasBeenReconnected, TRUE))
+		return FALSE;
+
+	BOOL status = rdp_client_connect(rdp);
 
 	if (status)
 		status = rdp_client_reconnect_channels(rdp, FALSE);

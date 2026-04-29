@@ -225,7 +225,10 @@ struct rdp_settings
 	SETTINGS_DEPRECATED(ALIGN64 BOOL AutoReconnectionPacketSupported);             /** 837
 		                                                                             @since version 3.5.0
 */
-	UINT64 padding0896[896 - 838];                                                 /* 838 */
+	SETTINGS_DEPRECATED(ALIGN64 BOOL SessionHasBeenReconnected);                   /** 838
+		                                                                            * @since version 3.25.1
+		                                                                            */
+	UINT64 padding0896[896 - 839];                                                 /* 839 */
 
 	/* Client Info (Time Zone) */
 	SETTINGS_DEPRECATED(ALIGN64 TIME_ZONE_INFORMATION* ClientTimeZone); /* 896 */
