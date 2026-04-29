@@ -26,7 +26,6 @@ import androidx.preference.PreferenceScreen;
 
 import com.freerdp.freerdpcore.R;
 import com.freerdp.freerdpcore.domain.BookmarkBase;
-import com.freerdp.freerdpcore.domain.ManualBookmark;
 import com.freerdp.freerdpcore.services.LibFreeRDP;
 
 public class BookmarkActivity
@@ -355,7 +354,7 @@ public class BookmarkActivity
 			BookmarkViewModel vm =
 			    new ViewModelProvider(requireActivity()).get(BookmarkViewModel.class);
 			BookmarkBase bookmark = vm.getBookmark();
-			if (bookmark != null && bookmark.getType() != ManualBookmark.TYPE_MANUAL)
+			if (bookmark != null && bookmark.getType() != BookmarkBase.TYPE_MANUAL)
 			{
 				PreferenceScreen screen = getPreferenceScreen();
 				removeIfPresent(screen, "bookmark.enable_gateway_settings");

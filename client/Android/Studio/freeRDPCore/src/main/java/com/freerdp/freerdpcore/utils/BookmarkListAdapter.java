@@ -19,7 +19,6 @@ import com.freerdp.freerdpcore.R;
 import com.freerdp.freerdpcore.databinding.BookmarkListItemBinding;
 import com.freerdp.freerdpcore.domain.BookmarkBase;
 import com.freerdp.freerdpcore.domain.ConnectionReference;
-import com.freerdp.freerdpcore.domain.ManualBookmark;
 import com.freerdp.freerdpcore.presentation.BookmarkActivity;
 
 import java.util.ArrayList;
@@ -77,7 +76,7 @@ public class BookmarkListAdapter extends RecyclerView.Adapter<BookmarkListAdapte
 			holder.binding.bookmarkIcon1.setImageResource(R.drawable.ic_computer);
 			holder.binding.bookmarkIcon1.setVisibility(View.VISIBLE);
 			holder.binding.bookmarkText2.setVisibility(View.VISIBLE);
-			holder.binding.bookmarkText2.setText(bookmark.<ManualBookmark>get().getHostname());
+			holder.binding.bookmarkText2.setText(bookmark.getHostname());
 			refStr = ConnectionReference.getManualBookmarkReference(bookmark.getId());
 
 			if (actionsEnabled)
@@ -103,14 +102,13 @@ public class BookmarkListAdapter extends RecyclerView.Adapter<BookmarkListAdapte
 		else if (bookmark.getType() == BookmarkBase.TYPE_QUICKCONNECT)
 		{
 			holder.binding.bookmarkText2.setVisibility(View.GONE);
-			ManualBookmark qcBm = (ManualBookmark)bookmark;
-			refStr = ConnectionReference.getHostnameReference(qcBm.getHostname());
+			refStr = ConnectionReference.getHostnameReference(bookmark.getHostname());
 			holder.itemView.setOnLongClickListener(null);
 
-			if (qcBm.isDirectConnect())
+			if (bookmark.isDirectConnect())
 			{
 				holder.binding.bookmarkText1.setText(holder.itemView.getContext().getString(
-				    R.string.quick_connect_to, qcBm.getHostname()));
+				    R.string.quick_connect_to, bookmark.getHostname()));
 				holder.binding.bookmarkIcon1.setImageResource(R.drawable.ic_login);
 				holder.binding.bookmarkIcon1.setVisibility(View.VISIBLE);
 				holder.binding.bookmarkIcon2.setVisibility(View.GONE);
@@ -118,12 +116,12 @@ public class BookmarkListAdapter extends RecyclerView.Adapter<BookmarkListAdapte
 			}
 			else
 			{
-				holder.binding.bookmarkText1.setText(qcBm.getLabel());
+				holder.binding.bookmarkText1.setText(bookmark.getLabel());
 				holder.binding.bookmarkIcon1.setImageResource(R.drawable.ic_history);
 				holder.binding.bookmarkIcon1.setVisibility(View.VISIBLE);
 				holder.binding.bookmarkIcon2.setVisibility(View.VISIBLE);
 				holder.binding.bookmarkIcon2.setImageResource(R.drawable.ic_bookmark_add);
-				final String hostname = qcBm.getHostname();
+				final String hostname = bookmark.getHostname();
 				holder.binding.bookmarkIcon2.setOnClickListener(v -> {
 					Bundle bundle = new Bundle();
 					bundle.putString(BookmarkActivity.PARAM_CONNECTION_REFERENCE,

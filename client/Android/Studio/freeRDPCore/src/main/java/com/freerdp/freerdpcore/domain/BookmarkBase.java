@@ -23,7 +23,7 @@ public class BookmarkBase implements Parcelable, Cloneable
 	public static final int TYPE_INVALID = -1;
 	public static final int TYPE_MANUAL = 1;
 	public static final int TYPE_QUICKCONNECT = 2;
-public static final int TYPE_CUSTOM_BASE = 1000;
+	public static final int TYPE_CUSTOM_BASE = 1000;
 	public static final Parcelable.Creator<BookmarkBase> CREATOR =
 	    new Parcelable.Creator<BookmarkBase>() {
 		    public BookmarkBase createFromParcel(Parcel in)
@@ -46,6 +46,11 @@ public static final int TYPE_CUSTOM_BASE = 1000;
 	private PerformanceFlags performanceFlags;
 	private AdvancedSettings advancedSettings;
 	private DebugSettings debugSettings;
+	private String hostname;
+	private int port;
+	private boolean enableGatewaySettings;
+	private GatewaySettings gatewaySettings;
+	private boolean directConnect;
 
 	public BookmarkBase(Parcel parcel)
 	{
@@ -60,6 +65,11 @@ public static final int TYPE_CUSTOM_BASE = 1000;
 		performanceFlags = parcel.readParcelable(PerformanceFlags.class.getClassLoader());
 		advancedSettings = parcel.readParcelable(AdvancedSettings.class.getClassLoader());
 		debugSettings = parcel.readParcelable(DebugSettings.class.getClassLoader());
+		hostname = parcel.readString();
+		port = parcel.readInt();
+		enableGatewaySettings = (parcel.readInt() == 1);
+		gatewaySettings = parcel.readParcelable(GatewaySettings.class.getClassLoader());
+		directConnect = (parcel.readInt() == 1);
 	}
 
 	public BookmarkBase()
@@ -69,7 +79,7 @@ public static final int TYPE_CUSTOM_BASE = 1000;
 
 	private void init()
 	{
-		type = TYPE_INVALID;
+		type = TYPE_MANUAL;
 		id = -1;
 		label = "";
 		username = "";
@@ -80,6 +90,12 @@ public static final int TYPE_CUSTOM_BASE = 1000;
 		performanceFlags = new PerformanceFlags();
 		advancedSettings = new AdvancedSettings();
 		debugSettings = new DebugSettings();
+
+		hostname = "";
+		port = 3389;
+		enableGatewaySettings = false;
+		gatewaySettings = new GatewaySettings();
+		directConnect = false;
 	}
 
 	@SuppressWarnings("unchecked") public <T extends BookmarkBase> T get()
@@ -90,6 +106,11 @@ public static final int TYPE_CUSTOM_BASE = 1000;
 	public int getType()
 	{
 		return type;
+	}
+
+	public void setType(int type)
+	{
+		this.type = type;
 	}
 
 	public long getId()
@@ -182,6 +203,56 @@ public static final int TYPE_CUSTOM_BASE = 1000;
 		this.debugSettings = debugSettings;
 	}
 
+	public String getHostname()
+	{
+		return hostname;
+	}
+
+	public void setHostname(String hostname)
+	{
+		this.hostname = hostname;
+	}
+
+	public int getPort()
+	{
+		return port;
+	}
+
+	public void setPort(int port)
+	{
+		this.port = port;
+	}
+
+	public boolean getEnableGatewaySettings()
+	{
+		return enableGatewaySettings;
+	}
+
+	public void setEnableGatewaySettings(boolean enableGatewaySettings)
+	{
+		this.enableGatewaySettings = enableGatewaySettings;
+	}
+
+	public GatewaySettings getGatewaySettings()
+	{
+		return gatewaySettings;
+	}
+
+	public void setGatewaySettings(GatewaySettings gatewaySettings)
+	{
+		this.gatewaySettings = gatewaySettings;
+	}
+
+	public boolean isDirectConnect()
+	{
+		return directConnect;
+	}
+
+	public void setDirectConnect(boolean directConnect)
+	{
+		this.directConnect = directConnect;
+	}
+
 	public ScreenSettings getActiveScreenSettings()
 	{
 		return (GlobalApp.IsMeteredNetwork && advancedSettings.getEnable3GSettings())
@@ -214,6 +285,11 @@ public static final int TYPE_CUSTOM_BASE = 1000;
 		out.writeParcelable(performanceFlags, flags);
 		out.writeParcelable(advancedSettings, flags);
 		out.writeParcelable(debugSettings, flags);
+		out.writeString(hostname);
+		out.writeInt(port);
+		out.writeInt(enableGatewaySettings ? 1 : 0);
+		out.writeParcelable(gatewaySettings, flags);
+		out.writeInt(directConnect ? 1 : 0);
 	}
 
 	// write to shared preferences
@@ -283,6 +359,15 @@ public static final int TYPE_CUSTOM_BASE = 1000;
 		editor.putBoolean("bookmark.async_channel", debugSettings.getAsyncChannel());
 		editor.putBoolean("bookmark.async_update", debugSettings.getAsyncUpdate());
 		editor.putString("bookmark.debug_level", debugSettings.getDebugLevel());
+
+		editor.putString("bookmark.hostname", hostname);
+		editor.putInt("bookmark.port", port);
+		editor.putBoolean("bookmark.enable_gateway_settings", enableGatewaySettings);
+		editor.putString("bookmark.gateway_hostname", gatewaySettings.getHostname());
+		editor.putInt("bookmark.gateway_port", gatewaySettings.getPort());
+		editor.putString("bookmark.gateway_username", gatewaySettings.getUsername());
+		editor.putString("bookmark.gateway_password", gatewaySettings.getPassword());
+		editor.putString("bookmark.gateway_domain", gatewaySettings.getDomain());
 
 		editor.apply();
 	}
@@ -355,6 +440,15 @@ public static final int TYPE_CUSTOM_BASE = 1000;
 		debugSettings.setAsyncChannel(sharedPrefs.getBoolean("bookmark.async_channel", true));
 		debugSettings.setAsyncUpdate(sharedPrefs.getBoolean("bookmark.async_update", true));
 		debugSettings.setDebugLevel(sharedPrefs.getString("bookmark.debug_level", "INFO"));
+
+		hostname = sharedPrefs.getString("bookmark.hostname", "");
+		port = sharedPrefs.getInt("bookmark.port", 3389);
+		enableGatewaySettings = sharedPrefs.getBoolean("bookmark.enable_gateway_settings", false);
+		gatewaySettings.setHostname(sharedPrefs.getString("bookmark.gateway_hostname", ""));
+		gatewaySettings.setPort(sharedPrefs.getInt("bookmark.gateway_port", 443));
+		gatewaySettings.setUsername(sharedPrefs.getString("bookmark.gateway_username", ""));
+		gatewaySettings.setPassword(sharedPrefs.getString("bookmark.gateway_password", ""));
+		gatewaySettings.setDomain(sharedPrefs.getString("bookmark.gateway_domain", ""));
 	}
 
 	// Cloneable
@@ -1041,6 +1135,109 @@ public static final int TYPE_CUSTOM_BASE = 1000;
 			out.writeInt(consoleMode ? 1 : 0);
 			out.writeString(remoteProgram);
 			out.writeString(workDir);
+		}
+	}
+
+	public static class GatewaySettings implements Parcelable
+	{
+		public static final Parcelable.Creator<GatewaySettings> CREATOR =
+		    new Parcelable.Creator<GatewaySettings>() {
+			    public GatewaySettings createFromParcel(Parcel in)
+			    {
+				    return new GatewaySettings(in);
+			    }
+
+			    @Override public GatewaySettings[] newArray(int size)
+			    {
+				    return new GatewaySettings[size];
+			    }
+		    };
+		private String hostname;
+		private int port;
+		private String username;
+		private String password;
+		private String domain;
+
+		public GatewaySettings()
+		{
+			hostname = "";
+			port = 443;
+			username = "";
+			password = "";
+			domain = "";
+		}
+
+		public GatewaySettings(Parcel parcel)
+		{
+			hostname = parcel.readString();
+			port = parcel.readInt();
+			username = parcel.readString();
+			password = parcel.readString();
+			domain = parcel.readString();
+		}
+
+		public String getHostname()
+		{
+			return hostname;
+		}
+
+		public void setHostname(String hostname)
+		{
+			this.hostname = hostname;
+		}
+
+		public int getPort()
+		{
+			return port;
+		}
+
+		public void setPort(int port)
+		{
+			this.port = port;
+		}
+
+		public String getUsername()
+		{
+			return username;
+		}
+
+		public void setUsername(String username)
+		{
+			this.username = username;
+		}
+
+		public String getPassword()
+		{
+			return password;
+		}
+
+		public void setPassword(String password)
+		{
+			this.password = password;
+		}
+
+		public String getDomain()
+		{
+			return domain;
+		}
+
+		public void setDomain(String domain)
+		{
+			this.domain = domain;
+		}
+
+		@Override public int describeContents()
+		{
+			return 0;
+		}
+
+		@Override public void writeToParcel(Parcel out, int flags)
+		{
+			out.writeString(hostname);
+			out.writeInt(port);
+			out.writeString(username);
+			out.writeString(password);
+			out.writeString(domain);
 		}
 	}
 }

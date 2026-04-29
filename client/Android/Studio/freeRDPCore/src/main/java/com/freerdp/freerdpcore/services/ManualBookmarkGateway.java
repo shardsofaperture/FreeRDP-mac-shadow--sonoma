@@ -16,7 +16,6 @@ import com.freerdp.freerdpcore.data.BookmarkConverter;
 import com.freerdp.freerdpcore.data.BookmarkDao;
 import com.freerdp.freerdpcore.data.BookmarkEntity;
 import com.freerdp.freerdpcore.domain.BookmarkBase;
-import com.freerdp.freerdpcore.domain.ManualBookmark;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -40,26 +39,26 @@ public class ManualBookmarkGateway
 		List<BookmarkEntity> entities = dao.getAll();
 		ArrayList<BookmarkBase> result = new ArrayList<>(entities.size());
 		for (BookmarkEntity e : entities)
-			result.add(BookmarkConverter.toManualBookmark(e));
+			result.add(BookmarkConverter.toBookmark(e));
 		return result;
 	}
 
 	public BookmarkBase findById(long id)
 	{
 		BookmarkEntity e = dao.getById(id);
-		return (e != null) ? BookmarkConverter.toManualBookmark(e) : null;
+		return (e != null) ? BookmarkConverter.toBookmark(e) : null;
 	}
 
 	public long insert(BookmarkBase bookmark)
 	{
-		long newId = dao.insert(BookmarkConverter.toEntity((ManualBookmark)bookmark));
+		long newId = dao.insert(BookmarkConverter.toEntity(bookmark));
 		bookmark.setId(newId);
 		return newId;
 	}
 
 	public boolean update(BookmarkBase bookmark)
 	{
-		dao.update(BookmarkConverter.toEntity((ManualBookmark)bookmark));
+		dao.update(BookmarkConverter.toEntity(bookmark));
 		return true;
 	}
 
@@ -74,7 +73,7 @@ public class ManualBookmarkGateway
 		List<BookmarkEntity> entities = dao.search("%" + pattern + "%");
 		ArrayList<BookmarkBase> result = new ArrayList<>(entities.size());
 		for (BookmarkEntity e : entities)
-			result.add(BookmarkConverter.toManualBookmark(e));
+			result.add(BookmarkConverter.toBookmark(e));
 		return result;
 	}
 }

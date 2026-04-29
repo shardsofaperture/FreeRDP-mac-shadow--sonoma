@@ -15,7 +15,6 @@ import androidx.lifecycle.MutableLiveData;
 import com.freerdp.freerdpcore.R;
 import com.freerdp.freerdpcore.application.GlobalApp;
 import com.freerdp.freerdpcore.domain.BookmarkBase;
-import com.freerdp.freerdpcore.domain.ManualBookmark;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -52,7 +51,8 @@ public class HomeViewModel extends AndroidViewModel
 			List<BookmarkBase> result = new ArrayList<>();
 			if (!currentQuery.isEmpty())
 			{
-				ManualBookmark qcBm = new ManualBookmark();
+				BookmarkBase qcBm = new BookmarkBase();
+				qcBm.setType(BookmarkBase.TYPE_QUICKCONNECT);
 				qcBm.setLabel(currentQuery);
 				qcBm.setHostname(currentQuery);
 				qcBm.setDirectConnect(true);

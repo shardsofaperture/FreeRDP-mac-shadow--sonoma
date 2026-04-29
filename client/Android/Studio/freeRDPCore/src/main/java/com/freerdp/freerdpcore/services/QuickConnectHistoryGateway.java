@@ -13,7 +13,6 @@ package com.freerdp.freerdpcore.services;
 import com.freerdp.freerdpcore.data.HistoryDao;
 import com.freerdp.freerdpcore.data.HistoryEntity;
 import com.freerdp.freerdpcore.domain.BookmarkBase;
-import com.freerdp.freerdpcore.domain.ManualBookmark;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,7 +34,8 @@ public class QuickConnectHistoryGateway
 		ArrayList<BookmarkBase> result = new ArrayList<>(entities.size());
 		for (HistoryEntity entity : entities)
 		{
-			ManualBookmark bookmark = new ManualBookmark();
+			BookmarkBase bookmark = new BookmarkBase();
+			bookmark.setType(BookmarkBase.TYPE_QUICKCONNECT);
 			bookmark.setLabel(entity.item);
 			bookmark.setHostname(entity.item);
 			result.add(bookmark);

@@ -64,7 +64,6 @@ import com.freerdp.freerdpcore.application.GlobalApp;
 import com.freerdp.freerdpcore.application.SessionState;
 import com.freerdp.freerdpcore.domain.BookmarkBase;
 import com.freerdp.freerdpcore.domain.ConnectionReference;
-import com.freerdp.freerdpcore.domain.ManualBookmark;
 import com.freerdp.freerdpcore.services.LibFreeRDP;
 import com.freerdp.freerdpcore.utils.ClipboardManagerProxy;
 import com.freerdp.freerdpcore.utils.KeyboardMapper;
@@ -466,8 +465,8 @@ public class SessionActivity extends AppCompatActivity
 			String refStr = bundle.getString(PARAM_CONNECTION_REFERENCE);
 			if (ConnectionReference.isHostnameReference(refStr))
 			{
-				bookmark = new ManualBookmark();
-				bookmark.<ManualBookmark>get().setHostname(ConnectionReference.getHostname(refStr));
+				bookmark = new BookmarkBase();
+				bookmark.setHostname(ConnectionReference.getHostname(refStr));
 			}
 			else if (ConnectionReference.isBookmarkReference(refStr))
 			{
@@ -1524,7 +1523,7 @@ public class SessionActivity extends AppCompatActivity
 				        bundle.getString(PARAM_CONNECTION_REFERENCE)))
 				{
 					assert session.getBookmark().getType() == BookmarkBase.TYPE_MANUAL;
-					String item = session.getBookmark().<ManualBookmark>get().getHostname();
+					String item = session.getBookmark().getHostname();
 					if (!GlobalApp.getQuickConnectHistoryGateway().historyItemExists(item))
 						GlobalApp.getQuickConnectHistoryGateway().addHistoryItem(item);
 				}
