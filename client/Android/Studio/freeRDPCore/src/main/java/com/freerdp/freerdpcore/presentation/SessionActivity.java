@@ -26,7 +26,6 @@ import android.graphics.Bitmap;
 import android.graphics.Bitmap.Config;
 import android.graphics.Rect;
 import android.graphics.drawable.BitmapDrawable;
-import android.inputmethodservice.Keyboard;
 import android.inputmethodservice.KeyboardView;
 import android.net.Uri;
 import android.os.Build;
@@ -41,7 +40,6 @@ import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 
-import android.text.InputType;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.Menu;
@@ -52,8 +50,6 @@ import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewTreeObserver.OnGlobalLayoutListener;
 import android.view.WindowManager;
-import android.view.inputmethod.InputMethodManager;
-import android.view.inputmethod.InputMethodSubtype;
 import android.widget.EditText;
 import android.widget.Toast;
 
@@ -64,14 +60,12 @@ import com.freerdp.freerdpcore.domain.BookmarkBase;
 import com.freerdp.freerdpcore.domain.ConnectionReference;
 import com.freerdp.freerdpcore.services.LibFreeRDP;
 import com.freerdp.freerdpcore.utils.ClipboardManagerProxy;
-import com.freerdp.freerdpcore.utils.KeyboardMapper;
 
 import java.util.Collection;
 import java.util.Iterator;
 
 public class SessionActivity extends AppCompatActivity
-    implements LibFreeRDP.UIEventListener, SessionInputManager.ActivityCallbacks,
-               ClipboardManagerProxy.OnClipboardChangedListener
+    implements LibFreeRDP.UIEventListener, ClipboardManagerProxy.OnClipboardChangedListener
 {
 	public static final String PARAM_CONNECTION_REFERENCE = "conRef";
 	public static final String PARAM_INSTANCE = "instance";
@@ -81,14 +75,6 @@ public class SessionActivity extends AppCompatActivity
 	private SessionView sessionView;
 	private TouchPointerView touchPointerView;
 	private ProgressDialog progressDialog;
-	private KeyboardView keyboardView;
-	private KeyboardView modifiersKeyboardView;
-	private KeyboardMapper keyboardMapper;
-
-	private Keyboard specialkeysKeyboard;
-	private Keyboard numpadKeyboard;
-	private Keyboard cursorKeyboard;
-	private Keyboard modifiersKeyboard;
 
 	private AlertDialog dlgVerifyCertificate;
 	private AlertDialog dlgUserCredentials;
@@ -105,9 +91,6 @@ public class SessionActivity extends AppCompatActivity
 
 	private LibFreeRDPBroadcastReceiver libFreeRDPBroadcastReceiver;
 	private ScrollView2D scrollView;
-	// keyboard visibility flags
-	private boolean sysKeyboardVisible = false;
-	private boolean extKeyboardVisible = false;
 	private ClipboardManagerProxy mClipboardManager;
 	private SessionInputManager inputManager;
 	private boolean callbackDialogResult;
@@ -271,20 +254,8 @@ public class SessionActivity extends AppCompatActivity
 
 		touchPointerView = findViewById(R.id.touchPointerView);
 
-		keyboardMapper = new KeyboardMapper();
-		keyboardMapper.init(this);
-
-		modifiersKeyboard = new Keyboard(getApplicationContext(), R.xml.modifiers_keyboard);
-		specialkeysKeyboard = new Keyboard(getApplicationContext(), R.xml.specialkeys_keyboard);
-		numpadKeyboard = new Keyboard(getApplicationContext(), R.xml.numpad_keyboard);
-		cursorKeyboard = new Keyboard(getApplicationContext(), R.xml.cursor_keyboard);
-
-		// hide keyboard below the sessionView
-		keyboardView = findViewById(R.id.extended_keyboard);
-		keyboardView.setKeyboard(specialkeysKeyboard);
-
-		modifiersKeyboardView = findViewById(R.id.extended_keyboard_header);
-		modifiersKeyboardView.setKeyboard(modifiersKeyboard);
+		KeyboardView keyboardView = findViewById(R.id.extended_keyboard);
+		KeyboardView modifiersKeyboardView = findViewById(R.id.extended_keyboard_header);
 
 		scrollView = findViewById(R.id.sessionScrollView);
 		uiHandler = new UIHandler();
@@ -293,14 +264,10 @@ public class SessionActivity extends AppCompatActivity
 		createDialogs();
 
 		// Wire up the input manager (instance is attached later in bindSession()).
-		inputManager = new SessionInputManager(
-		    this, keyboardMapper, scrollView, sessionView, touchPointerView, keyboardView,
-		    modifiersKeyboardView, modifiersKeyboard, specialkeysKeyboard, numpadKeyboard,
-		    cursorKeyboard, this);
+		inputManager = new SessionInputManager(this, scrollView, sessionView, touchPointerView,
+		                                       keyboardView, modifiersKeyboardView);
 		sessionView.setSessionViewListener(inputManager);
 		touchPointerView.setTouchPointerListener(inputManager);
-		keyboardView.setOnKeyboardActionListener(inputManager);
-		modifiersKeyboardView.setOnKeyboardActionListener(inputManager);
 		sessionView.setScaleGestureDetector(
 		    new ScaleGestureDetector(this, inputManager.getPinchZoomListener()));
 
@@ -355,7 +322,7 @@ public class SessionActivity extends AppCompatActivity
 		Log.v(TAG, "Session.onPause");
 
 		// hide any visible keyboards
-		showKeyboard(false, false);
+		inputManager.hideKeyboards();
 	}
 
 	@Override protected void onStop()
@@ -398,17 +365,7 @@ public class SessionActivity extends AppCompatActivity
 		super.onConfigurationChanged(newConfig);
 
 		// reload keyboard resources (changed from landscape)
-		modifiersKeyboard = new Keyboard(getApplicationContext(), R.xml.modifiers_keyboard);
-		specialkeysKeyboard = new Keyboard(getApplicationContext(), R.xml.specialkeys_keyboard);
-		numpadKeyboard = new Keyboard(getApplicationContext(), R.xml.numpad_keyboard);
-		cursorKeyboard = new Keyboard(getApplicationContext(), R.xml.cursor_keyboard);
-
-		// apply loaded keyboards
-		keyboardView.setKeyboard(specialkeysKeyboard);
-		modifiersKeyboardView.setKeyboard(modifiersKeyboard);
-
-		inputManager.updateKeyboards(modifiersKeyboard, specialkeysKeyboard, numpadKeyboard,
-		                             cursorKeyboard);
+		inputManager.reloadKeyboards();
 
 		hideSystemBars();
 	}
@@ -550,67 +507,10 @@ public class SessionActivity extends AppCompatActivity
 		sessionView.onSurfaceChange(session);
 		scrollView.requestLayout();
 
-		Bitmap surface =
-		    session.getSurface() != null ? session.getSurface().getBitmap() : null;
+		Bitmap surface = session.getSurface() != null ? session.getSurface().getBitmap() : null;
 		inputManager.attachSession(session.getInstance(), surface);
 		inputManager.setScreenSize(screen_width, screen_height);
-		keyboardMapper.reset(inputManager);
 		hideSystemBars();
-	}
-
-	private void setSoftInputState(boolean state)
-	{
-		InputMethodManager mgr = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
-
-		if (state)
-		{
-			sessionView.requestFocus();
-			mgr.showSoftInput(sessionView, InputMethodManager.SHOW_IMPLICIT);
-		}
-		else
-		{
-			mgr.hideSoftInputFromWindow(sessionView.getWindowToken(), 0);
-		}
-	}
-
-	// displays either the system or the extended keyboard or non of them
-	private void showKeyboard(final boolean showSystemKeyboard, final boolean showExtendedKeyboard)
-	{
-		InputMethodManager mgr = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
-
-		if (showSystemKeyboard)
-		{
-			// hide extended keyboard
-			keyboardView.setVisibility(View.GONE);
-			// show system keyboard
-			setSoftInputState(true);
-
-			// show modifiers keyboard
-			modifiersKeyboardView.setVisibility(View.VISIBLE);
-		}
-		else if (showExtendedKeyboard)
-		{
-			// hide system keyboard
-			setSoftInputState(false);
-
-			// show extended keyboard
-			keyboardView.setKeyboard(specialkeysKeyboard);
-			keyboardView.setVisibility(View.VISIBLE);
-			modifiersKeyboardView.setVisibility(View.VISIBLE);
-		}
-		else
-		{
-			// hide both
-			setSoftInputState(false);
-			keyboardView.setVisibility(View.GONE);
-			modifiersKeyboardView.setVisibility(View.GONE);
-
-			// clear any active key modifiers)
-			keyboardMapper.clearlAllModifiers();
-		}
-
-		sysKeyboardVisible = showSystemKeyboard;
-		extKeyboardVisible = showExtendedKeyboard;
 	}
 
 	private void closeSessionActivity(int resultCode)
@@ -638,15 +538,15 @@ public class SessionActivity extends AppCompatActivity
 		}
 		else if (itemId == R.id.session_sys_keyboard)
 		{
-			showKeyboard(!sysKeyboardVisible, false);
+			inputManager.toggleSystemKeyboard();
 		}
 		else if (itemId == R.id.session_ext_keyboard)
 		{
-			showKeyboard(false, !extKeyboardVisible);
+			inputManager.toggleExtendedKeyboard();
 		}
 		else if (itemId == R.id.session_disconnect)
 		{
-			showKeyboard(false, false);
+			inputManager.hideKeyboards();
 			LibFreeRDP.disconnect(session.getInstance());
 		}
 
@@ -656,9 +556,9 @@ public class SessionActivity extends AppCompatActivity
 	public void handleBackPressed()
 	{
 		// hide keyboards (if any visible) or send alt+f4 to the session
-		if (sysKeyboardVisible || extKeyboardVisible)
+		if (inputManager.isAnyKeyboardVisible())
 		{
-			showKeyboard(false, false);
+			inputManager.hideKeyboards();
 			return;
 		}
 		if (inputManager.handleBackAsAltF4())
@@ -974,18 +874,6 @@ public class SessionActivity extends AppCompatActivity
 	}
 
 	// ****************************************************************************
-	// SessionInputManager.ActivityCallbacks
-	@Override public void toggleSystemKeyboard()
-	{
-		showKeyboard(!sysKeyboardVisible, false);
-	}
-
-	@Override public void toggleExtendedKeyboard()
-	{
-		showKeyboard(false, !extKeyboardVisible);
-	}
-
-	// ****************************************************************************
 	// ClipboardManagerProxy.OnClipboardChangedListener
 	@Override public void onClipboardChanged(String data)
 	{
@@ -1034,7 +922,6 @@ public class SessionActivity extends AppCompatActivity
 					((Dialog)msg.obj).show();
 					break;
 				}
-
 			}
 		}
 	}

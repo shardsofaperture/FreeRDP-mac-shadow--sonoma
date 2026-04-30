@@ -17,7 +17,9 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
+import android.view.inputmethod.InputMethodManager;
 
+import com.freerdp.freerdpcore.R;
 import com.freerdp.freerdpcore.services.LibFreeRDP;
 import com.freerdp.freerdpcore.utils.KeyboardMapper;
 import com.freerdp.freerdpcore.utils.Mouse;
@@ -38,16 +40,6 @@ public class SessionInputManager
 	private static final int MSG_SEND_MOVE_EVENT = 1;
 	private static final int MSG_SCROLLING_REQUESTED = 2;
 
-	/**
-	 * Callback interface for actions that require Activity-level state (keyboard visibility).
-	 */
-	public interface ActivityCallbacks
-	{
-		void toggleSystemKeyboard();
-
-		void toggleExtendedKeyboard();
-	}
-
 	private final Context context;
 	private final KeyboardMapper keyboardMapper;
 	private final ScrollView2D scrollView;
@@ -55,7 +47,6 @@ public class SessionInputManager
 	private final TouchPointerView touchPointerView;
 	private final KeyboardView keyboardView;
 	private final KeyboardView modifiersKeyboardView;
-	private final ActivityCallbacks callbacks;
 	private final PinchZoomListener pinchZoomListener = new PinchZoomListener();
 
 	private Keyboard modifiersKeyboard;
@@ -70,28 +61,42 @@ public class SessionInputManager
 	private int screenHeight;
 	private int discardedMoveEvents = 0;
 
+	// keyboard visibility flags
+	private boolean sysKeyboardVisible = false;
+	private boolean extKeyboardVisible = false;
+
 	private final Handler handler;
 
-	public SessionInputManager(Context context, KeyboardMapper keyboardMapper,
-	                           ScrollView2D scrollView, SessionView sessionView,
+	public SessionInputManager(Context context, ScrollView2D scrollView, SessionView sessionView,
 	                           TouchPointerView touchPointerView, KeyboardView keyboardView,
-	                           KeyboardView modifiersKeyboardView, Keyboard modifiersKeyboard,
-	                           Keyboard specialkeysKeyboard, Keyboard numpadKeyboard,
-	                           Keyboard cursorKeyboard, ActivityCallbacks callbacks)
+	                           KeyboardView modifiersKeyboardView)
 	{
 		this.context = context;
-		this.keyboardMapper = keyboardMapper;
 		this.scrollView = scrollView;
 		this.sessionView = sessionView;
 		this.touchPointerView = touchPointerView;
 		this.keyboardView = keyboardView;
 		this.modifiersKeyboardView = modifiersKeyboardView;
-		this.modifiersKeyboard = modifiersKeyboard;
-		this.specialkeysKeyboard = specialkeysKeyboard;
-		this.numpadKeyboard = numpadKeyboard;
-		this.cursorKeyboard = cursorKeyboard;
-		this.callbacks = callbacks;
 		this.handler = new InputHandler();
+
+		this.keyboardMapper = new KeyboardMapper();
+		this.keyboardMapper.init(context);
+
+		loadKeyboards();
+		keyboardView.setKeyboard(specialkeysKeyboard);
+		modifiersKeyboardView.setKeyboard(modifiersKeyboard);
+
+		keyboardView.setOnKeyboardActionListener(this);
+		modifiersKeyboardView.setOnKeyboardActionListener(this);
+	}
+
+	private void loadKeyboards()
+	{
+		Context app = context.getApplicationContext();
+		modifiersKeyboard = new Keyboard(app, R.xml.modifiers_keyboard);
+		specialkeysKeyboard = new Keyboard(app, R.xml.specialkeys_keyboard);
+		numpadKeyboard = new Keyboard(app, R.xml.numpad_keyboard);
+		cursorKeyboard = new Keyboard(app, R.xml.cursor_keyboard);
 	}
 
 	// Binds this manager to a live FreeRDP session. Until called, all input events are dropped.
@@ -99,6 +104,7 @@ public class SessionInputManager
 	{
 		this.instance = instance;
 		this.bitmap = surface;
+		keyboardMapper.reset(this);
 	}
 
 	// Called when the session bitmap is created or replaced (OnSettingsChanged / OnGraphicsResize).
@@ -120,14 +126,91 @@ public class SessionInputManager
 		this.screenHeight = height;
 	}
 
-	// Called from onConfigurationChanged when keyboard resources are reloaded.
-	public void updateKeyboards(Keyboard modifiers, Keyboard special, Keyboard numpad,
-	                            Keyboard cursor)
+	// Called from onConfigurationChanged when keyboard resources need to be reloaded
+	// (e.g. after orientation change).
+	public void reloadKeyboards()
 	{
-		this.modifiersKeyboard = modifiers;
-		this.specialkeysKeyboard = special;
-		this.numpadKeyboard = numpad;
-		this.cursorKeyboard = cursor;
+		loadKeyboards();
+		keyboardView.setKeyboard(specialkeysKeyboard);
+		modifiersKeyboardView.setKeyboard(modifiersKeyboard);
+	}
+
+	// Toggles the system soft-keyboard (and accompanying modifiers row).
+	public void toggleSystemKeyboard()
+	{
+		showKeyboard(!sysKeyboardVisible, false);
+	}
+
+	// Toggles the extended (special keys / function / numpad / cursor) keyboard.
+	public void toggleExtendedKeyboard()
+	{
+		showKeyboard(false, !extKeyboardVisible);
+	}
+
+	// Hides any visible keyboards (called from onPause and back-press handling).
+	public void hideKeyboards()
+	{
+		showKeyboard(false, false);
+	}
+
+	// True if either the system or extended keyboard is currently shown.
+	public boolean isAnyKeyboardVisible()
+	{
+		return sysKeyboardVisible || extKeyboardVisible;
+	}
+
+	// displays either the system or the extended keyboard or none of them
+	private void showKeyboard(boolean showSystemKeyboard, boolean showExtendedKeyboard)
+	{
+		if (showSystemKeyboard)
+		{
+			// hide extended keyboard
+			keyboardView.setVisibility(View.GONE);
+			// show system keyboard
+			setSoftInputState(true);
+
+			// show modifiers keyboard
+			modifiersKeyboardView.setVisibility(View.VISIBLE);
+		}
+		else if (showExtendedKeyboard)
+		{
+			// hide system keyboard
+			setSoftInputState(false);
+
+			// show extended keyboard
+			keyboardView.setKeyboard(specialkeysKeyboard);
+			keyboardView.setVisibility(View.VISIBLE);
+			modifiersKeyboardView.setVisibility(View.VISIBLE);
+		}
+		else
+		{
+			// hide both
+			setSoftInputState(false);
+			keyboardView.setVisibility(View.GONE);
+			modifiersKeyboardView.setVisibility(View.GONE);
+
+			// clear any active key modifiers
+			keyboardMapper.clearlAllModifiers();
+		}
+
+		sysKeyboardVisible = showSystemKeyboard;
+		extKeyboardVisible = showExtendedKeyboard;
+	}
+
+	private void setSoftInputState(boolean state)
+	{
+		InputMethodManager mgr =
+		    (InputMethodManager)context.getSystemService(Context.INPUT_METHOD_SERVICE);
+
+		if (state)
+		{
+			sessionView.requestFocus();
+			mgr.showSoftInput(sessionView, InputMethodManager.SHOW_IMPLICIT);
+		}
+		else
+		{
+			mgr.hideSoftInputFromWindow(sessionView.getWindowToken(), 0);
+		}
 	}
 
 	// Cancels any pending delayed-move events; called on connection failure / disconnect.
@@ -382,12 +465,12 @@ public class SessionInputManager
 
 	@Override public void onTouchPointerToggleKeyboard()
 	{
-		callbacks.toggleSystemKeyboard();
+		toggleSystemKeyboard();
 	}
 
 	@Override public void onTouchPointerToggleExtKeyboard()
 	{
-		callbacks.toggleExtendedKeyboard();
+		toggleExtendedKeyboard();
 	}
 
 	@Override public void onTouchPointerResetScrollZoom()
