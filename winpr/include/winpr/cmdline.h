@@ -94,7 +94,7 @@
 #define CommandLineSwitchEnd(_arg)
 
 #define BoolValueTrue WINPR_CXX_COMPAT_CAST(LPSTR, 1)
-#define BoolValueFalse WINPR_CXX_COMPAT_CAST(LPSTR, 0)
+#define BoolValueFalse WINPR_CXX_COMPAT_CAST(LPSTR, nullptr)
 
 typedef struct
 {

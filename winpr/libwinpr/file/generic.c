@@ -918,7 +918,8 @@ static WIN32_FILE_SEARCH* file_search_new(const char* name, size_t namelen, cons
 			char buffer[128] = WINPR_C_ARRAY_INIT;
 			const DWORD err = map_posix_err(errno);
 			WLog_DBG(TAG, "stat failed with %s [%d] -> %s",
-			         winpr_strerror(errno, buffer, sizeof(buffer)), errno, Win32ErrorCode2Tag(err));
+			         winpr_strerror(errno, buffer, sizeof(buffer)), errno,
+			         Win32ErrorCode2Tag(err & 0xFFFF));
 			SetLastError(err);
 		}
 	}
