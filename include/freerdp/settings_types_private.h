@@ -226,7 +226,7 @@ struct rdp_settings
 		                                                                             @since version 3.5.0
 */
 	SETTINGS_DEPRECATED(ALIGN64 BOOL SessionHasBeenReconnected);                   /** 838
-		                                                                            * @since version 3.25.1
+		                                                                            * @since version 3.26.0
 		                                                                            */
 	UINT64 padding0896[896 - 839];                                                 /* 839 */
 
