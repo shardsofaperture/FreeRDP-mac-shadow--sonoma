@@ -1551,7 +1551,9 @@ static gdiGfxCacheEntry* gdi_GfxCacheEntryNew(UINT64 cacheKey, UINT32 width, UIN
 	cacheEntry->width = width;
 	cacheEntry->height = height;
 	cacheEntry->format = format;
-	cacheEntry->scanline = gfx_align_scanline(cacheEntry->width * 4, 16);
+
+	const UINT32 bpp = MAX(4, FreeRDPGetBytesPerPixel(format));
+	cacheEntry->scanline = gfx_align_scanline(cacheEntry->width * bpp, 16);
 
 	if ((cacheEntry->width > 0) && (cacheEntry->height > 0))
 	{
