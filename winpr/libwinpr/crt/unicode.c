@@ -400,8 +400,11 @@ SSIZE_T ConvertWCharNToUtf8(const WCHAR* wstr, size_t wlen, char* str, size_t le
 		isNullTerminated = TRUE;
 		iwlen++;
 	}
+	WINPR_PRAGMA_DIAG_PUSH
+	WINPR_PRAGMA_DIAG_IGNORED_DEPRECATED_DECL
 	const int rc =
 	    WideCharToMultiByte(CP_UTF8, 0, wstr, (int)iwlen, str, (int)len, nullptr, nullptr);
+	WINPR_PRAGMA_DIAG_POP
 	if ((rc <= 0) || ((len > 0) && ((size_t)rc > len)))
 		return -1;
 	else if (!isNullTerminated)
@@ -432,7 +435,10 @@ SSIZE_T ConvertMszWCharNToUtf8(const WCHAR* wstr, size_t wlen, char* str, size_t
 	}
 
 	const int iwlen = (int)len;
+	WINPR_PRAGMA_DIAG_PUSH
+	WINPR_PRAGMA_DIAG_IGNORED_DEPRECATED_DECL
 	const int rc = WideCharToMultiByte(CP_UTF8, 0, wstr, (int)wlen, str, iwlen, nullptr, nullptr);
+	WINPR_PRAGMA_DIAG_POP
 	if ((rc <= 0) || ((len > 0) && (rc > iwlen)))
 		return -1;
 
@@ -473,7 +479,10 @@ SSIZE_T ConvertUtf8NToWChar(const char* str, size_t len, WCHAR* wstr, size_t wle
 	}
 
 	const int iwlen = (int)wlen;
+	WINPR_PRAGMA_DIAG_PUSH
+	WINPR_PRAGMA_DIAG_IGNORED_DEPRECATED_DECL
 	const int rc = MultiByteToWideChar(CP_UTF8, 0, str, (int)ilen, wstr, iwlen);
+	WINPR_PRAGMA_DIAG_POP
 	if ((rc <= 0) || ((wlen > 0) && (rc > iwlen)))
 		return -1;
 	if (!isNullTerminated)
@@ -504,7 +513,10 @@ SSIZE_T ConvertMszUtf8NToWChar(const char* str, size_t len, WCHAR* wstr, size_t 
 	}
 
 	const int iwlen = (int)wlen;
+	WINPR_PRAGMA_DIAG_PUSH
+	WINPR_PRAGMA_DIAG_IGNORED_DEPRECATED_DECL
 	const int rc = MultiByteToWideChar(CP_UTF8, 0, str, (int)len, wstr, iwlen);
+	WINPR_PRAGMA_DIAG_POP
 	if ((rc <= 0) || ((wlen > 0) && (rc > iwlen)))
 		return -1;
 
