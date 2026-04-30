@@ -34,6 +34,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
+import androidx.lifecycle.ViewModelProvider;
 
 import android.util.Log;
 import android.view.KeyEvent;
@@ -78,8 +79,7 @@ public class SessionActivity extends AppCompatActivity
 	private boolean sessionRunning = false;
 	private long backPressedTime = 0;
 
-	private LibFreeRDPSessionListener sessionEventListener;
-	private long registeredSessionInstance = 0;
+	private SessionViewModel sessionViewModel;
 	private ScrollView2D scrollView;
 	private ClipboardManagerProxy mClipboardManager;
 	private SessionInputManager inputManager;
@@ -180,7 +180,8 @@ public class SessionActivity extends AppCompatActivity
 
 		scrollView = findViewById(R.id.sessionScrollView);
 		uiHandler = new UIHandler();
-		sessionEventListener = new LibFreeRDPSessionListener();
+		sessionViewModel = new ViewModelProvider(this).get(SessionViewModel.class);
+		sessionViewModel.getState().observe(this, this::onConnectionStateChanged);
 
 		dialogs = new SessionDialogs(this, new SessionDialogs.OnUserCancelListener() {
 			@Override public void onUserCancel()
@@ -269,11 +270,7 @@ public class SessionActivity extends AppCompatActivity
 			LibFreeRDP.disconnect(session.getInstance());
 
 		// unregister freerdp session listener
-		if (registeredSessionInstance != 0)
-		{
-			GlobalApp.unregisterSessionListener(registeredSessionInstance);
-			registeredSessionInstance = 0;
-		}
+		sessionViewModel.unregister();
 
 		// remove clipboard listener
 		mClipboardManager.removeClipboardboardChangedListener(this);
@@ -404,8 +401,7 @@ public class SessionActivity extends AppCompatActivity
 	{
 		session.setUIEventListener(this);
 
-		registeredSessionInstance = session.getInstance();
-		GlobalApp.registerSessionListener(registeredSessionInstance, sessionEventListener);
+		sessionViewModel.register(session.getInstance());
 
 		dialogs.showProgress(title, () -> {
 			connectCancelledByUser = true;
@@ -693,107 +689,103 @@ public class SessionActivity extends AppCompatActivity
 		}
 	}
 
-	private class LibFreeRDPSessionListener implements GlobalApp.SessionEventListener
+	private void onConnectionStateChanged(SessionViewModel.ConnectionState state)
 	{
-		@Override public void onConnectionSuccess()
+		if (session == null)
+			return;
+		switch (state)
 		{
-			if (session == null)
-				return;
-			OnConnectionSuccess(SessionActivity.this);
+			case CONNECTED:
+				onSessionConnected();
+				break;
+			case FAILED:
+				onSessionFailed();
+				break;
+			case DISCONNECTED:
+				onSessionDisconnected();
+				break;
+			default:
+				break;
 		}
+	}
 
-		@Override public void onConnectionFailure()
+	private void onSessionConnected()
+	{
+		Log.v(TAG, "onSessionConnected");
+
+		if (connectCancelledByUser)
 		{
-			if (session == null)
-				return;
-			OnConnectionFailure(SessionActivity.this);
-		}
-
-		@Override public void onDisconnected()
-		{
-			if (session == null)
-				return;
-			OnDisconnected(SessionActivity.this);
-		}
-
-		private void OnConnectionSuccess(Context context)
-		{
-			Log.v(TAG, "OnConnectionSuccess");
-
-			if (connectCancelledByUser)
-			{
-				LibFreeRDP.disconnect(session.getInstance());
-				closeSessionActivity(RESULT_CANCELED);
-				return;
-			}
-
-			// bind session
-			bindSession();
-
-			if (ApplicationSettingsActivity.getKeepScreenOnWhenConnected(context))
-			{
-				getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-			}
-
-			dialogs.dismissProgress();
-
-			if (session.getBookmark() == null)
-			{
-				// Return immediately if we launch from URI
-				return;
-			}
-
-			// add hostname to history if quick connect was used
-			Bundle bundle = getIntent().getExtras();
-			if (bundle != null && bundle.containsKey(PARAM_CONNECTION_REFERENCE))
-			{
-				if (ConnectionReference.isHostnameReference(
-				        bundle.getString(PARAM_CONNECTION_REFERENCE)))
-				{
-					assert session.getBookmark().getType() == BookmarkBase.TYPE_MANUAL;
-					String item = session.getBookmark().getHostname();
-					if (!GlobalApp.getQuickConnectHistoryGateway().historyItemExists(item))
-						GlobalApp.getQuickConnectHistoryGateway().addHistoryItem(item);
-				}
-			}
-		}
-
-		private void OnConnectionFailure(Context context)
-		{
-			Log.v(TAG, "OnConnectionFailure");
-
-			// cancel any pending input events
-			if (inputManager != null)
-				inputManager.cancelPendingEvents();
-
-			dialogs.dismissProgress();
-
-			// post error message on UI thread
-			if (!connectCancelledByUser)
-				uiHandler.sendMessage(
-				    Message.obtain(null, UIHandler.DISPLAY_TOAST,
-				                   getResources().getText(R.string.error_connection_failure)));
-
+			LibFreeRDP.disconnect(session.getInstance());
 			closeSessionActivity(RESULT_CANCELED);
+			return;
 		}
 
-		private void OnDisconnected(Context context)
+		// bind session
+		bindSession();
+
+		if (ApplicationSettingsActivity.getKeepScreenOnWhenConnected(this))
 		{
-			Log.v(TAG, "OnDisconnected");
-
-			// cancel any pending input events
-			if (inputManager != null)
-				inputManager.cancelPendingEvents();
-
-			if (ApplicationSettingsActivity.getKeepScreenOnWhenConnected(context))
-			{
-				getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-			}
-
-			dialogs.dismissProgress();
-
-			session.setUIEventListener(null);
-			closeSessionActivity(RESULT_OK);
+			getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 		}
+
+		dialogs.dismissProgress();
+
+		if (session.getBookmark() == null)
+		{
+			// Return immediately if we launch from URI
+			return;
+		}
+
+		// add hostname to history if quick connect was used
+		Bundle bundle = getIntent().getExtras();
+		if (bundle != null && bundle.containsKey(PARAM_CONNECTION_REFERENCE))
+		{
+			if (ConnectionReference.isHostnameReference(
+			        bundle.getString(PARAM_CONNECTION_REFERENCE)))
+			{
+				assert session.getBookmark().getType() == BookmarkBase.TYPE_MANUAL;
+				String item = session.getBookmark().getHostname();
+				if (!GlobalApp.getQuickConnectHistoryGateway().historyItemExists(item))
+					GlobalApp.getQuickConnectHistoryGateway().addHistoryItem(item);
+			}
+		}
+	}
+
+	private void onSessionFailed()
+	{
+		Log.v(TAG, "onSessionFailed");
+
+		// cancel any pending input events
+		if (inputManager != null)
+			inputManager.cancelPendingEvents();
+
+		dialogs.dismissProgress();
+
+		// post error message on UI thread
+		if (!connectCancelledByUser)
+			uiHandler.sendMessage(
+			    Message.obtain(null, UIHandler.DISPLAY_TOAST,
+			                   getResources().getText(R.string.error_connection_failure)));
+
+		closeSessionActivity(RESULT_CANCELED);
+	}
+
+	private void onSessionDisconnected()
+	{
+		Log.v(TAG, "onSessionDisconnected");
+
+		// cancel any pending input events
+		if (inputManager != null)
+			inputManager.cancelPendingEvents();
+
+		if (ApplicationSettingsActivity.getKeepScreenOnWhenConnected(this))
+		{
+			getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+		}
+
+		dialogs.dismissProgress();
+
+		session.setUIEventListener(null);
+		closeSessionActivity(RESULT_OK);
 	}
 }
