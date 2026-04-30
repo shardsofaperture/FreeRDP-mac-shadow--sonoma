@@ -240,6 +240,8 @@ BOOL freerdp_client_codecs_reset(rdpCodecs* codecs, UINT32 flags, UINT32 width, 
 }
 
 #if !defined(WITHOUT_FREERDP_3x_DEPRECATED)
+WINPR_PRAGMA_DIAG_PUSH
+WINPR_PRAGMA_DIAG_IGNORED_DEPRECATED_DECL
 rdpCodecs* codecs_new(rdpContext* context)
 {
 	if (!context || !context->settings)
@@ -253,6 +255,7 @@ void codecs_free(rdpCodecs* codecs)
 {
 	freerdp_client_codecs_free(codecs);
 }
+WINPR_PRAGMA_DIAG_POP
 #endif
 
 rdpCodecs* freerdp_client_codecs_new(UINT32 ThreadingFlags)

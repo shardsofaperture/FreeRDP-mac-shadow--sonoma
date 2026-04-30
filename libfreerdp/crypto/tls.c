@@ -1823,6 +1823,11 @@ int tls_verify_certificate(rdpTls* tls, const rdpCertificate* cert, const char* 
 					free(efp);
 				}
 
+#if !defined(WITHOUT_FREERDP_3x_DEPRECATED)
+				WINPR_PRAGMA_DIAG_PUSH
+				WINPR_PRAGMA_DIAG_IGNORED_DEPRECATED_DECL
+#endif
+
 				/* Automatically accept certificate on first use */
 				if (settings->AutoAcceptCertificate)
 				{
@@ -1961,6 +1966,10 @@ int tls_verify_certificate(rdpTls* tls, const rdpCertificate* cert, const char* 
 			}
 			else if (match == 0)
 				accept_certificate = 2; /* success! */
+
+#if !defined(WITHOUT_FREERDP_3x_DEPRECATED)
+			WINPR_PRAGMA_DIAG_POP
+#endif
 
 			/* Save certificate or do a simple accept / reject */
 			switch (accept_certificate)
