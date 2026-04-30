@@ -5,18 +5,22 @@
 
 package com.freerdp.freerdpcore.presentation;
 
+import android.app.Application;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.util.Log;
 
+import androidx.annotation.NonNull;
+import androidx.lifecycle.AndroidViewModel;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
-import androidx.lifecycle.ViewModel;
 
-import com.freerdp.freerdpcore.application.GlobalApp;
+import com.freerdp.freerdpcore.data.AppDatabase;
+import com.freerdp.freerdpcore.data.HistoryDatabase;
 import com.freerdp.freerdpcore.domain.BookmarkBase;
 import com.freerdp.freerdpcore.domain.ConnectionReference;
 import com.freerdp.freerdpcore.services.ManualBookmarkGateway;
+import com.freerdp.freerdpcore.services.QuickConnectHistoryGateway;
 import com.freerdp.freerdpcore.utils.RDPFileParser;
 
 import java.io.File;
@@ -24,7 +28,7 @@ import java.io.IOException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class BookmarkViewModel extends ViewModel
+public class BookmarkViewModel extends AndroidViewModel
 {
 	private static final String TAG = "BookmarkViewModel";
 
@@ -37,6 +41,18 @@ public class BookmarkViewModel extends ViewModel
 
 	// Single-thread executor handles Room DB and File parsing off the UI thread
 	private final ExecutorService executor = Executors.newSingleThreadExecutor();
+
+	private final ManualBookmarkGateway manualBookmarkGateway;
+	private final QuickConnectHistoryGateway quickConnectHistoryGateway;
+
+	public BookmarkViewModel(@NonNull Application application)
+	{
+		super(application);
+		manualBookmarkGateway =
+		    new ManualBookmarkGateway(AppDatabase.getInstance(application).bookmarkDao());
+		quickConnectHistoryGateway =
+		    new QuickConnectHistoryGateway(HistoryDatabase.getInstance(application).historyDao());
+	}
 
 	public LiveData<BookmarkBase> getBookmarkLiveData()
 	{
@@ -92,8 +108,8 @@ public class BookmarkViewModel extends ViewModel
 
 				if (ConnectionReference.isBookmarkReference(refStr))
 				{
-					bookmark = GlobalApp.getManualBookmarkGateway().findById(
-					    ConnectionReference.getBookmarkId(refStr));
+					bookmark =
+					    manualBookmarkGateway.findById(ConnectionReference.getBookmarkId(refStr));
 					isNew = false;
 				}
 				else if (ConnectionReference.isHostnameReference(refStr))
@@ -150,16 +166,15 @@ public class BookmarkViewModel extends ViewModel
 
 			if (bookmark.getType() == BookmarkBase.TYPE_MANUAL)
 			{
-				ManualBookmarkGateway gateway = GlobalApp.getManualBookmarkGateway();
-				GlobalApp.getQuickConnectHistoryGateway().removeHistoryItem(bookmark.getHostname());
+				quickConnectHistoryGateway.removeHistoryItem(bookmark.getHostname());
 
 				if (bookmark.getId() > 0)
 				{
-					gateway.update(bookmark);
+					manualBookmarkGateway.update(bookmark);
 				}
 				else
 				{
-					gateway.insert(bookmark);
+					manualBookmarkGateway.insert(bookmark);
 				}
 			}
 

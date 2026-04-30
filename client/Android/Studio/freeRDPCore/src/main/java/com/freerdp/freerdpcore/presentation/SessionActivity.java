@@ -311,23 +311,27 @@ public class SessionActivity extends AppCompatActivity
 		}
 		else if (bundle.containsKey(PARAM_CONNECTION_REFERENCE))
 		{
-			BookmarkBase bookmark = null;
 			String refStr = bundle.getString(PARAM_CONNECTION_REFERENCE);
 			if (ConnectionReference.isHostnameReference(refStr))
 			{
-				bookmark = new BookmarkBase();
+				BookmarkBase bookmark = new BookmarkBase();
 				bookmark.setHostname(ConnectionReference.getHostname(refStr));
+				connect(bookmark);
 			}
 			else if (ConnectionReference.isBookmarkReference(refStr))
 			{
-				bookmark = GlobalApp.getManualBookmarkGateway().findById(
-				    ConnectionReference.getBookmarkId(refStr));
+				sessionViewModel.loadBookmarkById(ConnectionReference.getBookmarkId(refStr),
+				                                  bookmark -> {
+					                                  if (bookmark != null)
+						                                  connect(bookmark);
+					                                  else
+						                                  closeSessionActivity(RESULT_CANCELED);
+				                                  });
 			}
-
-			if (bookmark != null)
-				connect(bookmark);
 			else
+			{
 				closeSessionActivity(RESULT_CANCELED);
+			}
 		}
 		else
 		{
@@ -744,9 +748,7 @@ public class SessionActivity extends AppCompatActivity
 			        bundle.getString(PARAM_CONNECTION_REFERENCE)))
 			{
 				assert session.getBookmark().getType() == BookmarkBase.TYPE_MANUAL;
-				String item = session.getBookmark().getHostname();
-				if (!GlobalApp.getQuickConnectHistoryGateway().historyItemExists(item))
-					GlobalApp.getQuickConnectHistoryGateway().addHistoryItem(item);
+				sessionViewModel.recordQuickConnectHistory(session.getBookmark().getHostname());
 			}
 		}
 	}
