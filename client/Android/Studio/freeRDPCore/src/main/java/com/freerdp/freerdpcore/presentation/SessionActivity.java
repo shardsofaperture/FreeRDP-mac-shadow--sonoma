@@ -11,7 +11,6 @@
 package com.freerdp.freerdpcore.presentation;
 
 import android.app.AlertDialog;
-import android.app.ProgressDialog;
 import android.app.UiModeManager;
 import android.content.BroadcastReceiver;
 import androidx.core.content.ContextCompat;
@@ -72,7 +71,6 @@ public class SessionActivity extends AppCompatActivity
 	private SessionState session;
 	private SessionView sessionView;
 	private TouchPointerView touchPointerView;
-	private ProgressDialog progressDialog;
 
 	private UIHandler uiHandler;
 
@@ -87,7 +85,7 @@ public class SessionActivity extends AppCompatActivity
 	private ScrollView2D scrollView;
 	private ClipboardManagerProxy mClipboardManager;
 	private SessionInputManager inputManager;
-	private SessionDialogs authDialogs;
+	private SessionDialogs dialogs;
 
 	private void hideSystemBars()
 	{
@@ -186,7 +184,7 @@ public class SessionActivity extends AppCompatActivity
 		uiHandler = new UIHandler();
 		libFreeRDPBroadcastReceiver = new LibFreeRDPBroadcastReceiver();
 
-		authDialogs = new SessionDialogs(this, new SessionDialogs.OnUserCancelListener() {
+		dialogs = new SessionDialogs(this, new SessionDialogs.OnUserCancelListener() {
 			@Override public void onUserCancel()
 			{
 				connectCancelledByUser = true;
@@ -410,19 +408,10 @@ public class SessionActivity extends AppCompatActivity
 	{
 		session.setUIEventListener(this);
 
-		progressDialog = new ProgressDialog(this);
-		progressDialog.setTitle(title);
-		progressDialog.setMessage(getResources().getText(R.string.dlg_msg_connecting));
-		progressDialog.setButton(
-		    ProgressDialog.BUTTON_NEGATIVE, "Cancel", new DialogInterface.OnClickListener() {
-			    @Override public void onClick(DialogInterface dialog, int which)
-			    {
-				    connectCancelledByUser = true;
-				    LibFreeRDP.cancelConnection(session.getInstance());
-			    }
-		    });
-		progressDialog.setCancelable(false);
-		progressDialog.show();
+		dialogs.showProgress(title, () -> {
+			connectCancelledByUser = true;
+			LibFreeRDP.cancelConnection(session.getInstance());
+		});
 
 		connectThread = new ConnectThread(getApplicationContext(), session);
 		connectThread.start();
@@ -613,14 +602,14 @@ public class SessionActivity extends AppCompatActivity
 	public boolean OnAuthenticate(StringBuilder username, StringBuilder domain,
 	                              StringBuilder password)
 	{
-		return authDialogs.promptCredentials(username, domain, password);
+		return dialogs.promptCredentials(username, domain, password);
 	}
 
 	@Override
 	public boolean OnGatewayAuthenticate(StringBuilder username, StringBuilder domain,
 	                                     StringBuilder password)
 	{
-		return authDialogs.promptCredentials(username, domain, password);
+		return dialogs.promptCredentials(username, domain, password);
 	}
 
 	@Override
@@ -629,7 +618,7 @@ public class SessionActivity extends AppCompatActivity
 	{
 		if (ApplicationSettingsActivity.getAcceptAllCertificates(this))
 			return 0;
-		return authDialogs.verifyCertificate(host, port, subject, issuer, fingerprint, flags);
+		return dialogs.verifyCertificate(host, port, subject, issuer, fingerprint, flags);
 	}
 
 	@Override
@@ -640,7 +629,7 @@ public class SessionActivity extends AppCompatActivity
 	{
 		if (ApplicationSettingsActivity.getAcceptAllCertificates(this))
 			return 0;
-		return authDialogs.verifyChangedCertificate(host, port, subject, issuer, fingerprint, flags);
+		return dialogs.verifyChangedCertificate(host, port, subject, issuer, fingerprint, flags);
 	}
 
 	@Override public void OnRemoteClipboardChanged(String data)
@@ -751,11 +740,7 @@ public class SessionActivity extends AppCompatActivity
 				getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 			}
 
-			if (progressDialog != null)
-			{
-				progressDialog.dismiss();
-				progressDialog = null;
-			}
+			dialogs.dismissProgress();
 
 			if (session.getBookmark() == null)
 			{
@@ -786,11 +771,7 @@ public class SessionActivity extends AppCompatActivity
 			if (inputManager != null)
 				inputManager.cancelPendingEvents();
 
-			if (progressDialog != null)
-			{
-				progressDialog.dismiss();
-				progressDialog = null;
-			}
+			dialogs.dismissProgress();
 
 			// post error message on UI thread
 			if (!connectCancelledByUser)
@@ -814,11 +795,7 @@ public class SessionActivity extends AppCompatActivity
 				getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 			}
 
-			if (progressDialog != null)
-			{
-				progressDialog.dismiss();
-				progressDialog = null;
-			}
+			dialogs.dismissProgress();
 
 			session.setUIEventListener(null);
 			closeSessionActivity(RESULT_OK);

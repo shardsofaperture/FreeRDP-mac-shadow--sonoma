@@ -15,17 +15,23 @@ import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.TextView;
 
 import com.freerdp.freerdpcore.R;
 import com.freerdp.freerdpcore.services.LibFreeRDP;
 
 /**
- * Owns the credentials prompt and certificate verification dialogs that the
- * native FreeRDP session may request during connect. Each public method blocks
- * the calling (background) thread until the user dismisses the corresponding
- * dialog on the UI thread.
+ * Owns every dialog that the FreeRDP session may need: the connect-progress
+ * spinner, the credentials prompt, and the certificate verification dialogs.
+ * The auth/verify methods block the calling (background) thread until the user
+ * dismisses the dialog on the UI thread.
  */
 public class SessionDialogs
 {
@@ -35,6 +41,12 @@ public class SessionDialogs
 		void onUserCancel();
 	}
 
+	/** Notified when the user cancels the connection-progress dialog. */
+	public interface OnConnectCancelListener
+	{
+		void onConnectCancel();
+	}
+
 	private final Activity activity;
 	private final OnUserCancelListener cancelListener;
 	private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -42,6 +54,8 @@ public class SessionDialogs
 	private final AlertDialog dlgVerifyCertificate;
 	private final AlertDialog dlgUserCredentials;
 	private final View userCredView;
+
+	private AlertDialog progressDialog;
 
 	private boolean callbackDialogResult;
 
@@ -223,5 +237,56 @@ public class SessionDialogs
 	{
 		if (cancelListener != null)
 			cancelListener.onUserCancel();
+	}
+
+	/**
+	 * Builds and shows a non-blocking connect-progress dialog. Subsequent calls
+	 * replace any previously shown progress dialog.
+	 */
+	public void showProgress(String title, final OnConnectCancelListener listener)
+	{
+		dismissProgress();
+
+		int pad = (int)TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 24,
+		                                         activity.getResources().getDisplayMetrics());
+		LinearLayout content = new LinearLayout(activity);
+		content.setOrientation(LinearLayout.HORIZONTAL);
+		content.setPadding(pad, pad, pad, pad);
+		content.setGravity(Gravity.CENTER_VERTICAL);
+
+		ProgressBar progressBar = new ProgressBar(activity);
+		progressBar.setIndeterminate(true);
+		content.addView(progressBar,
+		                new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+		                                              ViewGroup.LayoutParams.WRAP_CONTENT));
+
+		TextView messageView = new TextView(activity);
+		messageView.setText(R.string.dlg_msg_connecting);
+		LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(
+		    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+		textParams.leftMargin = pad;
+		content.addView(messageView, textParams);
+
+		progressDialog = new AlertDialog.Builder(activity)
+		                     .setTitle(title)
+		                     .setView(content)
+		                     .setNegativeButton(android.R.string.cancel,
+		                                        (dialog, which) -> {
+			                                        if (listener != null)
+				                                        listener.onConnectCancel();
+		                                        })
+		                     .setCancelable(false)
+		                     .create();
+		progressDialog.show();
+	}
+
+	/** Dismisses the connect-progress dialog if it is currently shown. */
+	public void dismissProgress()
+	{
+		if (progressDialog != null)
+		{
+			progressDialog.dismiss();
+			progressDialog = null;
+		}
 	}
 }
