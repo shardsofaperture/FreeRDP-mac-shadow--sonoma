@@ -473,6 +473,15 @@ static UINT cliprdr_server_receive_general_capability(CliprdrServerContext* cont
 	WINPR_ASSERT(context);
 	WINPR_ASSERT(cap_set);
 
+	if (cap_set->capabilitySetLength != sizeof(CLIPRDR_GENERAL_CAPABILITY_SET))
+	{
+		WLog_ERR(TAG,
+		         "invalid capabilitySetLength %" PRIu16 " != %" PRIuz
+		         " (capabilitySetType=CB_CAPSTYPE_GENERAL)",
+		         cap_set->capabilitySetLength, sizeof(CLIPRDR_GENERAL_CAPABILITY_SET));
+		return ERROR_INVALID_DATA;
+	}
+
 	if (!Stream_CheckAndLogRequiredLength(TAG, s, 8))
 		return ERROR_INVALID_DATA;
 
@@ -497,6 +506,27 @@ static UINT cliprdr_server_receive_general_capability(CliprdrServerContext* cont
 	return CHANNEL_RC_OK;
 }
 
+WINPR_ATTR_NODISCARD
+static BOOL cliprdr_capabilities_contain_capset(const CLIPRDR_CAPABILITIES* capabilities,
+                                                const CLIPRDR_CAPABILITY_SET* capset)
+{
+	WINPR_ASSERT(capabilities);
+
+	const BYTE* offset = (const BYTE*)capabilities->capabilitySets;
+	for (UINT32 x = 0; x < capabilities->cCapabilitiesSets; x++)
+	{
+		const CLIPRDR_CAPABILITY_SET* cur = (const CLIPRDR_CAPABILITY_SET*)offset;
+		offset += cur->capabilitySetLength;
+
+		if (cur->capabilitySetType == capset->capabilitySetType)
+		{
+			WLog_ERR(TAG, "duplicate  CLIPRDR_CAPABILITY_SET %" PRIu16, cur->capabilitySetType);
+			return TRUE;
+		}
+	}
+	return FALSE;
+}
+
 /**
  * Function description
  *
@@ -505,12 +535,9 @@ static UINT cliprdr_server_receive_general_capability(CliprdrServerContext* cont
 static UINT cliprdr_server_receive_capabilities(CliprdrServerContext* context, wStream* s,
                                                 const CLIPRDR_HEADER* header)
 {
-	UINT16 capabilitySetType = 0;
-	UINT16 capabilitySetLength = 0;
 	UINT error = ERROR_INVALID_DATA;
 	size_t cap_sets_size = 0;
 	CLIPRDR_CAPABILITIES capabilities = WINPR_C_ARRAY_INIT;
-	CLIPRDR_CAPABILITY_SET* capSet = nullptr;
 
 	WINPR_ASSERT(context);
 	WINPR_UNUSED(header);
@@ -519,17 +546,16 @@ static UINT cliprdr_server_receive_capabilities(CliprdrServerContext* context, w
 	if (!Stream_CheckAndLogRequiredLength(TAG, s, 4))
 		return ERROR_INVALID_DATA;
 
-	Stream_Read_UINT16(s, capabilities.cCapabilitiesSets); /* cCapabilitiesSets (2 bytes) */
+	const UINT16 cCapabilitiesSets = Stream_Get_UINT16(s); /* cCapabilitiesSets (2 bytes) */
 	Stream_Seek_UINT16(s);                                 /* pad1 (2 bytes) */
 
-	for (size_t index = 0; index < capabilities.cCapabilitiesSets; index++)
+	for (size_t index = 0; index < cCapabilitiesSets; index++)
 	{
-		void* tmp = nullptr;
 		const size_t cap_set_offset = cap_sets_size;
 		if (!Stream_CheckAndLogRequiredLength(TAG, s, sizeof(CLIPRDR_CAPABILITY_SET)))
 			goto out;
-		Stream_Read_UINT16(s, capabilitySetType);   /* capabilitySetType (2 bytes) */
-		Stream_Read_UINT16(s, capabilitySetLength); /* capabilitySetLength (2 bytes) */
+		const UINT16 capabilitySetType = Stream_Get_UINT16(s);   /* capabilitySetType (2 bytes) */
+		const UINT16 capabilitySetLength = Stream_Get_UINT16(s); /* capabilitySetLength (2 bytes) */
 
 		if (capabilitySetLength < sizeof(CLIPRDR_CAPABILITY_SET))
 		{
@@ -544,26 +570,9 @@ static UINT cliprdr_server_receive_capabilities(CliprdrServerContext* context, w
 		        TAG, s, (size_t)capabilitySetLength - sizeof(CLIPRDR_CAPABILITY_SET)))
 			goto out;
 
-		switch (capabilitySetType)
-		{
-			case CB_CAPSTYPE_GENERAL:
-				if (capabilitySetLength != sizeof(CLIPRDR_GENERAL_CAPABILITY_SET))
-				{
-					WLog_ERR(TAG,
-					         "invalid capabilitySetLength %" PRIu16 " != %" PRIuz
-					         " (capabilitySetType=CB_CAPSTYPE_GENERAL)",
-					         capabilitySetLength, sizeof(CLIPRDR_GENERAL_CAPABILITY_SET));
-					goto out;
-				}
-				break;
-			default:
-				WLog_ERR(TAG, "unknown cliprdr capability set: %" PRIu16 "", capabilitySetType);
-				goto out;
-		}
-
 		cap_sets_size += capabilitySetLength;
 
-		tmp = realloc(capabilities.capabilitySets, cap_sets_size);
+		CLIPRDR_CAPABILITY_SET* tmp = realloc(capabilities.capabilitySets, cap_sets_size);
 		if (tmp == nullptr)
 		{
 			WLog_ERR(TAG, "capabilities.capabilitySets realloc failed!");
@@ -571,12 +580,18 @@ static UINT cliprdr_server_receive_capabilities(CliprdrServerContext* context, w
 			return CHANNEL_RC_NO_MEMORY;
 		}
 
-		capabilities.capabilitySets = (CLIPRDR_CAPABILITY_SET*)tmp;
+		capabilities.capabilitySets = tmp;
 
-		capSet = (CLIPRDR_CAPABILITY_SET*)(((BYTE*)capabilities.capabilitySets) + cap_set_offset);
+		CLIPRDR_CAPABILITY_SET* capSet =
+		    (CLIPRDR_CAPABILITY_SET*)(((BYTE*)capabilities.capabilitySets) + cap_set_offset);
 
 		capSet->capabilitySetType = capabilitySetType;
 		capSet->capabilitySetLength = capabilitySetLength;
+
+		if (cliprdr_capabilities_contain_capset(&capabilities, capSet))
+			goto out;
+
+		capabilities.cCapabilitiesSets++;
 
 		switch (capSet->capabilitySetType)
 		{
