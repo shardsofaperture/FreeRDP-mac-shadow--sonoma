@@ -11,7 +11,6 @@
 package com.freerdp.freerdpcore.presentation;
 
 import android.app.AlertDialog;
-import android.app.Dialog;
 import android.app.ProgressDialog;
 import android.app.UiModeManager;
 import android.content.BroadcastReceiver;
@@ -50,7 +49,6 @@ import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewTreeObserver.OnGlobalLayoutListener;
 import android.view.WindowManager;
-import android.widget.EditText;
 import android.widget.Toast;
 
 import com.freerdp.freerdpcore.R;
@@ -76,10 +74,6 @@ public class SessionActivity extends AppCompatActivity
 	private TouchPointerView touchPointerView;
 	private ProgressDialog progressDialog;
 
-	private AlertDialog dlgVerifyCertificate;
-	private AlertDialog dlgUserCredentials;
-	private View userCredView;
-
 	private UIHandler uiHandler;
 
 	private int screen_width;
@@ -93,76 +87,7 @@ public class SessionActivity extends AppCompatActivity
 	private ScrollView2D scrollView;
 	private ClipboardManagerProxy mClipboardManager;
 	private SessionInputManager inputManager;
-	private boolean callbackDialogResult;
-
-	private void createDialogs()
-	{
-		// build verify certificate dialog
-		dlgVerifyCertificate =
-		    new AlertDialog.Builder(this)
-		        .setTitle(R.string.dlg_title_verify_certificate)
-		        .setPositiveButton(android.R.string.yes,
-		                           new DialogInterface.OnClickListener() {
-			                           @Override
-			                           public void onClick(DialogInterface dialog, int which)
-			                           {
-				                           callbackDialogResult = true;
-				                           synchronized (dialog)
-				                           {
-					                           dialog.notify();
-				                           }
-			                           }
-		                           })
-		        .setNegativeButton(android.R.string.no,
-		                           new DialogInterface.OnClickListener() {
-			                           @Override
-			                           public void onClick(DialogInterface dialog, int which)
-			                           {
-				                           callbackDialogResult = false;
-				                           connectCancelledByUser = true;
-				                           synchronized (dialog)
-				                           {
-					                           dialog.notify();
-				                           }
-			                           }
-		                           })
-		        .setCancelable(false)
-		        .create();
-
-		// build the dialog
-		userCredView = getLayoutInflater().inflate(R.layout.credentials, null, true);
-		dlgUserCredentials =
-		    new AlertDialog.Builder(this)
-		        .setView(userCredView)
-		        .setTitle(R.string.dlg_title_credentials)
-		        .setPositiveButton(android.R.string.ok,
-		                           new DialogInterface.OnClickListener() {
-			                           @Override
-			                           public void onClick(DialogInterface dialog, int which)
-			                           {
-				                           callbackDialogResult = true;
-				                           synchronized (dialog)
-				                           {
-					                           dialog.notify();
-				                           }
-			                           }
-		                           })
-		        .setNegativeButton(android.R.string.cancel,
-		                           new DialogInterface.OnClickListener() {
-			                           @Override
-			                           public void onClick(DialogInterface dialog, int which)
-			                           {
-				                           callbackDialogResult = false;
-				                           connectCancelledByUser = true;
-				                           synchronized (dialog)
-				                           {
-					                           dialog.notify();
-				                           }
-			                           }
-		                           })
-		        .setCancelable(false)
-		        .create();
-	}
+	private SessionDialogs authDialogs;
 
 	private void hideSystemBars()
 	{
@@ -261,7 +186,12 @@ public class SessionActivity extends AppCompatActivity
 		uiHandler = new UIHandler();
 		libFreeRDPBroadcastReceiver = new LibFreeRDPBroadcastReceiver();
 
-		createDialogs();
+		authDialogs = new SessionDialogs(this, new SessionDialogs.OnUserCancelListener() {
+			@Override public void onUserCancel()
+			{
+				connectCancelledByUser = true;
+			}
+		});
 
 		// Wire up the input manager (instance is attached later in bindSession()).
 		inputManager = new SessionInputManager(this, scrollView, sessionView, touchPointerView,
@@ -683,132 +613,23 @@ public class SessionActivity extends AppCompatActivity
 	public boolean OnAuthenticate(StringBuilder username, StringBuilder domain,
 	                              StringBuilder password)
 	{
-		// this is where the return code of our dialog will be stored
-		callbackDialogResult = false;
-
-		// set text fields
-		((EditText)userCredView.findViewById(R.id.editTextUsername)).setText(username);
-		((EditText)userCredView.findViewById(R.id.editTextDomain)).setText(domain);
-		((EditText)userCredView.findViewById(R.id.editTextPassword)).setText(password);
-
-		// start dialog in UI thread
-		uiHandler.sendMessage(Message.obtain(null, UIHandler.SHOW_DIALOG, dlgUserCredentials));
-
-		// wait for result
-		try
-		{
-			synchronized (dlgUserCredentials)
-			{
-				dlgUserCredentials.wait();
-			}
-		}
-		catch (InterruptedException e)
-		{
-		}
-
-		// clear buffers
-		username.setLength(0);
-		domain.setLength(0);
-		password.setLength(0);
-
-		// read back user credentials
-		username.append(
-		    ((EditText)userCredView.findViewById(R.id.editTextUsername)).getText().toString());
-		domain.append(
-		    ((EditText)userCredView.findViewById(R.id.editTextDomain)).getText().toString());
-		password.append(
-		    ((EditText)userCredView.findViewById(R.id.editTextPassword)).getText().toString());
-
-		return callbackDialogResult;
+		return authDialogs.promptCredentials(username, domain, password);
 	}
 
 	@Override
 	public boolean OnGatewayAuthenticate(StringBuilder username, StringBuilder domain,
 	                                     StringBuilder password)
 	{
-		// this is where the return code of our dialog will be stored
-		callbackDialogResult = false;
-
-		// set text fields
-		((EditText)userCredView.findViewById(R.id.editTextUsername)).setText(username);
-		((EditText)userCredView.findViewById(R.id.editTextDomain)).setText(domain);
-		((EditText)userCredView.findViewById(R.id.editTextPassword)).setText(password);
-
-		// start dialog in UI thread
-		uiHandler.sendMessage(Message.obtain(null, UIHandler.SHOW_DIALOG, dlgUserCredentials));
-
-		// wait for result
-		try
-		{
-			synchronized (dlgUserCredentials)
-			{
-				dlgUserCredentials.wait();
-			}
-		}
-		catch (InterruptedException e)
-		{
-		}
-
-		// clear buffers
-		username.setLength(0);
-		domain.setLength(0);
-		password.setLength(0);
-
-		// read back user credentials
-		username.append(
-		    ((EditText)userCredView.findViewById(R.id.editTextUsername)).getText().toString());
-		domain.append(
-		    ((EditText)userCredView.findViewById(R.id.editTextDomain)).getText().toString());
-		password.append(
-		    ((EditText)userCredView.findViewById(R.id.editTextPassword)).getText().toString());
-
-		return callbackDialogResult;
+		return authDialogs.promptCredentials(username, domain, password);
 	}
 
 	@Override
 	public int OnVerifiyCertificateEx(String host, long port, String commonName, String subject,
 	                                  String issuer, String fingerprint, long flags)
 	{
-		// see if global settings says accept all
 		if (ApplicationSettingsActivity.getAcceptAllCertificates(this))
 			return 0;
-
-		// this is where the return code of our dialog will be stored
-		callbackDialogResult = false;
-
-		// set message
-		String msg = getResources().getString(R.string.dlg_msg_verify_certificate);
-		String type = "RDP-Server";
-		if ((flags & LibFreeRDP.VERIFY_CERT_FLAG_GATEWAY) != 0)
-			type = "RDP-Gateway";
-		if ((flags & LibFreeRDP.VERIFY_CERT_FLAG_REDIRECT) != 0)
-			type = "RDP-Redirect";
-		msg += "\n\n" + type + ": " + host + ":" + port;
-
-		msg += "\n\nSubject: " + subject + "\nIssuer: " + issuer;
-
-		if ((flags & LibFreeRDP.VERIFY_CERT_FLAG_FP_IS_PEM) != 0)
-			msg += "\nCertificate: " + fingerprint;
-		else
-			msg += "\nFingerprint: " + fingerprint;
-		dlgVerifyCertificate.setMessage(msg);
-
-		// start dialog in UI thread
-		uiHandler.sendMessage(Message.obtain(null, UIHandler.SHOW_DIALOG, dlgVerifyCertificate));
-
-		// wait for result
-		try
-		{
-			synchronized (dlgVerifyCertificate)
-			{
-				dlgVerifyCertificate.wait();
-			}
-		}
-		catch (InterruptedException e)
-		{
-		}
-
-		return callbackDialogResult ? 1 : 0;
+		return authDialogs.verifyCertificate(host, port, subject, issuer, fingerprint, flags);
 	}
 
 	@Override
@@ -817,44 +638,9 @@ public class SessionActivity extends AppCompatActivity
 	                                        String oldSubject, String oldIssuer,
 	                                        String oldFingerprint, long flags)
 	{
-		// see if global settings says accept all
 		if (ApplicationSettingsActivity.getAcceptAllCertificates(this))
 			return 0;
-
-		// this is where the return code of our dialog will be stored
-		callbackDialogResult = false;
-
-		// set message
-		String msg = getResources().getString(R.string.dlg_msg_verify_certificate);
-		String type = "RDP-Server";
-		if ((flags & LibFreeRDP.VERIFY_CERT_FLAG_GATEWAY) != 0)
-			type = "RDP-Gateway";
-		if ((flags & LibFreeRDP.VERIFY_CERT_FLAG_REDIRECT) != 0)
-			type = "RDP-Redirect";
-		msg += "\n\n" + type + ": " + host + ":" + port;
-		msg += "\n\nSubject: " + subject + "\nIssuer: " + issuer;
-		if ((flags & LibFreeRDP.VERIFY_CERT_FLAG_FP_IS_PEM) != 0)
-			msg += "\nCertificate: " + fingerprint;
-		else
-			msg += "\nFingerprint: " + fingerprint;
-		dlgVerifyCertificate.setMessage(msg);
-
-		// start dialog in UI thread
-		uiHandler.sendMessage(Message.obtain(null, UIHandler.SHOW_DIALOG, dlgVerifyCertificate));
-
-		// wait for result
-		try
-		{
-			synchronized (dlgVerifyCertificate)
-			{
-				dlgVerifyCertificate.wait();
-			}
-		}
-		catch (InterruptedException e)
-		{
-		}
-
-		return callbackDialogResult ? 1 : 0;
+		return authDialogs.verifyChangedCertificate(host, port, subject, issuer, fingerprint, flags);
 	}
 
 	@Override public void OnRemoteClipboardChanged(String data)
@@ -886,7 +672,6 @@ public class SessionActivity extends AppCompatActivity
 
 		public static final int REFRESH_SESSIONVIEW = 1;
 		public static final int DISPLAY_TOAST = 2;
-		public static final int SHOW_DIALOG = 5;
 		public static final int GRAPHICS_CHANGED = 6;
 
 		UIHandler()
@@ -914,12 +699,6 @@ public class SessionActivity extends AppCompatActivity
 					Toast errorToast = Toast.makeText(getApplicationContext(), msg.obj.toString(),
 					                                  Toast.LENGTH_LONG);
 					errorToast.show();
-					break;
-				}
-				case SHOW_DIALOG:
-				{
-					// create and show the dialog
-					((Dialog)msg.obj).show();
 					break;
 				}
 			}
