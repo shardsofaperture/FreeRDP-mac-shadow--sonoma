@@ -12,12 +12,9 @@ package com.freerdp.freerdpcore.presentation;
 
 import android.app.AlertDialog;
 import android.app.UiModeManager;
-import android.content.BroadcastReceiver;
-import androidx.core.content.ContextCompat;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
@@ -81,7 +78,8 @@ public class SessionActivity extends AppCompatActivity
 	private boolean sessionRunning = false;
 	private long backPressedTime = 0;
 
-	private LibFreeRDPBroadcastReceiver libFreeRDPBroadcastReceiver;
+	private LibFreeRDPSessionListener sessionEventListener;
+	private long registeredSessionInstance = 0;
 	private ScrollView2D scrollView;
 	private ClipboardManagerProxy mClipboardManager;
 	private SessionInputManager inputManager;
@@ -182,7 +180,7 @@ public class SessionActivity extends AppCompatActivity
 
 		scrollView = findViewById(R.id.sessionScrollView);
 		uiHandler = new UIHandler();
-		libFreeRDPBroadcastReceiver = new LibFreeRDPBroadcastReceiver();
+		sessionEventListener = new LibFreeRDPSessionListener();
 
 		dialogs = new SessionDialogs(this, new SessionDialogs.OnUserCancelListener() {
 			@Override public void onUserCancel()
@@ -198,12 +196,6 @@ public class SessionActivity extends AppCompatActivity
 		touchPointerView.setTouchPointerListener(inputManager);
 		sessionView.setScaleGestureDetector(
 		    new ScaleGestureDetector(this, inputManager.getPinchZoomListener()));
-
-		// register freerdp events broadcast receiver
-		IntentFilter filter = new IntentFilter();
-		filter.addAction(GlobalApp.ACTION_EVENT_FREERDP);
-		ContextCompat.registerReceiver(this, libFreeRDPBroadcastReceiver, filter,
-		                               ContextCompat.RECEIVER_EXPORTED);
 
 		mClipboardManager = ClipboardManagerProxy.getClipboardManager(this);
 		mClipboardManager.addClipboardChangedListener(this);
@@ -276,8 +268,12 @@ public class SessionActivity extends AppCompatActivity
 		for (SessionState session : sessions)
 			LibFreeRDP.disconnect(session.getInstance());
 
-		// unregister freerdp events broadcast receiver
-		unregisterReceiver(libFreeRDPBroadcastReceiver);
+		// unregister freerdp session listener
+		if (registeredSessionInstance != 0)
+		{
+			GlobalApp.unregisterSessionListener(registeredSessionInstance);
+			registeredSessionInstance = 0;
+		}
 
 		// remove clipboard listener
 		mClipboardManager.removeClipboardboardChangedListener(this);
@@ -407,6 +403,9 @@ public class SessionActivity extends AppCompatActivity
 	private void connectWithTitle(String title)
 	{
 		session.setUIEventListener(this);
+
+		registeredSessionInstance = session.getInstance();
+		GlobalApp.registerSessionListener(registeredSessionInstance, sessionEventListener);
 
 		dialogs.showProgress(title, () -> {
 			connectCancelledByUser = true;
@@ -694,31 +693,27 @@ public class SessionActivity extends AppCompatActivity
 		}
 	}
 
-	private class LibFreeRDPBroadcastReceiver extends BroadcastReceiver
+	private class LibFreeRDPSessionListener implements GlobalApp.SessionEventListener
 	{
-		@Override public void onReceive(Context context, Intent intent)
+		@Override public void onConnectionSuccess()
 		{
-			// still got a valid session?
 			if (session == null)
 				return;
+			OnConnectionSuccess(SessionActivity.this);
+		}
 
-			// is this event for the current session?
-			if (session.getInstance() != intent.getExtras().getLong(GlobalApp.EVENT_PARAM, -1))
+		@Override public void onConnectionFailure()
+		{
+			if (session == null)
 				return;
+			OnConnectionFailure(SessionActivity.this);
+		}
 
-			switch (intent.getExtras().getInt(GlobalApp.EVENT_TYPE, -1))
-			{
-				case GlobalApp.FREERDP_EVENT_CONNECTION_SUCCESS:
-					OnConnectionSuccess(context);
-					break;
-
-				case GlobalApp.FREERDP_EVENT_CONNECTION_FAILURE:
-					OnConnectionFailure(context);
-					break;
-				case GlobalApp.FREERDP_EVENT_DISCONNECTED:
-					OnDisconnected(context);
-					break;
-			}
+		@Override public void onDisconnected()
+		{
+			if (session == null)
+				return;
+			OnDisconnected(SessionActivity.this);
 		}
 
 		private void OnConnectionSuccess(Context context)
