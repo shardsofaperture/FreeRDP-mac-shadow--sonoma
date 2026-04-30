@@ -286,7 +286,7 @@ static BOOL pf_config_load_server(wIniFile* ini, proxyConfig* config)
 			return FALSE;
 	}
 
-	if (!pf_config_get_uint16(ini, section_server, key_port, &config->Port, TRUE))
+	if (!pf_config_get_uint16(ini, section_server, key_port, &config->Port, FALSE))
 		return FALSE;
 
 	const char* sam = pf_config_get_str(ini, section_server, key_sam_file, FALSE);
