@@ -12,7 +12,6 @@ package com.freerdp.freerdpcore.presentation;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.DialogInterface;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.TypedValue;
@@ -64,69 +63,51 @@ public class SessionDialogs
 		this.activity = activity;
 		this.cancelListener = cancelListener;
 
-		dlgVerifyCertificate =
-		    new AlertDialog.Builder(activity)
-		        .setTitle(R.string.dlg_title_verify_certificate)
-		        .setPositiveButton(android.R.string.yes,
-		                           new DialogInterface.OnClickListener() {
-			                           @Override
-			                           public void onClick(DialogInterface dialog, int which)
-			                           {
-				                           callbackDialogResult = true;
-				                           synchronized (dialog)
-				                           {
-					                           dialog.notify();
-				                           }
-			                           }
-		                           })
-		        .setNegativeButton(android.R.string.no,
-		                           new DialogInterface.OnClickListener() {
-			                           @Override
-			                           public void onClick(DialogInterface dialog, int which)
-			                           {
-				                           callbackDialogResult = false;
-				                           notifyCancel();
-				                           synchronized (dialog)
-				                           {
-					                           dialog.notify();
-				                           }
-			                           }
-		                           })
-		        .setCancelable(false)
-		        .create();
+		dlgVerifyCertificate = new AlertDialog.Builder(activity)
+		                           .setTitle(R.string.dlg_title_verify_certificate)
+		                           .setPositiveButton(android.R.string.yes,
+		                                              (dialog, which) -> {
+			                                              callbackDialogResult = true;
+			                                              synchronized (dialog)
+			                                              {
+				                                              dialog.notify();
+			                                              }
+		                                              })
+		                           .setNegativeButton(android.R.string.no,
+		                                              (dialog, which) -> {
+			                                              callbackDialogResult = false;
+			                                              notifyCancel();
+			                                              synchronized (dialog)
+			                                              {
+				                                              dialog.notify();
+			                                              }
+		                                              })
+		                           .setCancelable(false)
+		                           .create();
 
 		userCredView = activity.getLayoutInflater().inflate(R.layout.credentials, null, true);
-		dlgUserCredentials =
-		    new AlertDialog.Builder(activity)
-		        .setView(userCredView)
-		        .setTitle(R.string.dlg_title_credentials)
-		        .setPositiveButton(android.R.string.ok,
-		                           new DialogInterface.OnClickListener() {
-			                           @Override
-			                           public void onClick(DialogInterface dialog, int which)
-			                           {
-				                           callbackDialogResult = true;
-				                           synchronized (dialog)
-				                           {
-					                           dialog.notify();
-				                           }
-			                           }
-		                           })
-		        .setNegativeButton(android.R.string.cancel,
-		                           new DialogInterface.OnClickListener() {
-			                           @Override
-			                           public void onClick(DialogInterface dialog, int which)
-			                           {
-				                           callbackDialogResult = false;
-				                           notifyCancel();
-				                           synchronized (dialog)
-				                           {
-					                           dialog.notify();
-				                           }
-			                           }
-		                           })
-		        .setCancelable(false)
-		        .create();
+		dlgUserCredentials = new AlertDialog.Builder(activity)
+		                         .setView(userCredView)
+		                         .setTitle(R.string.dlg_title_credentials)
+		                         .setPositiveButton(android.R.string.ok,
+		                                            (dialog, which) -> {
+			                                            callbackDialogResult = true;
+			                                            synchronized (dialog)
+			                                            {
+				                                            dialog.notify();
+			                                            }
+		                                            })
+		                         .setNegativeButton(android.R.string.cancel,
+		                                            (dialog, which) -> {
+			                                            callbackDialogResult = false;
+			                                            notifyCancel();
+			                                            synchronized (dialog)
+			                                            {
+				                                            dialog.notify();
+			                                            }
+		                                            })
+		                         .setCancelable(false)
+		                         .create();
 	}
 
 	/**
@@ -225,12 +206,7 @@ public class SessionDialogs
 
 	private void showOnUiThread(final AlertDialog dialog)
 	{
-		mainHandler.post(new Runnable() {
-			@Override public void run()
-			{
-				dialog.show();
-			}
-		});
+		mainHandler.post(dialog::show);
 	}
 
 	private void notifyCancel()

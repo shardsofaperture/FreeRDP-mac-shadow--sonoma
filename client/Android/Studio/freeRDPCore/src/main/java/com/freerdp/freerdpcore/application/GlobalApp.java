@@ -22,11 +22,7 @@ import android.util.Log;
 
 import com.freerdp.freerdpcore.domain.BookmarkBase;
 import com.freerdp.freerdpcore.presentation.ApplicationSettingsActivity;
-import com.freerdp.freerdpcore.data.AppDatabase;
-import com.freerdp.freerdpcore.data.HistoryDatabase;
 import com.freerdp.freerdpcore.services.LibFreeRDP;
-import com.freerdp.freerdpcore.services.ManualBookmarkGateway;
-import com.freerdp.freerdpcore.services.QuickConnectHistoryGateway;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -43,8 +39,6 @@ public class GlobalApp extends Application implements LibFreeRDP.EventListener
 	private static final String TAG = "GlobalApp";
 	public static boolean IsMeteredNetwork = false;
 	private static Map<Long, SessionState> sessionMap;
-	private static ManualBookmarkGateway manualBookmarkGateway;
-	private static QuickConnectHistoryGateway quickConnectHistoryGateway;
 
 	/** Per-session connection event listener. Callbacks are invoked on the main thread. */
 	public interface SessionEventListener
@@ -78,16 +72,6 @@ public class GlobalApp extends Application implements LibFreeRDP.EventListener
 
 	// timer for disconnecting sessions after the screen was turned off
 	private static Timer disconnectTimer = null;
-
-	public static ManualBookmarkGateway getManualBookmarkGateway()
-	{
-		return manualBookmarkGateway;
-	}
-
-	public static QuickConnectHistoryGateway getQuickConnectHistoryGateway()
-	{
-		return quickConnectHistoryGateway;
-	}
 
 	// Disconnect handling for Screen on/off events
 	public void startDisconnectTimer()
@@ -157,12 +141,6 @@ public class GlobalApp extends Application implements LibFreeRDP.EventListener
 		sessionMap = Collections.synchronizedMap(new HashMap<Long, SessionState>());
 
 		LibFreeRDP.setEventListener(this);
-
-		AppDatabase appDb = AppDatabase.getInstance(this);
-		manualBookmarkGateway = new ManualBookmarkGateway(appDb.bookmarkDao());
-
-		HistoryDatabase historyDb = HistoryDatabase.getInstance(this);
-		quickConnectHistoryGateway = new QuickConnectHistoryGateway(historyDb.historyDao());
 
 		IsMeteredNetwork = NetworkStateReceiver.isMeteredNetwork(this);
 		NetworkStateReceiver.registerNetworkCallback(this);
