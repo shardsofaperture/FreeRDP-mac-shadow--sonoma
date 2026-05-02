@@ -26,6 +26,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.Message;
 
 import androidx.activity.OnBackPressedCallback;
@@ -70,7 +71,36 @@ public class SessionActivity extends AppCompatActivity
 	private SessionView sessionView;
 	private TouchPointerView touchPointerView;
 
-	private UIHandler uiHandler;
+	private static final int REFRESH_SESSIONVIEW = 1;
+	private static final int DISPLAY_TOAST = 2;
+	private static final int GRAPHICS_CHANGED = 6;
+
+	private final Handler uiHandler = new Handler(Looper.getMainLooper()) {
+		@Override public void handleMessage(Message msg)
+		{
+			switch (msg.what)
+			{
+				case GRAPHICS_CHANGED:
+				{
+					sessionView.onSurfaceChange(session);
+					scrollView.requestLayout();
+					break;
+				}
+				case REFRESH_SESSIONVIEW:
+				{
+					sessionView.invalidateRegion();
+					break;
+				}
+				case DISPLAY_TOAST:
+				{
+					Toast errorToast = Toast.makeText(getApplicationContext(), msg.obj.toString(),
+					                                  Toast.LENGTH_LONG);
+					errorToast.show();
+					break;
+				}
+			}
+		}
+	};
 
 	private int screen_width;
 	private int screen_height;
@@ -179,7 +209,6 @@ public class SessionActivity extends AppCompatActivity
 		KeyboardView modifiersKeyboardView = findViewById(R.id.extended_keyboard_header);
 
 		scrollView = findViewById(R.id.sessionScrollView);
-		uiHandler = new UIHandler();
 		sessionViewModel = new ViewModelProvider(this).get(SessionViewModel.class);
 		sessionViewModel.getState().observe(this, this::onConnectionStateChanged);
 
@@ -559,9 +588,8 @@ public class SessionActivity extends AppCompatActivity
 		BookmarkBase.ScreenSettings settings = session.getBookmark().getActiveScreenSettings();
 		if ((settings.getWidth() != width && settings.getWidth() != width + 1) ||
 		    settings.getHeight() != height || settings.getColors() != bpp)
-			uiHandler.sendMessage(
-			    Message.obtain(null, UIHandler.DISPLAY_TOAST,
-			                   getResources().getText(R.string.info_capabilities_changed)));
+			uiHandler.sendMessage(Message.obtain(
+			    null, DISPLAY_TOAST, getResources().getText(R.string.info_capabilities_changed)));
 	}
 
 	@Override public void OnGraphicsUpdate(int x, int y, int width, int height)
@@ -575,7 +603,7 @@ public class SessionActivity extends AppCompatActivity
 		 * modifications to it need to be scheduled
 		 */
 
-		uiHandler.sendEmptyMessage(UIHandler.REFRESH_SESSIONVIEW);
+		uiHandler.sendEmptyMessage(REFRESH_SESSIONVIEW);
 	}
 
 	@Override public void OnGraphicsResize(int width, int height, int bpp)
@@ -594,7 +622,7 @@ public class SessionActivity extends AppCompatActivity
 		 * since sessionView can only be modified from the UI thread any
 		 * modifications to it need to be scheduled
 		 */
-		uiHandler.sendEmptyMessage(UIHandler.GRAPHICS_CHANGED);
+		uiHandler.sendEmptyMessage(GRAPHICS_CHANGED);
 	}
 
 	@Override
@@ -653,44 +681,6 @@ public class SessionActivity extends AppCompatActivity
 	{
 		Log.v(TAG, "onClipboardChanged: " + data);
 		LibFreeRDP.sendClipboardData(session.getInstance(), data);
-	}
-
-	private class UIHandler extends Handler
-	{
-
-		public static final int REFRESH_SESSIONVIEW = 1;
-		public static final int DISPLAY_TOAST = 2;
-		public static final int GRAPHICS_CHANGED = 6;
-
-		UIHandler()
-		{
-			super();
-		}
-
-		@Override public void handleMessage(Message msg)
-		{
-			switch (msg.what)
-			{
-				case GRAPHICS_CHANGED:
-				{
-					sessionView.onSurfaceChange(session);
-					scrollView.requestLayout();
-					break;
-				}
-				case REFRESH_SESSIONVIEW:
-				{
-					sessionView.invalidateRegion();
-					break;
-				}
-				case DISPLAY_TOAST:
-				{
-					Toast errorToast = Toast.makeText(getApplicationContext(), msg.obj.toString(),
-					                                  Toast.LENGTH_LONG);
-					errorToast.show();
-					break;
-				}
-			}
-		}
 	}
 
 	private void onConnectionStateChanged(SessionViewModel.ConnectionState state)
@@ -765,9 +755,8 @@ public class SessionActivity extends AppCompatActivity
 
 		// post error message on UI thread
 		if (!connectCancelledByUser)
-			uiHandler.sendMessage(
-			    Message.obtain(null, UIHandler.DISPLAY_TOAST,
-			                   getResources().getText(R.string.error_connection_failure)));
+			uiHandler.sendMessage(Message.obtain(
+			    null, DISPLAY_TOAST, getResources().getText(R.string.error_connection_failure)));
 
 		closeSessionActivity(RESULT_CANCELED);
 	}

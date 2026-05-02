@@ -11,6 +11,7 @@ import android.graphics.Point;
 import android.inputmethodservice.Keyboard;
 import android.inputmethodservice.KeyboardView;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
 import android.view.KeyEvent;
@@ -564,6 +565,11 @@ public class SessionInputManager
 
 	private class InputHandler extends Handler
 	{
+		InputHandler()
+		{
+			super(Looper.getMainLooper());
+		}
+
 		@Override public void handleMessage(Message msg)
 		{
 			switch (msg.what)
