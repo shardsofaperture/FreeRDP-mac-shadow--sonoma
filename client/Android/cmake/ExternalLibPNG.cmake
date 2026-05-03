@@ -1,0 +1,15 @@
+include(ExternalProject)
+
+ExternalProject_Add(libpng
+    GIT_REPOSITORY https://github.com/pnggroup/libpng.git
+    GIT_TAG        v1.6.58
+    GIT_SHALLOW    TRUE
+
+    CMAKE_ARGS
+        ${ANDROID_CMAKE_ARGS}
+        -DCMAKE_INSTALL_PREFIX:PATH=${DEPS_INSTALL_DIR}
+        -DCMAKE_INSTALL_LIBDIR:STRING=lib
+        -DPNG_SHARED:BOOL=OFF
+        -DPNG_TESTS:BOOL=OFF
+        -DPNG_TOOLS:BOOL=OFF
+)
