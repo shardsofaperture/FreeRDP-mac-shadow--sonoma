@@ -17,6 +17,8 @@
  * limitations under the License.
  */
 
+#include <algorithm>
+
 #include <freerdp/config.h>
 
 #include <freerdp/gdi/gdi.h>
@@ -64,10 +66,13 @@ struct sdlPointer
 [[nodiscard]] static BOOL sdl_Pointer_New(rdpContext* context, rdpPointer* pointer)
 {
 	auto ptr = reinterpret_cast<sdlPointer*>(pointer);
+	auto sdl = get_context(context);
 
-	WINPR_ASSERT(context);
+	WINPR_ASSERT(sdl);
+	std::unique_lock lock(sdl->lock());
 	if (!ptr)
 		return FALSE;
+	sdl->pointers().push_back(pointer);
 
 	return ptr->update(context);
 }
@@ -83,6 +88,13 @@ static void sdl_Pointer_Clear(sdlPointer* ptr)
 
 static void sdl_Pointer_Free(WINPR_ATTR_UNUSED rdpContext* context, rdpPointer* pointer)
 {
+	auto sdl = get_context(context);
+
+	WINPR_ASSERT(sdl);
+	std::unique_lock lock(sdl->lock());
+	auto it = std::remove(sdl->pointers().begin(), sdl->pointers().end(), pointer);
+	sdl->pointers().erase(it, sdl->pointers().end());
+
 	sdl_Pointer_FreeCopy(pointer);
 }
 
@@ -115,6 +127,7 @@ bool sdl_Pointer_Set_Process(SdlContext* sdl)
 {
 	WINPR_ASSERT(sdl);
 
+	std::unique_lock lock(sdl->lock());
 	auto context = sdl->context();
 	auto pointer = sdl->cursor();
 	auto ptr = reinterpret_cast<sdlPointer*>(pointer);
