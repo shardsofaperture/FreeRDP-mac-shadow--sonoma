@@ -1458,6 +1458,26 @@ int SdlContext::argumentHandler(const COMMAND_LINE_ARGUMENT_A* arg, void* custom
 	return 0;
 }
 
+CriticalSection& SdlContext::lock()
+{
+	return _critical;
+}
+
+std::vector<rdpPointer*>& SdlContext::pointers()
+{
+	return _valid_pointers;
+}
+
+bool SdlContext::contains(const rdpPointer* ptr) const
+{
+	for (const auto& cur : _valid_pointers)
+	{
+		if (cur == ptr)
+			return true;
+	}
+	return false;
+}
+
 bool SdlContext::resizeToScale(SdlWindow* window)
 {
 	if (freerdp_settings_get_bool(context()->settings, FreeRDP_SmartSizing))
@@ -1581,6 +1601,10 @@ bool SdlContext::setCursor(CursorType type)
 
 bool SdlContext::setCursor(const rdpPointer* cursor)
 {
+	std::unique_lock lock(_critical);
+	if (!contains(cursor))
+		return true;
+
 	_cursor = { sdl_Pointer_Copy(cursor), sdl_PointerFreeCopyAll };
 	return setCursor(CURSOR_IMAGE);
 }

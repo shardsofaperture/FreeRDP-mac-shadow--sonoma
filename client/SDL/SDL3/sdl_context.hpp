@@ -20,6 +20,7 @@
 
 #include <map>
 #include <memory>
+#include <mutex>
 #include <sstream>
 #include <vector>
 #include <mutex>
@@ -149,6 +150,11 @@ class SdlContext
 
 	[[nodiscard]] static int argumentHandler(const COMMAND_LINE_ARGUMENT_A* arg, void* custom);
 
+	[[nodiscard]] CriticalSection& lock();
+
+	[[nodiscard]] std::vector<rdpPointer*>& pointers();
+	[[nodiscard]] bool contains(const rdpPointer* ptr) const;
+
   private:
 	[[nodiscard]] bool resizeToScale(SdlWindow* window);
 	[[nodiscard]] bool useLocalScale() const;
@@ -236,4 +242,5 @@ class SdlContext
 	WinPREvent _windowsCreatedEvent;
 	std::thread _thread;
 	std::vector<COMMAND_LINE_ARGUMENT_A> _args;
+	std::vector<rdpPointer*> _valid_pointers;
 };
