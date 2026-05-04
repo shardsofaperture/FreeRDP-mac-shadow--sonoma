@@ -262,13 +262,6 @@ public class ApplicationSettingsActivity
 		    context.getString(R.string.preference_key_accept_certificates), false);
 	}
 
-	public static boolean getHideZoomControls(Context context)
-	{
-		SharedPreferences preferences = get(context);
-		return preferences.getBoolean(
-		    context.getString(R.string.preference_key_ui_hide_zoom_controls), true);
-	}
-
 	public static boolean getSwapMouseButtons(Context context)
 	{
 		SharedPreferences preferences = get(context);

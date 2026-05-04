@@ -28,14 +28,11 @@ public abstract class HistoryDatabase extends RoomDatabase
 			{
 				if (instance == null)
 				{
-					instance =
-					    Room.databaseBuilder(context.getApplicationContext(), HistoryDatabase.class,
-					                         DB_NAME)
-					        .addMigrations(MIGRATION_1_2)
-					        .fallbackToDestructiveMigration()
-					        // TODO: remove once database access is moved to background threads.
-					        .allowMainThreadQueries()
-					        .build();
+					instance = Room.databaseBuilder(context.getApplicationContext(),
+					                                HistoryDatabase.class, DB_NAME)
+					               .addMigrations(MIGRATION_1_2)
+					               .fallbackToDestructiveMigration()
+					               .build();
 				}
 			}
 		}

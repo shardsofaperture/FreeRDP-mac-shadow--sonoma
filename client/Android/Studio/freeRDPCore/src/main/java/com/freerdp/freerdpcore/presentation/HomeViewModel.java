@@ -13,8 +13,11 @@ import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 
 import com.freerdp.freerdpcore.R;
-import com.freerdp.freerdpcore.application.GlobalApp;
+import com.freerdp.freerdpcore.data.AppDatabase;
+import com.freerdp.freerdpcore.data.HistoryDatabase;
 import com.freerdp.freerdpcore.domain.BookmarkBase;
+import com.freerdp.freerdpcore.services.ManualBookmarkGateway;
+import com.freerdp.freerdpcore.services.QuickConnectHistoryGateway;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -29,9 +32,16 @@ public class HomeViewModel extends AndroidViewModel
 	private String currentQuery = "";
 	private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
+	private final ManualBookmarkGateway manualBookmarkGateway;
+	private final QuickConnectHistoryGateway quickConnectHistoryGateway;
+
 	public HomeViewModel(@NonNull Application application)
 	{
 		super(application);
+		manualBookmarkGateway =
+		    new ManualBookmarkGateway(AppDatabase.getInstance(application).bookmarkDao());
+		quickConnectHistoryGateway =
+		    new QuickConnectHistoryGateway(HistoryDatabase.getInstance(application).historyDao());
 	}
 
 	public LiveData<List<BookmarkBase>> getBookmarks()
@@ -57,13 +67,12 @@ public class HomeViewModel extends AndroidViewModel
 				qcBm.setHostname(currentQuery);
 				qcBm.setDirectConnect(true);
 				result.add(qcBm);
-				result.addAll(GlobalApp.getQuickConnectHistoryGateway().findHistory(currentQuery));
-				result.addAll(
-				    GlobalApp.getManualBookmarkGateway().findByLabelOrHostnameLike(currentQuery));
+				result.addAll(quickConnectHistoryGateway.findHistory(currentQuery));
+				result.addAll(manualBookmarkGateway.findByLabelOrHostnameLike(currentQuery));
 			}
 			else
 			{
-				result.addAll(GlobalApp.getManualBookmarkGateway().findAll());
+				result.addAll(manualBookmarkGateway.findAll());
 			}
 			bookmarks.postValue(result);
 		});
@@ -72,7 +81,7 @@ public class HomeViewModel extends AndroidViewModel
 	public void deleteBookmark(long id)
 	{
 		executor.execute(() -> {
-			GlobalApp.getManualBookmarkGateway().delete(id);
+			manualBookmarkGateway.delete(id);
 			loadBookmarks(currentQuery);
 		});
 	}

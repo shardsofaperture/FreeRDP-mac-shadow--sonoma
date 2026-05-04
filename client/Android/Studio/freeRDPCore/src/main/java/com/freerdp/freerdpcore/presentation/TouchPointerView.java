@@ -14,7 +14,7 @@ import android.content.Context;
 import android.graphics.Matrix;
 import android.graphics.RectF;
 import android.os.Handler;
-import android.os.Message;
+import android.os.Looper;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.widget.ImageView;
@@ -57,7 +57,9 @@ public class TouchPointerView extends ImageView
 	private boolean pointerMoving = false;
 	private boolean pointerScrolling = false;
 	private TouchPointerListener listener = null;
-	private final UIHandler uiHandler = new UIHandler();
+	private final Handler uiHandler = new Handler(Looper.getMainLooper());
+	private final Runnable restorePointerImage =
+	    () -> setPointerImage(R.drawable.touch_pointer_default);
 	// gesture detection
 	private GestureDetector gestureDetector;
 	public TouchPointerView(Context context)
@@ -154,7 +156,8 @@ public class TouchPointerView extends ImageView
 	private void displayPointerImageAction(int resId)
 	{
 		setPointerImage(resId);
-		uiHandler.sendEmptyMessageDelayed(0, DEFAULT_TOUCH_POINTER_RESTORE_DELAY);
+		uiHandler.removeCallbacks(restorePointerImage);
+		uiHandler.postDelayed(restorePointerImage, DEFAULT_TOUCH_POINTER_RESTORE_DELAY);
 	}
 
 	private void setPointerImage(int resId)
@@ -216,20 +219,6 @@ public class TouchPointerView extends ImageView
 		void onTouchPointerToggleExtKeyboard();
 
 		void onTouchPointerResetScrollZoom();
-	}
-
-	private class UIHandler extends Handler
-	{
-
-		UIHandler()
-		{
-			super();
-		}
-
-		@Override public void handleMessage(Message msg)
-		{
-			setPointerImage(R.drawable.touch_pointer_default);
-		}
 	}
 
 	private class TouchPointerGestureListener extends GestureDetector.SimpleOnGestureListener

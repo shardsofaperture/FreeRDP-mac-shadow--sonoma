@@ -11,28 +11,22 @@
 package com.freerdp.freerdpcore.presentation;
 
 import android.app.AlertDialog;
-import android.app.Dialog;
-import android.app.ProgressDialog;
 import android.app.UiModeManager;
-import android.content.BroadcastReceiver;
-import androidx.core.content.ContextCompat;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.Config;
-import android.graphics.Point;
 import android.graphics.Rect;
 import android.graphics.drawable.BitmapDrawable;
-import android.inputmethodservice.Keyboard;
 import android.inputmethodservice.KeyboardView;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.Message;
 
 import androidx.activity.OnBackPressedCallback;
@@ -41,8 +35,8 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
+import androidx.lifecycle.ViewModelProvider;
 
-import android.text.InputType;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.Menu;
@@ -53,11 +47,7 @@ import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewTreeObserver.OnGlobalLayoutListener;
 import android.view.WindowManager;
-import android.view.inputmethod.InputMethodManager;
-import android.view.inputmethod.InputMethodSubtype;
-import android.widget.EditText;
 import android.widget.Toast;
-import android.widget.ZoomControls;
 
 import com.freerdp.freerdpcore.R;
 import com.freerdp.freerdpcore.application.GlobalApp;
@@ -66,51 +56,51 @@ import com.freerdp.freerdpcore.domain.BookmarkBase;
 import com.freerdp.freerdpcore.domain.ConnectionReference;
 import com.freerdp.freerdpcore.services.LibFreeRDP;
 import com.freerdp.freerdpcore.utils.ClipboardManagerProxy;
-import com.freerdp.freerdpcore.utils.KeyboardMapper;
-import com.freerdp.freerdpcore.utils.Mouse;
 
 import java.util.Collection;
 import java.util.Iterator;
-import java.util.List;
 
 public class SessionActivity extends AppCompatActivity
-    implements LibFreeRDP.UIEventListener, KeyboardView.OnKeyboardActionListener,
-               ScrollView2D.ScrollView2DListener, KeyboardMapper.KeyProcessingListener,
-               SessionView.SessionViewListener, TouchPointerView.TouchPointerListener,
-               ClipboardManagerProxy.OnClipboardChangedListener
+    implements LibFreeRDP.UIEventListener, ClipboardManagerProxy.OnClipboardChangedListener
 {
 	public static final String PARAM_CONNECTION_REFERENCE = "conRef";
 	public static final String PARAM_INSTANCE = "instance";
-	private static final float ZOOMING_STEP = 0.5f;
-	private static final int ZOOMCONTROLS_AUTOHIDE_TIMEOUT = 4000;
-	// timeout between subsequent scrolling requests when the touch-pointer is
-	// at the edge of the session view
-	private static final int SCROLLING_TIMEOUT = 50;
-	private static final int SCROLLING_DISTANCE = 20;
 	private static final String TAG = "FreeRDP.SessionActivity";
-	// variables for delayed move event sending
-	private static final int MAX_DISCARDED_MOVE_EVENTS = 3;
-	private static final int SEND_MOVE_EVENT_TIMEOUT = 150;
 	private Bitmap bitmap;
 	private SessionState session;
 	private SessionView sessionView;
 	private TouchPointerView touchPointerView;
-	private ProgressDialog progressDialog;
-	private KeyboardView keyboardView;
-	private KeyboardView modifiersKeyboardView;
-	private ZoomControls zoomControls;
-	private KeyboardMapper keyboardMapper;
 
-	private Keyboard specialkeysKeyboard;
-	private Keyboard numpadKeyboard;
-	private Keyboard cursorKeyboard;
-	private Keyboard modifiersKeyboard;
+	private static final int REFRESH_SESSIONVIEW = 1;
+	private static final int DISPLAY_TOAST = 2;
+	private static final int GRAPHICS_CHANGED = 6;
 
-	private AlertDialog dlgVerifyCertificate;
-	private AlertDialog dlgUserCredentials;
-	private View userCredView;
-
-	private UIHandler uiHandler;
+	private final Handler uiHandler = new Handler(Looper.getMainLooper()) {
+		@Override public void handleMessage(Message msg)
+		{
+			switch (msg.what)
+			{
+				case GRAPHICS_CHANGED:
+				{
+					sessionView.onSurfaceChange(session);
+					scrollView.requestLayout();
+					break;
+				}
+				case REFRESH_SESSIONVIEW:
+				{
+					sessionView.invalidateRegion();
+					break;
+				}
+				case DISPLAY_TOAST:
+				{
+					Toast errorToast = Toast.makeText(getApplicationContext(), msg.obj.toString(),
+					                                  Toast.LENGTH_LONG);
+					errorToast.show();
+					break;
+				}
+			}
+		}
+	};
 
 	private int screen_width;
 	private int screen_height;
@@ -119,83 +109,11 @@ public class SessionActivity extends AppCompatActivity
 	private boolean sessionRunning = false;
 	private long backPressedTime = 0;
 
-	private LibFreeRDPBroadcastReceiver libFreeRDPBroadcastReceiver;
+	private SessionViewModel sessionViewModel;
 	private ScrollView2D scrollView;
-	// keyboard visibility flags
-	private boolean sysKeyboardVisible = false;
-	private boolean extKeyboardVisible = false;
-	private int discardedMoveEvents = 0;
 	private ClipboardManagerProxy mClipboardManager;
-	private boolean callbackDialogResult;
-
-	private void createDialogs()
-	{
-		// build verify certificate dialog
-		dlgVerifyCertificate =
-		    new AlertDialog.Builder(this)
-		        .setTitle(R.string.dlg_title_verify_certificate)
-		        .setPositiveButton(android.R.string.yes,
-		                           new DialogInterface.OnClickListener() {
-			                           @Override
-			                           public void onClick(DialogInterface dialog, int which)
-			                           {
-				                           callbackDialogResult = true;
-				                           synchronized (dialog)
-				                           {
-					                           dialog.notify();
-				                           }
-			                           }
-		                           })
-		        .setNegativeButton(android.R.string.no,
-		                           new DialogInterface.OnClickListener() {
-			                           @Override
-			                           public void onClick(DialogInterface dialog, int which)
-			                           {
-				                           callbackDialogResult = false;
-				                           connectCancelledByUser = true;
-				                           synchronized (dialog)
-				                           {
-					                           dialog.notify();
-				                           }
-			                           }
-		                           })
-		        .setCancelable(false)
-		        .create();
-
-		// build the dialog
-		userCredView = getLayoutInflater().inflate(R.layout.credentials, null, true);
-		dlgUserCredentials =
-		    new AlertDialog.Builder(this)
-		        .setView(userCredView)
-		        .setTitle(R.string.dlg_title_credentials)
-		        .setPositiveButton(android.R.string.ok,
-		                           new DialogInterface.OnClickListener() {
-			                           @Override
-			                           public void onClick(DialogInterface dialog, int which)
-			                           {
-				                           callbackDialogResult = true;
-				                           synchronized (dialog)
-				                           {
-					                           dialog.notify();
-				                           }
-			                           }
-		                           })
-		        .setNegativeButton(android.R.string.cancel,
-		                           new DialogInterface.OnClickListener() {
-			                           @Override
-			                           public void onClick(DialogInterface dialog, int which)
-			                           {
-				                           callbackDialogResult = false;
-				                           connectCancelledByUser = true;
-				                           synchronized (dialog)
-				                           {
-					                           dialog.notify();
-				                           }
-			                           }
-		                           })
-		        .setCancelable(false)
-		        .create();
-	}
+	private SessionInputManager inputManager;
+	private SessionDialogs dialogs;
 
 	private void hideSystemBars()
 	{
@@ -283,63 +201,31 @@ public class SessionActivity extends AppCompatActivity
 		    });
 
 		sessionView = findViewById(R.id.sessionView);
-		sessionView.setScaleGestureDetector(
-		    new ScaleGestureDetector(this, new PinchZoomListener()));
-		sessionView.setSessionViewListener(this);
 		sessionView.requestFocus();
 
 		touchPointerView = findViewById(R.id.touchPointerView);
-		touchPointerView.setTouchPointerListener(this);
 
-		keyboardMapper = new KeyboardMapper();
-		keyboardMapper.init(this);
-		keyboardMapper.reset(this);
-
-		modifiersKeyboard = new Keyboard(getApplicationContext(), R.xml.modifiers_keyboard);
-		specialkeysKeyboard = new Keyboard(getApplicationContext(), R.xml.specialkeys_keyboard);
-		numpadKeyboard = new Keyboard(getApplicationContext(), R.xml.numpad_keyboard);
-		cursorKeyboard = new Keyboard(getApplicationContext(), R.xml.cursor_keyboard);
-
-		// hide keyboard below the sessionView
-		keyboardView = findViewById(R.id.extended_keyboard);
-		keyboardView.setKeyboard(specialkeysKeyboard);
-		keyboardView.setOnKeyboardActionListener(this);
-
-		modifiersKeyboardView = findViewById(R.id.extended_keyboard_header);
-		modifiersKeyboardView.setKeyboard(modifiersKeyboard);
-		modifiersKeyboardView.setOnKeyboardActionListener(this);
+		KeyboardView keyboardView = findViewById(R.id.extended_keyboard);
+		KeyboardView modifiersKeyboardView = findViewById(R.id.extended_keyboard_header);
 
 		scrollView = findViewById(R.id.sessionScrollView);
-		scrollView.setScrollViewListener(this);
-		uiHandler = new UIHandler();
-		libFreeRDPBroadcastReceiver = new LibFreeRDPBroadcastReceiver();
+		sessionViewModel = new ViewModelProvider(this).get(SessionViewModel.class);
+		sessionViewModel.getState().observe(this, this::onConnectionStateChanged);
 
-		zoomControls = findViewById(R.id.zoomControls);
-		zoomControls.hide();
-		zoomControls.setOnZoomInClickListener(new View.OnClickListener() {
-			@Override public void onClick(View v)
+		dialogs = new SessionDialogs(this, new SessionDialogs.OnUserCancelListener() {
+			@Override public void onUserCancel()
 			{
-				resetZoomControlsAutoHideTimeout();
-				zoomControls.setIsZoomInEnabled(sessionView.zoomIn(ZOOMING_STEP));
-				zoomControls.setIsZoomOutEnabled(true);
-			}
-		});
-		zoomControls.setOnZoomOutClickListener(new View.OnClickListener() {
-			@Override public void onClick(View v)
-			{
-				resetZoomControlsAutoHideTimeout();
-				zoomControls.setIsZoomOutEnabled(sessionView.zoomOut(ZOOMING_STEP));
-				zoomControls.setIsZoomInEnabled(true);
+				connectCancelledByUser = true;
 			}
 		});
 
-		createDialogs();
-
-		// register freerdp events broadcast receiver
-		IntentFilter filter = new IntentFilter();
-		filter.addAction(GlobalApp.ACTION_EVENT_FREERDP);
-		ContextCompat.registerReceiver(this, libFreeRDPBroadcastReceiver, filter,
-		                               ContextCompat.RECEIVER_EXPORTED);
+		// Wire up the input manager (instance is attached later in bindSession()).
+		inputManager = new SessionInputManager(this, scrollView, sessionView, touchPointerView,
+		                                       keyboardView, modifiersKeyboardView);
+		sessionView.setSessionViewListener(inputManager);
+		touchPointerView.setTouchPointerListener(inputManager);
+		sessionView.setScaleGestureDetector(
+		    new ScaleGestureDetector(this, inputManager.getPinchZoomListener()));
 
 		mClipboardManager = ClipboardManagerProxy.getClipboardManager(this);
 		mClipboardManager.addClipboardChangedListener(this);
@@ -386,7 +272,7 @@ public class SessionActivity extends AppCompatActivity
 		Log.v(TAG, "Session.onPause");
 
 		// hide any visible keyboards
-		showKeyboard(false, false);
+		inputManager.hideKeyboards();
 	}
 
 	@Override protected void onStop()
@@ -412,8 +298,8 @@ public class SessionActivity extends AppCompatActivity
 		for (SessionState session : sessions)
 			LibFreeRDP.disconnect(session.getInstance());
 
-		// unregister freerdp events broadcast receiver
-		unregisterReceiver(libFreeRDPBroadcastReceiver);
+		// unregister freerdp session listener
+		sessionViewModel.unregister();
 
 		// remove clipboard listener
 		mClipboardManager.removeClipboardboardChangedListener(this);
@@ -429,14 +315,7 @@ public class SessionActivity extends AppCompatActivity
 		super.onConfigurationChanged(newConfig);
 
 		// reload keyboard resources (changed from landscape)
-		modifiersKeyboard = new Keyboard(getApplicationContext(), R.xml.modifiers_keyboard);
-		specialkeysKeyboard = new Keyboard(getApplicationContext(), R.xml.specialkeys_keyboard);
-		numpadKeyboard = new Keyboard(getApplicationContext(), R.xml.numpad_keyboard);
-		cursorKeyboard = new Keyboard(getApplicationContext(), R.xml.cursor_keyboard);
-
-		// apply loaded keyboards
-		keyboardView.setKeyboard(specialkeysKeyboard);
-		modifiersKeyboardView.setKeyboard(modifiersKeyboard);
+		inputManager.reloadKeyboards();
 
 		hideSystemBars();
 	}
@@ -461,23 +340,27 @@ public class SessionActivity extends AppCompatActivity
 		}
 		else if (bundle.containsKey(PARAM_CONNECTION_REFERENCE))
 		{
-			BookmarkBase bookmark = null;
 			String refStr = bundle.getString(PARAM_CONNECTION_REFERENCE);
 			if (ConnectionReference.isHostnameReference(refStr))
 			{
-				bookmark = new BookmarkBase();
+				BookmarkBase bookmark = new BookmarkBase();
 				bookmark.setHostname(ConnectionReference.getHostname(refStr));
+				connect(bookmark);
 			}
 			else if (ConnectionReference.isBookmarkReference(refStr))
 			{
-				bookmark = GlobalApp.getManualBookmarkGateway().findById(
-				    ConnectionReference.getBookmarkId(refStr));
+				sessionViewModel.loadBookmarkById(ConnectionReference.getBookmarkId(refStr),
+				                                  bookmark -> {
+					                                  if (bookmark != null)
+						                                  connect(bookmark);
+					                                  else
+						                                  closeSessionActivity(RESULT_CANCELED);
+				                                  });
 			}
-
-			if (bookmark != null)
-				connect(bookmark);
 			else
+			{
 				closeSessionActivity(RESULT_CANCELED);
+			}
 		}
 		else
 		{
@@ -551,19 +434,12 @@ public class SessionActivity extends AppCompatActivity
 	{
 		session.setUIEventListener(this);
 
-		progressDialog = new ProgressDialog(this);
-		progressDialog.setTitle(title);
-		progressDialog.setMessage(getResources().getText(R.string.dlg_msg_connecting));
-		progressDialog.setButton(
-		    ProgressDialog.BUTTON_NEGATIVE, "Cancel", new DialogInterface.OnClickListener() {
-			    @Override public void onClick(DialogInterface dialog, int which)
-			    {
-				    connectCancelledByUser = true;
-				    LibFreeRDP.cancelConnection(session.getInstance());
-			    }
-		    });
-		progressDialog.setCancelable(false);
-		progressDialog.show();
+		sessionViewModel.register(session.getInstance());
+
+		dialogs.showProgress(title, () -> {
+			connectCancelledByUser = true;
+			LibFreeRDP.cancelConnection(session.getInstance());
+		});
 
 		connectThread = new ConnectThread(getApplicationContext(), session);
 		connectThread.start();
@@ -577,69 +453,11 @@ public class SessionActivity extends AppCompatActivity
 		session.setUIEventListener(this);
 		sessionView.onSurfaceChange(session);
 		scrollView.requestLayout();
-		keyboardMapper.reset(this);
+
+		Bitmap surface = session.getSurface() != null ? session.getSurface().getBitmap() : null;
+		inputManager.attachSession(session.getInstance(), surface);
+		inputManager.setScreenSize(screen_width, screen_height);
 		hideSystemBars();
-	}
-
-	private void setSoftInputState(boolean state)
-	{
-		InputMethodManager mgr = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
-
-		if (state)
-		{
-			sessionView.requestFocus();
-			mgr.showSoftInput(sessionView, InputMethodManager.SHOW_IMPLICIT);
-		}
-		else
-		{
-			mgr.hideSoftInputFromWindow(sessionView.getWindowToken(), 0);
-		}
-	}
-
-	// displays either the system or the extended keyboard or non of them
-	private void showKeyboard(final boolean showSystemKeyboard, final boolean showExtendedKeyboard)
-	{
-		// no matter what we are doing ... hide the zoom controls
-		// onScrollChange notification showing the control again ...
-		// i think check for "preference_key_ui_hide_zoom_controls" preference should be there
-		uiHandler.removeMessages(UIHandler.SHOW_ZOOMCONTROLS);
-		uiHandler.sendEmptyMessage(UIHandler.HIDE_ZOOMCONTROLS);
-
-		InputMethodManager mgr = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
-
-		if (showSystemKeyboard)
-		{
-			// hide extended keyboard
-			keyboardView.setVisibility(View.GONE);
-			// show system keyboard
-			setSoftInputState(true);
-
-			// show modifiers keyboard
-			modifiersKeyboardView.setVisibility(View.VISIBLE);
-		}
-		else if (showExtendedKeyboard)
-		{
-			// hide system keyboard
-			setSoftInputState(false);
-
-			// show extended keyboard
-			keyboardView.setKeyboard(specialkeysKeyboard);
-			keyboardView.setVisibility(View.VISIBLE);
-			modifiersKeyboardView.setVisibility(View.VISIBLE);
-		}
-		else
-		{
-			// hide both
-			setSoftInputState(false);
-			keyboardView.setVisibility(View.GONE);
-			modifiersKeyboardView.setVisibility(View.GONE);
-
-			// clear any active key modifiers)
-			keyboardMapper.clearlAllModifiers();
-		}
-
-		sysKeyboardVisible = showSystemKeyboard;
-		extKeyboardVisible = showExtendedKeyboard;
 	}
 
 	private void closeSessionActivity(int resultCode)
@@ -647,63 +465,6 @@ public class SessionActivity extends AppCompatActivity
 		// Go back to home activity (and send intent data back to home)
 		setResult(resultCode, getIntent());
 		finish();
-	}
-
-	// update the state of our modifier keys
-	private void updateModifierKeyStates()
-	{
-		// check if any key is in the keycodes list
-
-		List<Keyboard.Key> keys = modifiersKeyboard.getKeys();
-		for (Keyboard.Key curKey : keys)
-		{
-			// if the key is a sticky key - just set it to off
-			if (curKey.sticky)
-			{
-				switch (keyboardMapper.getModifierState(curKey.codes[0]))
-				{
-					case KeyboardMapper.KEYSTATE_ON:
-						curKey.on = true;
-						curKey.pressed = false;
-						break;
-
-					case KeyboardMapper.KEYSTATE_OFF:
-						curKey.on = false;
-						curKey.pressed = false;
-						break;
-
-					case KeyboardMapper.KEYSTATE_LOCKED:
-						curKey.on = true;
-						curKey.pressed = true;
-						break;
-				}
-			}
-		}
-
-		// refresh image
-		modifiersKeyboardView.invalidateAllKeys();
-	}
-
-	private void sendDelayedMoveEvent(int x, int y)
-	{
-		if (uiHandler.hasMessages(UIHandler.SEND_MOVE_EVENT))
-		{
-			uiHandler.removeMessages(UIHandler.SEND_MOVE_EVENT);
-			discardedMoveEvents++;
-		}
-		else
-			discardedMoveEvents = 0;
-
-		if (discardedMoveEvents > MAX_DISCARDED_MOVE_EVENTS)
-			LibFreeRDP.sendCursorEvent(session.getInstance(), x, y, Mouse.getMoveEvent());
-		else
-			uiHandler.sendMessageDelayed(Message.obtain(null, UIHandler.SEND_MOVE_EVENT, x, y),
-			                             SEND_MOVE_EVENT_TIMEOUT);
-	}
-
-	private void cancelDelayedMoveEvent()
-	{
-		uiHandler.removeMessages(UIHandler.SEND_MOVE_EVENT);
 	}
 
 	@Override public boolean onCreateOptionsMenu(Menu menu)
@@ -720,30 +481,19 @@ public class SessionActivity extends AppCompatActivity
 
 		if (itemId == R.id.session_touch_pointer)
 		{
-			// toggle touch pointer
-			if (touchPointerView.getVisibility() == View.VISIBLE)
-			{
-				touchPointerView.setVisibility(View.INVISIBLE);
-				sessionView.setTouchPointerPadding(0, 0);
-			}
-			else
-			{
-				touchPointerView.setVisibility(View.VISIBLE);
-				sessionView.setTouchPointerPadding(touchPointerView.getPointerWidth(),
-				                                   touchPointerView.getPointerHeight());
-			}
+			inputManager.toggleTouchPointer();
 		}
 		else if (itemId == R.id.session_sys_keyboard)
 		{
-			showKeyboard(!sysKeyboardVisible, false);
+			inputManager.toggleSystemKeyboard();
 		}
 		else if (itemId == R.id.session_ext_keyboard)
 		{
-			showKeyboard(false, !extKeyboardVisible);
+			inputManager.toggleExtendedKeyboard();
 		}
 		else if (itemId == R.id.session_disconnect)
 		{
-			showKeyboard(false, false);
+			inputManager.hideKeyboards();
 			LibFreeRDP.disconnect(session.getInstance());
 		}
 
@@ -753,14 +503,13 @@ public class SessionActivity extends AppCompatActivity
 	public void handleBackPressed()
 	{
 		// hide keyboards (if any visible) or send alt+f4 to the session
-		if (sysKeyboardVisible || extKeyboardVisible)
+		if (inputManager.isAnyKeyboardVisible())
 		{
-			showKeyboard(false, false);
+			inputManager.hideKeyboards();
 			return;
 		}
-		if (ApplicationSettingsActivity.getUseBackAsAltf4(this))
+		if (inputManager.handleBackAsAltF4())
 		{
-			keyboardMapper.sendAltF4();
 			return;
 		}
 		if (System.currentTimeMillis() - backPressedTime < 2000)
@@ -776,11 +525,8 @@ public class SessionActivity extends AppCompatActivity
 
 	@Override public boolean onKeyLongPress(int keyCode, KeyEvent event)
 	{
-		if (keyCode == KeyEvent.KEYCODE_BACK)
-		{
-			LibFreeRDP.disconnect(session.getInstance());
+		if (inputManager.onAndroidKeyLongPress(keyCode))
 			return true;
-		}
 		return super.onKeyLongPress(keyCode, event);
 	}
 
@@ -794,96 +540,25 @@ public class SessionActivity extends AppCompatActivity
 	{
 		if (keycode == KeyEvent.KEYCODE_BACK)
 			return super.onKeyDown(keycode, event);
-		return keyboardMapper.processAndroidKeyEvent(event);
+		return inputManager.onAndroidKeyEvent(event);
 	}
 
 	@Override public boolean onKeyUp(int keycode, KeyEvent event)
 	{
 		if (keycode == KeyEvent.KEYCODE_BACK)
 			return super.onKeyUp(keycode, event);
-		return keyboardMapper.processAndroidKeyEvent(event);
+		return inputManager.onAndroidKeyEvent(event);
 	}
 
 	// onKeyMultiple is called for input of some special characters like umlauts
 	// and some symbol characters
 	@Override public boolean onKeyMultiple(int keyCode, int repeatCount, KeyEvent event)
 	{
-		return keyboardMapper.processAndroidKeyEvent(event);
+		return inputManager.onAndroidKeyEvent(event);
 	}
 
 	// ****************************************************************************
-	// KeyboardView.KeyboardActionEventListener
-	@Override public void onKey(int primaryCode, int[] keyCodes)
-	{
-		keyboardMapper.processCustomKeyEvent(primaryCode);
-	}
-
-	@Override public void onText(CharSequence text)
-	{
-	}
-
-	@Override public void swipeRight()
-	{
-	}
-
-	@Override public void swipeLeft()
-	{
-	}
-
-	@Override public void swipeDown()
-	{
-	}
-
-	@Override public void swipeUp()
-	{
-	}
-
-	@Override public void onPress(int primaryCode)
-	{
-	}
-
-	@Override public void onRelease(int primaryCode)
-	{
-	}
-
-	// ****************************************************************************
-	// KeyboardMapper.KeyProcessingListener implementation
-	@Override public void processVirtualKey(int virtualKeyCode, boolean down)
-	{
-		LibFreeRDP.sendKeyEvent(session.getInstance(), virtualKeyCode, down);
-	}
-
-	@Override public void processUnicodeKey(int unicodeKey)
-	{
-		LibFreeRDP.sendUnicodeKeyEvent(session.getInstance(), unicodeKey, true);
-		LibFreeRDP.sendUnicodeKeyEvent(session.getInstance(), unicodeKey, false);
-	}
-
-	@Override public void switchKeyboard(int keyboardType)
-	{
-		switch (keyboardType)
-		{
-			case KeyboardMapper.KEYBOARD_TYPE_FUNCTIONKEYS:
-				keyboardView.setKeyboard(specialkeysKeyboard);
-				break;
-
-			case KeyboardMapper.KEYBOARD_TYPE_NUMPAD:
-				keyboardView.setKeyboard(numpadKeyboard);
-				break;
-
-			case KeyboardMapper.KEYBOARD_TYPE_CURSOR:
-				keyboardView.setKeyboard(cursorKeyboard);
-				break;
-
-			default:
-				break;
-		}
-	}
-
-	@Override public void modifiersChanged()
-	{
-		updateModifierKeyStates();
-	}
+	// KeyboardMapper.KeyProcessingListener — delegated to SessionInputManager
 
 	// ****************************************************************************
 	// LibFreeRDP UI event listener implementation
@@ -897,12 +572,14 @@ public class SessionActivity extends AppCompatActivity
 
 		session.setSurface(new BitmapDrawable(getResources(), bitmap));
 
+		if (inputManager != null)
+			inputManager.setBitmap(bitmap);
+
 		if (session.getBookmark() == null)
 		{
 			// Return immediately if we launch from URI
 			return;
 		}
-
 		// check this settings and initial settings - if they are not equal the
 		// server doesn't support our settings
 		// FIXME: the additional check (settings.getWidth() != width + 1) is for
@@ -911,9 +588,8 @@ public class SessionActivity extends AppCompatActivity
 		BookmarkBase.ScreenSettings settings = session.getBookmark().getActiveScreenSettings();
 		if ((settings.getWidth() != width && settings.getWidth() != width + 1) ||
 		    settings.getHeight() != height || settings.getColors() != bpp)
-			uiHandler.sendMessage(
-			    Message.obtain(null, UIHandler.DISPLAY_TOAST,
-			                   getResources().getText(R.string.info_capabilities_changed)));
+			uiHandler.sendMessage(Message.obtain(
+			    null, DISPLAY_TOAST, getResources().getText(R.string.info_capabilities_changed)));
 	}
 
 	@Override public void OnGraphicsUpdate(int x, int y, int width, int height)
@@ -927,7 +603,7 @@ public class SessionActivity extends AppCompatActivity
 		 * modifications to it need to be scheduled
 		 */
 
-		uiHandler.sendEmptyMessage(UIHandler.REFRESH_SESSIONVIEW);
+		uiHandler.sendEmptyMessage(REFRESH_SESSIONVIEW);
 	}
 
 	@Override public void OnGraphicsResize(int width, int height, int bpp)
@@ -939,143 +615,37 @@ public class SessionActivity extends AppCompatActivity
 			bitmap = Bitmap.createBitmap(width, height, Config.RGB_565);
 		session.setSurface(new BitmapDrawable(getResources(), bitmap));
 
+		if (inputManager != null)
+			inputManager.setBitmap(bitmap);
+
 		/*
 		 * since sessionView can only be modified from the UI thread any
 		 * modifications to it need to be scheduled
 		 */
-		uiHandler.sendEmptyMessage(UIHandler.GRAPHICS_CHANGED);
+		uiHandler.sendEmptyMessage(GRAPHICS_CHANGED);
 	}
 
 	@Override
 	public boolean OnAuthenticate(StringBuilder username, StringBuilder domain,
 	                              StringBuilder password)
 	{
-		// this is where the return code of our dialog will be stored
-		callbackDialogResult = false;
-
-		// set text fields
-		((EditText)userCredView.findViewById(R.id.editTextUsername)).setText(username);
-		((EditText)userCredView.findViewById(R.id.editTextDomain)).setText(domain);
-		((EditText)userCredView.findViewById(R.id.editTextPassword)).setText(password);
-
-		// start dialog in UI thread
-		uiHandler.sendMessage(Message.obtain(null, UIHandler.SHOW_DIALOG, dlgUserCredentials));
-
-		// wait for result
-		try
-		{
-			synchronized (dlgUserCredentials)
-			{
-				dlgUserCredentials.wait();
-			}
-		}
-		catch (InterruptedException e)
-		{
-		}
-
-		// clear buffers
-		username.setLength(0);
-		domain.setLength(0);
-		password.setLength(0);
-
-		// read back user credentials
-		username.append(
-		    ((EditText)userCredView.findViewById(R.id.editTextUsername)).getText().toString());
-		domain.append(
-		    ((EditText)userCredView.findViewById(R.id.editTextDomain)).getText().toString());
-		password.append(
-		    ((EditText)userCredView.findViewById(R.id.editTextPassword)).getText().toString());
-
-		return callbackDialogResult;
+		return dialogs.promptCredentials(username, domain, password);
 	}
 
 	@Override
 	public boolean OnGatewayAuthenticate(StringBuilder username, StringBuilder domain,
 	                                     StringBuilder password)
 	{
-		// this is where the return code of our dialog will be stored
-		callbackDialogResult = false;
-
-		// set text fields
-		((EditText)userCredView.findViewById(R.id.editTextUsername)).setText(username);
-		((EditText)userCredView.findViewById(R.id.editTextDomain)).setText(domain);
-		((EditText)userCredView.findViewById(R.id.editTextPassword)).setText(password);
-
-		// start dialog in UI thread
-		uiHandler.sendMessage(Message.obtain(null, UIHandler.SHOW_DIALOG, dlgUserCredentials));
-
-		// wait for result
-		try
-		{
-			synchronized (dlgUserCredentials)
-			{
-				dlgUserCredentials.wait();
-			}
-		}
-		catch (InterruptedException e)
-		{
-		}
-
-		// clear buffers
-		username.setLength(0);
-		domain.setLength(0);
-		password.setLength(0);
-
-		// read back user credentials
-		username.append(
-		    ((EditText)userCredView.findViewById(R.id.editTextUsername)).getText().toString());
-		domain.append(
-		    ((EditText)userCredView.findViewById(R.id.editTextDomain)).getText().toString());
-		password.append(
-		    ((EditText)userCredView.findViewById(R.id.editTextPassword)).getText().toString());
-
-		return callbackDialogResult;
+		return dialogs.promptCredentials(username, domain, password);
 	}
 
 	@Override
 	public int OnVerifiyCertificateEx(String host, long port, String commonName, String subject,
 	                                  String issuer, String fingerprint, long flags)
 	{
-		// see if global settings says accept all
 		if (ApplicationSettingsActivity.getAcceptAllCertificates(this))
 			return 0;
-
-		// this is where the return code of our dialog will be stored
-		callbackDialogResult = false;
-
-		// set message
-		String msg = getResources().getString(R.string.dlg_msg_verify_certificate);
-		String type = "RDP-Server";
-		if ((flags & LibFreeRDP.VERIFY_CERT_FLAG_GATEWAY) != 0)
-			type = "RDP-Gateway";
-		if ((flags & LibFreeRDP.VERIFY_CERT_FLAG_REDIRECT) != 0)
-			type = "RDP-Redirect";
-		msg += "\n\n" + type + ": " + host + ":" + port;
-
-		msg += "\n\nSubject: " + subject + "\nIssuer: " + issuer;
-
-		if ((flags & LibFreeRDP.VERIFY_CERT_FLAG_FP_IS_PEM) != 0)
-			msg += "\nCertificate: " + fingerprint;
-		else
-			msg += "\nFingerprint: " + fingerprint;
-		dlgVerifyCertificate.setMessage(msg);
-
-		// start dialog in UI thread
-		uiHandler.sendMessage(Message.obtain(null, UIHandler.SHOW_DIALOG, dlgVerifyCertificate));
-
-		// wait for result
-		try
-		{
-			synchronized (dlgVerifyCertificate)
-			{
-				dlgVerifyCertificate.wait();
-			}
-		}
-		catch (InterruptedException e)
-		{
-		}
-
-		return callbackDialogResult ? 1 : 0;
+		return dialogs.verifyCertificate(host, port, subject, issuer, fingerprint, flags);
 	}
 
 	@Override
@@ -1084,44 +654,9 @@ public class SessionActivity extends AppCompatActivity
 	                                        String oldSubject, String oldIssuer,
 	                                        String oldFingerprint, long flags)
 	{
-		// see if global settings says accept all
 		if (ApplicationSettingsActivity.getAcceptAllCertificates(this))
 			return 0;
-
-		// this is where the return code of our dialog will be stored
-		callbackDialogResult = false;
-
-		// set message
-		String msg = getResources().getString(R.string.dlg_msg_verify_certificate);
-		String type = "RDP-Server";
-		if ((flags & LibFreeRDP.VERIFY_CERT_FLAG_GATEWAY) != 0)
-			type = "RDP-Gateway";
-		if ((flags & LibFreeRDP.VERIFY_CERT_FLAG_REDIRECT) != 0)
-			type = "RDP-Redirect";
-		msg += "\n\n" + type + ": " + host + ":" + port;
-		msg += "\n\nSubject: " + subject + "\nIssuer: " + issuer;
-		if ((flags & LibFreeRDP.VERIFY_CERT_FLAG_FP_IS_PEM) != 0)
-			msg += "\nCertificate: " + fingerprint;
-		else
-			msg += "\nFingerprint: " + fingerprint;
-		dlgVerifyCertificate.setMessage(msg);
-
-		// start dialog in UI thread
-		uiHandler.sendMessage(Message.obtain(null, UIHandler.SHOW_DIALOG, dlgVerifyCertificate));
-
-		// wait for result
-		try
-		{
-			synchronized (dlgVerifyCertificate)
-			{
-				dlgVerifyCertificate.wait();
-			}
-		}
-		catch (InterruptedException e)
-		{
-		}
-
-		return callbackDialogResult ? 1 : 0;
+		return dialogs.verifyChangedCertificate(host, port, subject, issuer, fingerprint, flags);
 	}
 
 	@Override public void OnRemoteClipboardChanged(String data)
@@ -1131,171 +666,13 @@ public class SessionActivity extends AppCompatActivity
 	}
 
 	// ****************************************************************************
-	// ScrollView2DListener implementation
-	private void resetZoomControlsAutoHideTimeout()
-	{
-		uiHandler.removeMessages(UIHandler.HIDE_ZOOMCONTROLS);
-		uiHandler.sendEmptyMessageDelayed(UIHandler.HIDE_ZOOMCONTROLS,
-		                                  ZOOMCONTROLS_AUTOHIDE_TIMEOUT);
-	}
-
-	@Override public void onScrollChanged(ScrollView2D scrollView, int x, int y, int oldx, int oldy)
-	{
-		zoomControls.setIsZoomInEnabled(!sessionView.isAtMaxZoom());
-		zoomControls.setIsZoomOutEnabled(!sessionView.isAtMinZoom());
-
-		if (sysKeyboardVisible || extKeyboardVisible)
-			return;
-
-		if (!ApplicationSettingsActivity.getHideZoomControls(this))
-		{
-			uiHandler.sendEmptyMessage(UIHandler.SHOW_ZOOMCONTROLS);
-			resetZoomControlsAutoHideTimeout();
-		}
-	}
-
-	// ****************************************************************************
-	// SessionView.SessionViewListener
-	@Override public void onSessionViewBeginTouch()
-	{
-		scrollView.setScrollEnabled(false);
-	}
-
-	@Override public void onSessionViewEndTouch()
-	{
-		scrollView.setScrollEnabled(true);
-	}
-
-	@Override public void onSessionViewLeftTouch(int x, int y, boolean down)
-	{
-		if (!down)
-			cancelDelayedMoveEvent();
-
-		LibFreeRDP.sendCursorEvent(session.getInstance(), x, y,
-		                           Mouse.getLeftButtonEvent(this, down));
-	}
-
-	@Override public void onSessionViewMiddleTouch(int x, int y, boolean down)
-	{
-		LibFreeRDP.sendCursorEvent(session.getInstance(), x, y, Mouse.getMiddleButtonEvent(down));
-	}
-
-	@Override public void onSessionViewRightTouch(int x, int y, boolean down)
-	{
-		LibFreeRDP.sendCursorEvent(session.getInstance(), x, y,
-		                           Mouse.getRightButtonEvent(this, down));
-	}
-
-	@Override public void onSessionViewMove(int x, int y)
-	{
-		sendDelayedMoveEvent(x, y);
-	}
-
-	@Override public void onSessionViewMouseMove(int x, int y)
-	{
-		LibFreeRDP.sendCursorEvent(session.getInstance(), x, y, Mouse.getMoveEvent());
-	}
-
-	@Override public void onSessionViewScroll(boolean down)
-	{
-		LibFreeRDP.sendCursorEvent(session.getInstance(), 0, 0, Mouse.getScrollEvent(this, down));
-	}
-
-	@Override public void onSessionViewHScroll(boolean right)
-	{
-		LibFreeRDP.sendCursorEvent(session.getInstance(), 0, 0, Mouse.getHScrollEvent(this, right));
-	}
-
-	// ****************************************************************************
-	// TouchPointerView.TouchPointerListener
-	@Override public void onTouchPointerClose()
-	{
-		touchPointerView.setVisibility(View.INVISIBLE);
-		sessionView.setTouchPointerPadding(0, 0);
-	}
-
-	private Point mapScreenCoordToSessionCoord(int x, int y)
-	{
-		int mappedX = (int)((float)(x + scrollView.getScrollX()) / sessionView.getZoom());
-		int mappedY = (int)((float)(y + scrollView.getScrollY()) / sessionView.getZoom());
-		if (bitmap != null)
-		{
-			if (mappedX > bitmap.getWidth())
-				mappedX = bitmap.getWidth();
-			if (mappedY > bitmap.getHeight())
-				mappedY = bitmap.getHeight();
-		}
-		return new Point(mappedX, mappedY);
-	}
-
-	@Override public void onTouchPointerLeftClick(int x, int y, boolean down)
-	{
-		Point p = mapScreenCoordToSessionCoord(x, y);
-		LibFreeRDP.sendCursorEvent(session.getInstance(), p.x, p.y,
-		                           Mouse.getLeftButtonEvent(this, down));
-	}
-
-	@Override public void onTouchPointerRightClick(int x, int y, boolean down)
-	{
-		Point p = mapScreenCoordToSessionCoord(x, y);
-		LibFreeRDP.sendCursorEvent(session.getInstance(), p.x, p.y,
-		                           Mouse.getRightButtonEvent(this, down));
-	}
-
-	@Override public void onTouchPointerMove(int x, int y)
-	{
-		Point p = mapScreenCoordToSessionCoord(x, y);
-		LibFreeRDP.sendCursorEvent(session.getInstance(), p.x, p.y, Mouse.getMoveEvent());
-
-		if (ApplicationSettingsActivity.getAutoScrollTouchPointer(this) &&
-		    !uiHandler.hasMessages(UIHandler.SCROLLING_REQUESTED))
-		{
-			Log.v(TAG, "Starting auto-scroll");
-			uiHandler.sendEmptyMessageDelayed(UIHandler.SCROLLING_REQUESTED, SCROLLING_TIMEOUT);
-		}
-	}
-
-	@Override public void onTouchPointerScroll(boolean down)
-	{
-		LibFreeRDP.sendCursorEvent(session.getInstance(), 0, 0, Mouse.getScrollEvent(this, down));
-	}
-
-	@Override public void onTouchPointerToggleKeyboard()
-	{
-		showKeyboard(!sysKeyboardVisible, false);
-	}
-
-	@Override public void onTouchPointerToggleExtKeyboard()
-	{
-		showKeyboard(false, !extKeyboardVisible);
-	}
-
-	@Override public void onTouchPointerResetScrollZoom()
-	{
-		sessionView.setZoom(1.0f);
-		scrollView.scrollTo(0, 0);
-	}
+	// SessionView.SessionViewListener and TouchPointerView.TouchPointerListener
+	// — delegated to SessionInputManager
 
 	@Override public boolean onGenericMotionEvent(MotionEvent e)
 	{
 		super.onGenericMotionEvent(e);
-		switch (e.getAction())
-		{
-			case MotionEvent.ACTION_SCROLL:
-				final float vScroll = e.getAxisValue(MotionEvent.AXIS_VSCROLL);
-				if (vScroll < 0)
-				{
-					LibFreeRDP.sendCursorEvent(session.getInstance(), 0, 0,
-					                           Mouse.getScrollEvent(this, false));
-				}
-				if (vScroll > 0)
-				{
-					LibFreeRDP.sendCursorEvent(session.getInstance(), 0, 0,
-					                           Mouse.getScrollEvent(this, true));
-				}
-				break;
-		}
-		return true;
+		return inputManager != null && inputManager.onGenericMotionEvent(e);
 	}
 
 	// ****************************************************************************
@@ -1306,269 +683,100 @@ public class SessionActivity extends AppCompatActivity
 		LibFreeRDP.sendClipboardData(session.getInstance(), data);
 	}
 
-	private class UIHandler extends Handler
+	private void onConnectionStateChanged(SessionViewModel.ConnectionState state)
 	{
-
-		public static final int REFRESH_SESSIONVIEW = 1;
-		public static final int DISPLAY_TOAST = 2;
-		public static final int HIDE_ZOOMCONTROLS = 3;
-		public static final int SEND_MOVE_EVENT = 4;
-		public static final int SHOW_DIALOG = 5;
-		public static final int GRAPHICS_CHANGED = 6;
-		public static final int SCROLLING_REQUESTED = 7;
-		public static final int SHOW_ZOOMCONTROLS = 8;
-
-		UIHandler()
+		if (session == null)
+			return;
+		switch (state)
 		{
-			super();
-		}
-
-		@Override public void handleMessage(Message msg)
-		{
-			switch (msg.what)
-			{
-				case GRAPHICS_CHANGED:
-				{
-					sessionView.onSurfaceChange(session);
-					scrollView.requestLayout();
-					break;
-				}
-				case REFRESH_SESSIONVIEW:
-				{
-					sessionView.invalidateRegion();
-					break;
-				}
-				case DISPLAY_TOAST:
-				{
-					Toast errorToast = Toast.makeText(getApplicationContext(), msg.obj.toString(),
-					                                  Toast.LENGTH_LONG);
-					errorToast.show();
-					break;
-				}
-				case HIDE_ZOOMCONTROLS:
-				{
-					if (zoomControls.isShown())
-						zoomControls.hide();
-					break;
-				}
-				case SHOW_ZOOMCONTROLS:
-				{
-					if (!zoomControls.isShown())
-						zoomControls.show();
-
-					break;
-				}
-				case SEND_MOVE_EVENT:
-				{
-					LibFreeRDP.sendCursorEvent(session.getInstance(), msg.arg1, msg.arg2,
-					                           Mouse.getMoveEvent());
-					break;
-				}
-				case SHOW_DIALOG:
-				{
-					// create and show the dialog
-					((Dialog)msg.obj).show();
-					break;
-				}
-				case SCROLLING_REQUESTED:
-				{
-					int scrollX = 0;
-					int scrollY = 0;
-					float[] pointerPos = touchPointerView.getPointerPosition();
-
-					if (pointerPos[0] > (screen_width - touchPointerView.getPointerWidth()))
-						scrollX = SCROLLING_DISTANCE;
-					else if (pointerPos[0] < 0)
-						scrollX = -SCROLLING_DISTANCE;
-
-					if (pointerPos[1] > (screen_height - touchPointerView.getPointerHeight()))
-						scrollY = SCROLLING_DISTANCE;
-					else if (pointerPos[1] < 0)
-						scrollY = -SCROLLING_DISTANCE;
-
-					scrollView.scrollBy(scrollX, scrollY);
-
-					// see if we reached the min/max scroll positions
-					if (scrollView.getScrollX() == 0 ||
-					    scrollView.getScrollX() == (sessionView.getWidth() - scrollView.getWidth()))
-						scrollX = 0;
-					if (scrollView.getScrollY() == 0 ||
-					    scrollView.getScrollY() ==
-					        (sessionView.getHeight() - scrollView.getHeight()))
-						scrollY = 0;
-
-					if (scrollX != 0 || scrollY != 0)
-						uiHandler.sendEmptyMessageDelayed(SCROLLING_REQUESTED, SCROLLING_TIMEOUT);
-					else
-						Log.v(TAG, "Stopping auto-scroll");
-					break;
-				}
-			}
+			case CONNECTED:
+				onSessionConnected();
+				break;
+			case FAILED:
+				onSessionFailed();
+				break;
+			case DISCONNECTED:
+				onSessionDisconnected();
+				break;
+			default:
+				break;
 		}
 	}
 
-	private class PinchZoomListener extends ScaleGestureDetector.SimpleOnScaleGestureListener
+	private void onSessionConnected()
 	{
-		private float scaleFactor = 1.0f;
+		Log.v(TAG, "onSessionConnected");
 
-		@Override public boolean onScaleBegin(ScaleGestureDetector detector)
+		if (connectCancelledByUser)
 		{
-			scrollView.setScrollEnabled(false);
-			return true;
-		}
-
-		@Override public boolean onScale(ScaleGestureDetector detector)
-		{
-
-			// calc scale factor
-			scaleFactor *= detector.getScaleFactor();
-			scaleFactor = Math.max(SessionView.MIN_SCALE_FACTOR,
-			                       Math.min(scaleFactor, SessionView.MAX_SCALE_FACTOR));
-			sessionView.setZoom(scaleFactor);
-
-			if (!sessionView.isAtMinZoom() && !sessionView.isAtMaxZoom())
-			{
-				// transform scroll origin to the new zoom space
-				float transOriginX = scrollView.getScrollX() * detector.getScaleFactor();
-				float transOriginY = scrollView.getScrollY() * detector.getScaleFactor();
-
-				// transform center point to the zoomed space
-				float transCenterX =
-				    (scrollView.getScrollX() + detector.getFocusX()) * detector.getScaleFactor();
-				float transCenterY =
-				    (scrollView.getScrollY() + detector.getFocusY()) * detector.getScaleFactor();
-
-				// scroll by the difference between the distance of the
-				// transformed center/origin point and their old distance
-				// (focusX/Y)
-				scrollView.scrollBy((int)((transCenterX - transOriginX) - detector.getFocusX()),
-				                    (int)((transCenterY - transOriginY) - detector.getFocusY()));
-			}
-
-			return true;
-		}
-
-		@Override public void onScaleEnd(ScaleGestureDetector de)
-		{
-			scrollView.setScrollEnabled(true);
-		}
-	}
-
-	private class LibFreeRDPBroadcastReceiver extends BroadcastReceiver
-	{
-		@Override public void onReceive(Context context, Intent intent)
-		{
-			// still got a valid session?
-			if (session == null)
-				return;
-
-			// is this event for the current session?
-			if (session.getInstance() != intent.getExtras().getLong(GlobalApp.EVENT_PARAM, -1))
-				return;
-
-			switch (intent.getExtras().getInt(GlobalApp.EVENT_TYPE, -1))
-			{
-				case GlobalApp.FREERDP_EVENT_CONNECTION_SUCCESS:
-					OnConnectionSuccess(context);
-					break;
-
-				case GlobalApp.FREERDP_EVENT_CONNECTION_FAILURE:
-					OnConnectionFailure(context);
-					break;
-				case GlobalApp.FREERDP_EVENT_DISCONNECTED:
-					OnDisconnected(context);
-					break;
-			}
-		}
-
-		private void OnConnectionSuccess(Context context)
-		{
-			Log.v(TAG, "OnConnectionSuccess");
-
-			if (connectCancelledByUser)
-			{
-				LibFreeRDP.disconnect(session.getInstance());
-				closeSessionActivity(RESULT_CANCELED);
-				return;
-			}
-
-			// bind session
-			bindSession();
-
-			if (ApplicationSettingsActivity.getKeepScreenOnWhenConnected(context))
-			{
-				getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-			}
-
-			if (progressDialog != null)
-			{
-				progressDialog.dismiss();
-				progressDialog = null;
-			}
-
-			if (session.getBookmark() == null)
-			{
-				// Return immediately if we launch from URI
-				return;
-			}
-
-			// add hostname to history if quick connect was used
-			Bundle bundle = getIntent().getExtras();
-			if (bundle != null && bundle.containsKey(PARAM_CONNECTION_REFERENCE))
-			{
-				if (ConnectionReference.isHostnameReference(
-				        bundle.getString(PARAM_CONNECTION_REFERENCE)))
-				{
-					assert session.getBookmark().getType() == BookmarkBase.TYPE_MANUAL;
-					String item = session.getBookmark().getHostname();
-					if (!GlobalApp.getQuickConnectHistoryGateway().historyItemExists(item))
-						GlobalApp.getQuickConnectHistoryGateway().addHistoryItem(item);
-				}
-			}
-		}
-
-		private void OnConnectionFailure(Context context)
-		{
-			Log.v(TAG, "OnConnectionFailure");
-
-			// remove pending move events
-			uiHandler.removeMessages(UIHandler.SEND_MOVE_EVENT);
-
-			if (progressDialog != null)
-			{
-				progressDialog.dismiss();
-				progressDialog = null;
-			}
-
-			// post error message on UI thread
-			if (!connectCancelledByUser)
-				uiHandler.sendMessage(
-				    Message.obtain(null, UIHandler.DISPLAY_TOAST,
-				                   getResources().getText(R.string.error_connection_failure)));
-
+			LibFreeRDP.disconnect(session.getInstance());
 			closeSessionActivity(RESULT_CANCELED);
+			return;
 		}
 
-		private void OnDisconnected(Context context)
+		// bind session
+		bindSession();
+
+		if (ApplicationSettingsActivity.getKeepScreenOnWhenConnected(this))
 		{
-			Log.v(TAG, "OnDisconnected");
-
-			// remove pending move events
-			uiHandler.removeMessages(UIHandler.SEND_MOVE_EVENT);
-
-			if (ApplicationSettingsActivity.getKeepScreenOnWhenConnected(context))
-			{
-				getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-			}
-
-			if (progressDialog != null)
-			{
-				progressDialog.dismiss();
-				progressDialog = null;
-			}
-
-			session.setUIEventListener(null);
-			closeSessionActivity(RESULT_OK);
+			getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 		}
+
+		dialogs.dismissProgress();
+
+		if (session.getBookmark() == null)
+		{
+			// Return immediately if we launch from URI
+			return;
+		}
+
+		// add hostname to history if quick connect was used
+		Bundle bundle = getIntent().getExtras();
+		if (bundle != null && bundle.containsKey(PARAM_CONNECTION_REFERENCE))
+		{
+			if (ConnectionReference.isHostnameReference(
+			        bundle.getString(PARAM_CONNECTION_REFERENCE)))
+			{
+				assert session.getBookmark().getType() == BookmarkBase.TYPE_MANUAL;
+				sessionViewModel.recordQuickConnectHistory(session.getBookmark().getHostname());
+			}
+		}
+	}
+
+	private void onSessionFailed()
+	{
+		Log.v(TAG, "onSessionFailed");
+
+		// cancel any pending input events
+		if (inputManager != null)
+			inputManager.cancelPendingEvents();
+
+		dialogs.dismissProgress();
+
+		// post error message on UI thread
+		if (!connectCancelledByUser)
+			uiHandler.sendMessage(Message.obtain(
+			    null, DISPLAY_TOAST, getResources().getText(R.string.error_connection_failure)));
+
+		closeSessionActivity(RESULT_CANCELED);
+	}
+
+	private void onSessionDisconnected()
+	{
+		Log.v(TAG, "onSessionDisconnected");
+
+		// cancel any pending input events
+		if (inputManager != null)
+			inputManager.cancelPendingEvents();
+
+		if (ApplicationSettingsActivity.getKeepScreenOnWhenConnected(this))
+		{
+			getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+		}
+
+		dialogs.dismissProgress();
+
+		session.setUIEventListener(null);
+		closeSessionActivity(RESULT_OK);
 	}
 }
