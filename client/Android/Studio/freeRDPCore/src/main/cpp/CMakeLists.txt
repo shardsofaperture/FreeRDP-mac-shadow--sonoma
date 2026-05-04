@@ -30,15 +30,93 @@ message("project ${PROJECT_NAME} is using version ${PROJECT_VERSION}")
 set(MODULE_NAME "freerdp-android")
 set(MODULE_PREFIX "FREERDP_CLIENT_ANDROID")
 
-set(FREERDP_IMPORT_DIR_RELATIVE ../jniLibs/${CMAKE_ANDROID_ARCH_ABI})
-get_filename_component(FREERDP_IMPORT_DIR ${FREERDP_IMPORT_DIR_RELATIVE} ABSOLUTE)
+get_filename_component(FREERDP_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../../.." ABSOLUTE)
 
-include_directories(
-  SYSTEM ${FREERDP_IMPORT_DIR}/include/freerdp3 ${FREERDP_IMPORT_DIR}/include/winpr3
-  ${FREERDP_IMPORT_DIR}/include/openssl
+# FREERDP_EXTERNAL_PATH points here; FreeRDP appends /${ANDROID_ABI}/ internally
+set(DEPS_EXTERNAL_ROOT "${CMAKE_BINARY_DIR}/deps")
+# All external deps install into this ABI-scoped prefix
+set(DEPS_INSTALL_DIR "${DEPS_EXTERNAL_ROOT}/${CMAKE_ANDROID_ARCH_ABI}")
+
+# Module path for our cmake helpers
+list(APPEND CMAKE_MODULE_PATH "${FREERDP_SOURCE_DIR}/client/Android/cmake")
+
+include(AndroidHelpers)
+detect_ndk_root(NDK_ROOT)
+detect_ndk_host_platform(NDK_HOST_PLATFORM)
+get_android_api_level(NDK_API_LEVEL)
+
+option(WITH_OPENSSL "Build and enable OpenSSL" ON)
+option(WITH_FFMPEG "Build and enable FFmpeg codec support" ON)
+option(WITH_OPENH264 "Build and enable OpenH264 codec support" ON)
+option(WITH_CJSON "Build cJSON for Azure AD (AAD) support" ON)
+option(WITH_MEDIACODEC "Enable Android MediaCodec API" OFF)
+option(WITH_OPUS "Build Opus audio codec" ON)
+option(WITH_PNG "Build libpng image support" ON)
+option(WITH_WEBP "Build libwebp image support" ON)
+option(WITH_JPEG "Build libjpeg-turbo image support" ON)
+
+set(ANDROID_CMAKE_ARGS
+    -DCMAKE_TOOLCHAIN_FILE:FILEPATH=${CMAKE_TOOLCHAIN_FILE}
+    -DANDROID_ABI:STRING=${CMAKE_ANDROID_ARCH_ABI}
+    -DANDROID_PLATFORM:STRING=android-${NDK_API_LEVEL}
+    -DANDROID_STL:STRING=c++_shared
+    -DCMAKE_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}
+    -DCMAKE_MAKE_PROGRAM:FILEPATH=${CMAKE_MAKE_PROGRAM}
+    -DBUILD_SHARED_LIBS:BOOL=ON
 )
 
+set(ANDROID_NATIVE_DEPS "")
+
+if(WITH_OPENSSL)
+  include(ExternalOpenSSL)
+  list(APPEND ANDROID_NATIVE_DEPS openssl)
+endif()
+
+if(WITH_CJSON)
+  include(ExternalCJSON)
+  list(APPEND ANDROID_NATIVE_DEPS cjson)
+endif()
+
+if(WITH_OPENH264)
+  include(ExternalOpenH264)
+  list(APPEND ANDROID_NATIVE_DEPS openh264)
+endif()
+
+if(WITH_OPUS)
+  include(ExternalOpus)
+  list(APPEND ANDROID_NATIVE_DEPS opus)
+endif()
+
+if(WITH_FFMPEG)
+  include(ExternalFFmpeg)
+  list(APPEND ANDROID_NATIVE_DEPS ffmpeg)
+endif()
+
+if(WITH_PNG)
+  include(ExternalLibPNG)
+  list(APPEND ANDROID_NATIVE_DEPS libpng)
+endif()
+
+if(WITH_WEBP)
+  include(ExternalWebP)
+  list(APPEND ANDROID_NATIVE_DEPS webp)
+endif()
+
+if(WITH_JPEG)
+  include(ExternalJpeg)
+  list(APPEND ANDROID_NATIVE_DEPS jpeg)
+endif()
+
+include(ExternalUriparser)
+list(APPEND ANDROID_NATIVE_DEPS uriparser)
+
+# FreeRDP itself — DEPENDS on everything above.
+# Also defines IMPORTED targets: freerdp3-lib, freerdp-client3-lib, winpr3-lib
+include(ExternalFreeRDP)
+
 set(${MODULE_PREFIX}_SRCS
+    android_cliprdr.c
+    android_cliprdr.h
     android_event.c
     android_event.h
     android_freerdp.c
@@ -49,20 +127,9 @@ set(${MODULE_PREFIX}_SRCS
     android_jni_callback.h
 )
 
-if(WITH_CLIENT_CHANNELS)
-  set(${MODULE_PREFIX}_SRCS ${${MODULE_PREFIX}_SRCS} android_cliprdr.c android_cliprdr.h)
-endif()
-
 add_library(${MODULE_NAME} SHARED ${${MODULE_PREFIX}_SRCS})
 
-add_library(freerdp3-lib SHARED IMPORTED)
-set_property(TARGET freerdp3-lib PROPERTY IMPORTED_LOCATION ${FREERDP_IMPORT_DIR}/libfreerdp3.so)
-
-add_library(freerdp-client3-lib SHARED IMPORTED)
-set_property(TARGET freerdp-client3-lib PROPERTY IMPORTED_LOCATION ${FREERDP_IMPORT_DIR}/libfreerdp-client3.so)
-
-add_library(winpr3-lib SHARED IMPORTED)
-set_property(TARGET winpr3-lib PROPERTY IMPORTED_LOCATION ${FREERDP_IMPORT_DIR}/libwinpr3.so)
+add_dependencies(${MODULE_NAME} freerdp)
 
 find_library(log-lib log)
 find_library(dl-lib dl)

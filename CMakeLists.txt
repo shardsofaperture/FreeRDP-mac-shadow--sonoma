@@ -265,22 +265,7 @@ endif(APPLE)
 if(ANDROID)
   set_property(GLOBAL PROPERTY FIND_LIBRARY_USE_LIB64_PATHS ${ANDROID_LIBRARY_USE_LIB64_PATHS})
 
-  if(ANDROID_ABI STREQUAL arm64-v8a)
-    include(CheckCCompilerFlag)
-    check_c_compiler_flag("-mfloat-abi=softfp" ABI_SOFTFP_SUPPORTED)
-
-    if(ABI_SOFTFP_SUPPORTED)
-      # https://github.com/android/ndk/issues/910
-      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mfloat-abi=softfp")
-    endif()
-  endif()
-
   add_compile_definitions("$<$<CONFIG:Debug>:NDK_DEBUG=1>")
-
-  # NOTE: Manually add -gdwarf-3, as newer toolchains default to -gdwarf-4,
-  #       which is not supported by the gdbserver binary shipped with
-  #       the android NDK (tested with r9b)
-  add_compile_options("$<$<CONFIG:Debug>:-gdwarf-3>")
   add_link_options(-llog)
 
   # CMAKE_PREFIX_PATH detection is broken in most Android toolchain files
@@ -298,8 +283,8 @@ if(ANDROID)
 
   list(APPEND CMAKE_INCLUDE_PATH ${FREERDP_EXTERNAL_PATH}/${ANDROID_ABI}/include)
   list(APPEND CMAKE_LIBRARY_PATH ${FREERDP_EXTERNAL_PATH}/${ANDROID_ABI}/)
-  set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY BOTH)
-  set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE BOTH)
+  set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+  set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 
   if(WITH_GPROF)
     configure_file(
