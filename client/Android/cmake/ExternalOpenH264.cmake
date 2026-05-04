@@ -16,6 +16,7 @@ else()
 endif()
 
 ExternalProject_Add(openh264
+    SOURCE_DIR ${CMAKE_SOURCE_DIR}/external/openh264
     URL      https://github.com/cisco/openh264/archive/refs/tags/${OPENH264_VERSION}.tar.gz
     URL_HASH SHA256=558544ad358283a7ab2930d69a9ceddf913f4a51ee9bf1bfb9e377322af81a69
 

@@ -18,6 +18,7 @@ endif()
 set(NDK_TOOLCHAIN_BIN "${NDK_ROOT}/toolchains/llvm/prebuilt/${NDK_HOST_PLATFORM}/bin")
 
 ExternalProject_Add(openssl
+    SOURCE_DIR ${CMAKE_SOURCE_DIR}/external/openssl
     URL      https://github.com/openssl/openssl/releases/download/${OPENSSL_VERSION}/${OPENSSL_VERSION}.tar.gz
     URL_HASH SHA256=aaf51a1fe064384f811daeaeb4ec4dce7340ec8bd893027eee676af31e83a04f
 

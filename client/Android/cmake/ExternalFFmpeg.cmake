@@ -51,6 +51,7 @@ else()
 endif()
 
 ExternalProject_Add(ffmpeg
+    SOURCE_DIR ${CMAKE_SOURCE_DIR}/external/ffmpeg
     URL      https://github.com/FFmpeg/FFmpeg/archive/refs/tags/${FFMPEG_VERSION}.tar.gz
     URL_HASH SHA256=dd308201bb1239a1b73185f80c6b4121f4efdfa424a009ce544fd00bf736bb2e
     DEPENDS  openh264 opus
@@ -65,7 +66,6 @@ ExternalProject_Add(ffmpeg
             --cc=${FFMPEG_CC}
             --cxx=${FFMPEG_CXX}
             --pkg-config=${PKG_CONFIG_EXECUTABLE}
-            --pkg-config-flags=--static
             --sysroot=${NDK_SYSROOT}
             --arch=${FFMPEG_ARCH}
             --cpu=${FFMPEG_CPU}
