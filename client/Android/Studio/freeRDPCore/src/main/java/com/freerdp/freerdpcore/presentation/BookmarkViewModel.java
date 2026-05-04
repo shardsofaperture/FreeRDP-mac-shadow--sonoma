@@ -16,7 +16,6 @@ import androidx.lifecycle.ViewModel;
 import com.freerdp.freerdpcore.application.GlobalApp;
 import com.freerdp.freerdpcore.domain.BookmarkBase;
 import com.freerdp.freerdpcore.domain.ConnectionReference;
-import com.freerdp.freerdpcore.domain.ManualBookmark;
 import com.freerdp.freerdpcore.services.ManualBookmarkGateway;
 import com.freerdp.freerdpcore.utils.RDPFileParser;
 
@@ -91,30 +90,28 @@ public class BookmarkViewModel extends ViewModel
 			{
 				String refStr = bundle.getString(BookmarkActivity.PARAM_CONNECTION_REFERENCE);
 
-				if (ConnectionReference.isManualBookmarkReference(refStr))
+				if (ConnectionReference.isBookmarkReference(refStr))
 				{
 					bookmark = GlobalApp.getManualBookmarkGateway().findById(
-					    ConnectionReference.getManualBookmarkId(refStr));
+					    ConnectionReference.getBookmarkId(refStr));
 					isNew = false;
 				}
 				else if (ConnectionReference.isHostnameReference(refStr))
 				{
-					bookmark = new ManualBookmark();
-					bookmark.<ManualBookmark>get().setLabel(
-					    ConnectionReference.getHostname(refStr));
-					bookmark.<ManualBookmark>get().setHostname(
-					    ConnectionReference.getHostname(refStr));
+					bookmark = new BookmarkBase();
+					bookmark.setLabel(ConnectionReference.getHostname(refStr));
+					bookmark.setHostname(ConnectionReference.getHostname(refStr));
 					isNew = true;
 				}
 				else if (ConnectionReference.isFileReference(refStr))
 				{
 					String file = ConnectionReference.getFile(refStr);
-					bookmark = new ManualBookmark();
+					bookmark = new BookmarkBase();
 					bookmark.setLabel(file);
 					try
 					{
 						RDPFileParser rdpFile = new RDPFileParser(file);
-						updateBookmarkFromFile((ManualBookmark)bookmark, rdpFile);
+						updateBookmarkFromFile(bookmark, rdpFile);
 						bookmark.setLabel(new File(file).getName());
 						isNew = true;
 					}
@@ -127,7 +124,7 @@ public class BookmarkViewModel extends ViewModel
 
 			if (bookmark == null)
 			{
-				bookmark = new ManualBookmark();
+				bookmark = new BookmarkBase();
 			}
 
 			this.newBookmark = isNew;
@@ -154,8 +151,7 @@ public class BookmarkViewModel extends ViewModel
 			if (bookmark.getType() == BookmarkBase.TYPE_MANUAL)
 			{
 				ManualBookmarkGateway gateway = GlobalApp.getManualBookmarkGateway();
-				GlobalApp.getQuickConnectHistoryGateway().removeHistoryItem(
-				    bookmark.<ManualBookmark>get().getHostname());
+				GlobalApp.getQuickConnectHistoryGateway().removeHistoryItem(bookmark.getHostname());
 
 				if (bookmark.getId() > 0)
 				{
@@ -172,7 +168,7 @@ public class BookmarkViewModel extends ViewModel
 		});
 	}
 
-	private void updateBookmarkFromFile(ManualBookmark bookmark, RDPFileParser rdpFile)
+	private void updateBookmarkFromFile(BookmarkBase bookmark, RDPFileParser rdpFile)
 	{
 		String s;
 		Integer i;

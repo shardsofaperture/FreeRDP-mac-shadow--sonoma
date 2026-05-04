@@ -20,7 +20,6 @@ import androidx.collection.LongSparseArray;
 import com.freerdp.freerdpcore.application.GlobalApp;
 import com.freerdp.freerdpcore.application.SessionState;
 import com.freerdp.freerdpcore.domain.BookmarkBase;
-import com.freerdp.freerdpcore.domain.ManualBookmark;
 import com.freerdp.freerdpcore.presentation.ApplicationSettingsActivity;
 
 import java.util.ArrayList;
@@ -249,8 +248,8 @@ public class LibFreeRDP
 			return false;
 		}
 
-		int port = bookmark.<ManualBookmark>get().getPort();
-		String hostname = bookmark.<ManualBookmark>get().getHostname();
+		int port = bookmark.getPort();
+		String hostname = bookmark.getHostname();
 
 		args.add("/v:" + hostname);
 		args.add("/port:" + port);
@@ -348,11 +347,9 @@ public class LibFreeRDP
 		args.add("/clipboard");
 
 		// Gateway enabled?
-		if (bookmark.getType() == BookmarkBase.TYPE_MANUAL &&
-		    bookmark.<ManualBookmark>get().getEnableGatewaySettings())
+		if (bookmark.getType() == BookmarkBase.TYPE_MANUAL && bookmark.getEnableGatewaySettings())
 		{
-			ManualBookmark.GatewaySettings gateway =
-			    bookmark.<ManualBookmark>get().getGatewaySettings();
+			BookmarkBase.GatewaySettings gateway = bookmark.getGatewaySettings();
 
 			StringBuilder carg = new StringBuilder();
 			carg.append(

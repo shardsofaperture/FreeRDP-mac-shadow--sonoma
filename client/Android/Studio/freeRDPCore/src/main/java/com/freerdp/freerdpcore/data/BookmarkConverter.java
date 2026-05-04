@@ -3,7 +3,6 @@
 package com.freerdp.freerdpcore.data;
 
 import com.freerdp.freerdpcore.domain.BookmarkBase;
-import com.freerdp.freerdpcore.domain.ManualBookmark;
 
 public final class BookmarkConverter
 {
@@ -11,9 +10,9 @@ public final class BookmarkConverter
 	{
 	}
 
-	public static ManualBookmark toManualBookmark(BookmarkEntity e)
+	public static BookmarkBase toBookmark(BookmarkEntity e)
 	{
-		ManualBookmark bm = new ManualBookmark();
+		BookmarkBase bm = new BookmarkBase();
 
 		bm.setId(e.id);
 		bm.setLabel(e.label);
@@ -68,7 +67,7 @@ public final class BookmarkConverter
 		perf3g.setDesktopComposition(e.perf3gDesktopComposition);
 
 		bm.setEnableGatewaySettings(e.enableGatewaySettings);
-		ManualBookmark.GatewaySettings gw = bm.getGatewaySettings();
+		BookmarkBase.GatewaySettings gw = bm.getGatewaySettings();
 		gw.setHostname(e.gatewayHostname);
 		gw.setPort(e.gatewayPort);
 		gw.setUsername(e.gatewayUsername);
@@ -83,7 +82,7 @@ public final class BookmarkConverter
 		return bm;
 	}
 
-	public static BookmarkEntity toEntity(ManualBookmark bm)
+	public static BookmarkEntity toEntity(BookmarkBase bm)
 	{
 		BookmarkEntity e = new BookmarkEntity();
 		if (bm.getId() > 0)
@@ -142,7 +141,7 @@ public final class BookmarkConverter
 		e.perf3gDesktopComposition = perf3g.getDesktopComposition();
 
 		e.enableGatewaySettings = bm.getEnableGatewaySettings();
-		ManualBookmark.GatewaySettings gw = bm.getGatewaySettings();
+		BookmarkBase.GatewaySettings gw = bm.getGatewaySettings();
 		e.gatewayHostname = gw.getHostname();
 		e.gatewayPort = gw.getPort();
 		e.gatewayUsername = gw.getUsername();
