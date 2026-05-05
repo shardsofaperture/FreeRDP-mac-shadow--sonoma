@@ -5,11 +5,18 @@ package com.freerdp.freerdpcore.data;
 import android.content.Context;
 
 import androidx.annotation.NonNull;
+
+import java.io.File;
 import androidx.room.Database;
 import androidx.room.Room;
 import androidx.room.RoomDatabase;
 import androidx.room.migration.Migration;
 import androidx.sqlite.db.SupportSQLiteDatabase;
+
+import com.freerdp.freerdpcore.security.KeystoreHelper;
+
+import net.zetetic.database.sqlcipher.SQLiteDatabase;
+import net.zetetic.database.sqlcipher.SupportOpenHelperFactory;
 
 @Database(entities = { BookmarkEntity.class }, version = AppDatabase.DB_VERSION,
           exportSchema = false)
@@ -17,6 +24,11 @@ public abstract class AppDatabase extends RoomDatabase
 {
 	static final int DB_VERSION = 11;
 	private static final String DB_NAME = "bookmarks.db";
+
+	static
+	{
+		System.loadLibrary("sqlcipher");
+	}
 
 	private static volatile AppDatabase instance;
 
@@ -30,14 +42,117 @@ public abstract class AppDatabase extends RoomDatabase
 			{
 				if (instance == null)
 				{
+					byte[] key = getOrCreateDbKey(context);
+					migrateUnencryptedIfNeeded(context, key);
+
 					instance = Room.databaseBuilder(context.getApplicationContext(),
 					                                AppDatabase.class, DB_NAME)
+					               .openHelperFactory(new SupportOpenHelperFactory(key))
 					               .addMigrations(MIGRATION_10_11)
 					               .build();
 				}
 			}
 		}
 		return instance;
+	}
+
+	private static byte[] getOrCreateDbKey(Context context)
+	{
+		try
+		{
+			return KeystoreHelper.getInstance(context).getOrCreateDbKey();
+		}
+		catch (KeystoreHelper.KeystoreException e)
+		{
+			throw new RuntimeException("Cannot obtain database encryption key", e);
+		}
+	}
+
+	// Converts an existing unencrypted database to SQLCipher in-place
+	private static void migrateUnencryptedIfNeeded(Context context, byte[] key)
+	{
+		File dbFile = context.getDatabasePath(DB_NAME);
+		if (!dbFile.exists())
+			return;
+
+		String path = dbFile.getAbsolutePath();
+
+		// Check if already encrypted by trying to open with the key.
+		try
+		{
+			SQLiteDatabase.openDatabase(path, key, null, SQLiteDatabase.OPEN_READONLY, null, null)
+			    .close();
+			return; // Database is already encrypted, no migration needed
+		}
+		catch (Exception ignored)
+		{
+		}
+
+		SQLiteDatabase db = null;
+		try
+		{
+			// Verify it is an unencrypted database by opening it with an empty key
+			db = SQLiteDatabase.openDatabase(path, new byte[0], null, SQLiteDatabase.OPEN_READWRITE,
+			                                 null, null);
+		}
+		catch (Exception e)
+		{
+			// If it fails, the file might be corrupted (not plaintext, not correctly encrypted)
+			SQLiteDatabase.deleteDatabase(dbFile);
+			return;
+		}
+
+		// https://www.zetetic.net/sqlcipher/sqlcipher-api/index.html#sqlcipher_export
+		// Prepare a temporary file for the encrypted database migration
+		String tmpPath = path + ".migrating";
+		File tmpFile = new File(tmpPath);
+		SQLiteDatabase.deleteDatabase(tmpFile);
+
+		try
+		{
+			// Pre-create the encrypted database to avoid CANTOPEN errors on ATTACH
+			SQLiteDatabase
+			    .openDatabase(tmpPath, key, null,
+			                  SQLiteDatabase.OPEN_READWRITE | SQLiteDatabase.CREATE_IF_NECESSARY,
+			                  null, null)
+			    .close();
+		}
+		catch (Exception ignored)
+		{
+		}
+
+		try
+		{
+			try
+			{
+				db.execSQL("ATTACH DATABASE '" + tmpPath + "' AS encrypted KEY X'" + toHex(key) +
+				           "'");
+				db.rawQuery("SELECT sqlcipher_export('encrypted')", null).moveToFirst();
+				db.execSQL("DETACH DATABASE encrypted");
+			}
+			finally
+			{
+				db.close();
+			}
+
+			// Replace the old unencrypted database with the new encrypted one
+			SQLiteDatabase.deleteDatabase(dbFile);
+			if (!tmpFile.renameTo(dbFile))
+				throw new RuntimeException("Could not replace database file after encryption");
+		}
+		catch (Exception e)
+		{
+			SQLiteDatabase.deleteDatabase(tmpFile);
+			throw new RuntimeException("Failed to encrypt existing database", e);
+		}
+	}
+
+	private static String toHex(byte[] bytes)
+	{
+		StringBuilder sb = new StringBuilder(bytes.length * 2);
+		for (byte b : bytes)
+			sb.append(String.format(java.util.Locale.US, "%02x", b));
+		return sb.toString();
 	}
 
 	// v10: tbl_manual_bookmarks + tbl_screen_settings + tbl_performance_flags (SQLiteOpenHelper)
