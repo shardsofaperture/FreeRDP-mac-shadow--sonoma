@@ -230,7 +230,10 @@ static NTLM_AV_PAIR* ntlm_av_pair_next(NTLM_AV_PAIR* pAvPair, size_t* pcbAvPair)
 		return nullptr;
 
 	*pcbAvPair -= offset;
-	return (NTLM_AV_PAIR*)((PBYTE)pAvPair + offset);
+	NTLM_AV_PAIR* next = (NTLM_AV_PAIR*)((PBYTE)pAvPair + offset);
+	if (!ntlm_av_pair_check(next, *pcbAvPair))
+		return nullptr;
+	return next;
 }
 
 NTLM_AV_PAIR* ntlm_av_pair_get(NTLM_AV_PAIR* pAvPairList, size_t cbAvPairList, NTLM_AV_ID AvId,
