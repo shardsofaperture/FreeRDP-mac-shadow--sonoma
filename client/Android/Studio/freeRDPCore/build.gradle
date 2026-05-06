@@ -49,6 +49,19 @@ android {
                 }
             }
         }
+        qa {
+            jniDebuggable false
+            externalNativeBuild {
+                cmake {
+                    arguments "-DWITH_FFMPEG=ON", "-DWITH_OPENH264=ON",
+                              "-DWITH_OPUS=ON",   "-DWITH_WEBP=ON",
+                              "-DWITH_JPEG=ON",   "-DWITH_PNG=ON",
+                              "-DWITH_CJSON=ON",  "-DWITH_OPENSSL=ON"
+
+                    abiFilters "arm64-v8a"
+                }
+            }
+        }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
