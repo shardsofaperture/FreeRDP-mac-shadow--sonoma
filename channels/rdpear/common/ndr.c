@@ -931,6 +931,11 @@ BOOL ndr_read_pointedMessageEx(NdrContext* context, wStream* s, ndr_refid ptrId,
 			return FALSE;
 		}
 	}
+	else
+	{
+		WLog_ERR(TAG, "aliased pointer aren't supported for now");
+		return FALSE;
+	}
 
 	*target = ret;
 	return TRUE;
