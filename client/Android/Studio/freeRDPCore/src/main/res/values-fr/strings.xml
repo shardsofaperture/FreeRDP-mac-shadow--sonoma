@@ -89,9 +89,6 @@
     <string name="settings_perf_theming">"Styles visuels"</string>
     <string name="settings_advanced">"Avancé"</string>
     <string name="settings_cat_advanced">"Paramètres avancés"</string>
-    <string name="settings_enable_3g_settings">"Paramètres 3G"</string>
-    <string name="settings_screen_3g">"Écran 3G"</string>
-    <string name="settings_performance_3g">"Performance 3G"</string>
     <string name="settings_cat_gateway">Gateway</string>
     <string name="settings_enable_gateway_settings">Enable Gateway</string>
     <string name="settings_gateway_settings">Gateway Settings</string>

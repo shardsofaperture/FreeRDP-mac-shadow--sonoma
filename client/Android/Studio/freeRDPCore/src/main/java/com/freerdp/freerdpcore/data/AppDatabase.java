@@ -22,7 +22,7 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory;
           exportSchema = false)
 public abstract class AppDatabase extends RoomDatabase
 {
-	static final int DB_VERSION = 11;
+	static final int DB_VERSION = 12;
 	private static final String DB_NAME = "bookmarks.db";
 
 	static
@@ -49,6 +49,7 @@ public abstract class AppDatabase extends RoomDatabase
 					                                AppDatabase.class, DB_NAME)
 					               .openHelperFactory(new SupportOpenHelperFactory(key))
 					               .addMigrations(MIGRATION_10_11)
+					               .addMigrations(MIGRATION_11_12)
 					               .build();
 				}
 			}
@@ -155,9 +156,38 @@ public abstract class AppDatabase extends RoomDatabase
 		return sb.toString();
 	}
 
+	private static final Migration MIGRATION_11_12 = new Migration(11, 12) {
+		@Override public void migrate(@NonNull SupportSQLiteDatabase db)
+		{
+			db.execSQL("ALTER TABLE 'bookmarks' ADD 'tlsSecLevel' CONSTRAINT chk_tlsSecLevel "
+			           + "CHECK (tlsSecLevel >= -1 AND tlsSecLevel <= 5) INTEGER DEFAULT -1;");
+			db.execSQL("ALTER TABLE 'bookmarks' ADD 'tlsMinLevel' CONSTRAINT chk_tlsMinLevel "
+			           + "CHECK (tlsSecLevel >= -1) INTEGER DEFAULT -1;");
+			final String list[] = { "screen_3g_colors",
+				                    "screen_3g_resolution",
+				                    "screen_3g_width",
+				                    "screen_3g_height",
+				                    "perf_3g_remotefx",
+				                    "perf_3g_gfx",
+				                    "perf_3g_gfx_h264",
+				                    "perf_3g_wallpaper",
+				                    "perf_3g_theming",
+				                    "perf_3g_full_window_drag",
+				                    "perf_3g_menu_animations",
+				                    "perf_3g_font_smoothing",
+				                    "perf_3g_desktop_composition",
+				                    "enable_3g_settings" };
+
+			for (String s : list)
+			{
+				db.execSQL("ALTER TABLE 'bookmarks' DROP COLUMN '" + s + "';");
+			}
+		}
+	};
+
 	// v10: tbl_manual_bookmarks + tbl_screen_settings + tbl_performance_flags (SQLiteOpenHelper)
 	// v11: single flat `bookmarks` table (Room)
-	private static final Migration MIGRATION_10_11 = new Migration(10, DB_VERSION) {
+	private static final Migration MIGRATION_10_11 = new Migration(10, 11) {
 		@Override public void migrate(@NonNull SupportSQLiteDatabase db)
 		{
 			db.execSQL("CREATE TABLE IF NOT EXISTS `bookmarks` ("

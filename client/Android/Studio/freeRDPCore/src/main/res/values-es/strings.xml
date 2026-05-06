@@ -90,9 +90,6 @@
     <string name="settings_perf_theming">Estilo visual</string>
     <string name="settings_advanced">Avanzado</string>
     <string name="settings_cat_advanced">Configuracion Avanzada</string>
-    <string name="settings_enable_3g_settings">Configuracion 3G</string>
-    <string name="settings_screen_3g">Pantalla 3G</string>
-    <string name="settings_performance_3g">Rendimiento 3G</string>
     <string name="settings_cat_gateway">Gateway</string>
     <string name="settings_enable_gateway_settings">Enable Gateway</string>
     <string name="settings_gateway_settings">Gateway Settings</string>

@@ -89,9 +89,6 @@
     <string name="settings_perf_theming">視覚設定</string>
     <string name="settings_advanced">高度な設定</string>
     <string name="settings_cat_advanced">高度な設定</string>
-    <string name="settings_enable_3g_settings">3G 設定</string>
-    <string name="settings_screen_3g">3G 画面</string>
-    <string name="settings_performance_3g">3G パフォーマンス</string>
     <string name="settings_cat_gateway">ゲートウェイ</string>
     <string name="settings_enable_gateway_settings">ゲートウェイを有効にする</string>
     <string name="settings_gateway_settings">ゲートウェイの設定</string>

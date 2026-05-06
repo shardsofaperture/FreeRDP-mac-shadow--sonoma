@@ -31,52 +31,23 @@ import androidx.room.PrimaryKey;
 
 	@ColumnInfo(name = "height") public int height = 0;
 
-	@ColumnInfo(name = "perf_remotefx") public boolean perfRemoteFx = false;
+	@ColumnInfo(name = "perf_remotefx") public boolean perfRemoteFx = true;
 
 	@ColumnInfo(name = "perf_gfx") public boolean perfGfx = true;
 
-	@ColumnInfo(name = "perf_gfx_h264") public boolean perfGfxH264 = false;
+	@ColumnInfo(name = "perf_gfx_h264") public boolean perfGfxH264 = true;
 
-	@ColumnInfo(name = "perf_wallpaper") public boolean perfWallpaper = false;
+	@ColumnInfo(name = "perf_wallpaper") public boolean perfWallpaper = true;
 
-	@ColumnInfo(name = "perf_theming") public boolean perfTheming = false;
+	@ColumnInfo(name = "perf_theming") public boolean perfTheming = true;
 
-	@ColumnInfo(name = "perf_full_window_drag") public boolean perfFullWindowDrag = false;
+	@ColumnInfo(name = "perf_full_window_drag") public boolean perfFullWindowDrag = true;
 
-	@ColumnInfo(name = "perf_menu_animations") public boolean perfMenuAnimations = false;
+	@ColumnInfo(name = "perf_menu_animations") public boolean perfMenuAnimations = true;
 
-	@ColumnInfo(name = "perf_font_smoothing") public boolean perfFontSmoothing = false;
+	@ColumnInfo(name = "perf_font_smoothing") public boolean perfFontSmoothing = true;
 
-	@ColumnInfo(name = "perf_desktop_composition") public boolean perfDesktopComposition = false;
-
-	@ColumnInfo(name = "screen_3g_colors") public int screen3gColors = 16;
-
-	@ColumnInfo(name = "screen_3g_resolution") public int screen3gResolution = -1;
-
-	@ColumnInfo(name = "screen_3g_width") public int screen3gWidth = 0;
-
-	@ColumnInfo(name = "screen_3g_height") public int screen3gHeight = 0;
-
-	@ColumnInfo(name = "perf_3g_remotefx") public boolean perf3gRemoteFx = false;
-
-	@ColumnInfo(name = "perf_3g_gfx") public boolean perf3gGfx = false;
-
-	@ColumnInfo(name = "perf_3g_gfx_h264") public boolean perf3gGfxH264 = false;
-
-	@ColumnInfo(name = "perf_3g_wallpaper") public boolean perf3gWallpaper = false;
-
-	@ColumnInfo(name = "perf_3g_theming") public boolean perf3gTheming = false;
-
-	@ColumnInfo(name = "perf_3g_full_window_drag") public boolean perf3gFullWindowDrag = false;
-
-	@ColumnInfo(name = "perf_3g_menu_animations") public boolean perf3gMenuAnimations = false;
-
-	@ColumnInfo(name = "perf_3g_font_smoothing") public boolean perf3gFontSmoothing = false;
-
-	@ColumnInfo(name = "perf_3g_desktop_composition")
-	public boolean perf3gDesktopComposition = false;
-
-	@ColumnInfo(name = "enable_3g_settings") public boolean enable3gSettings = false;
+	@ColumnInfo(name = "perf_desktop_composition") public boolean perfDesktopComposition = true;
 
 	@ColumnInfo(name = "enable_gateway_settings") public boolean enableGatewaySettings = false;
 
@@ -111,4 +82,8 @@ import androidx.room.PrimaryKey;
 	@ColumnInfo(name = "async_channel") public boolean asyncChannel = false;
 
 	@ColumnInfo(name = "async_update") public boolean asyncUpdate = false;
+
+	@ColumnInfo(name = "tlsSecLevel") public int tlsSecLevel = -1;
+
+	@ColumnInfo(name = "tlsMinLevel") public int tlsMinLevel = -1;
 }

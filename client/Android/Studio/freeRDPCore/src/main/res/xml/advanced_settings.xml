@@ -20,18 +20,17 @@
             android:title="@string/settings_gateway_settings"
             app:fragment="com.freerdp.freerdpcore.presentation.BookmarkActivity$GatewayFragment" />
 
-        <SwitchPreferenceCompat
-            android:key="bookmark.enable_3g_settings"
-            android:title="@string/settings_enable_3g_settings" />
-        <Preference
-            android:key="bookmark.screen_3g"
-            android:title="@string/settings_screen_3g"
-            app:fragment="com.freerdp.freerdpcore.presentation.BookmarkActivity$ScreenFragment3g" />
+        <com.freerdp.freerdpcore.utils.IntListPreference
+            android:entries="@array/tlsSecLevel_array"
+            android:entryValues="@array/tlsSecLevel_values_array"
+            android:key="bookmark.tlsSecLevel"
+            android:title="@string/settings_tlsSecLevel" />
 
-        <Preference
-            android:key="bookmark.performance_3g"
-            android:title="@string/settings_performance_3g"
-            app:fragment="com.freerdp.freerdpcore.presentation.BookmarkActivity$PerformanceFragment3g" />
+        <com.freerdp.freerdpcore.utils.IntListPreference
+            android:entries="@array/tlsMinLevel_array"
+            android:entryValues="@array/tlsMinLevel_values_array"
+            android:key="bookmark.tlsMinLevel"
+            android:title="@string/settings_tlsMinLevel" />
 
         <CheckBoxPreference
             android:key="bookmark.redirect_sdcard"
