@@ -2257,9 +2257,18 @@ static int parse_tls_enforce(rdpSettings* settings, const char* Value)
 			}
 		}
 
-		if (!found)
-			return COMMAND_LINE_ERROR_UNEXPECTED_VALUE;
-		version = found->version;
+		if (found)
+			version = found->version;
+		else
+		{
+			errno = 0;
+			const long v = strtol(Value, nullptr, 0);
+
+			if ((v < -1) || (v == LONG_MAX) && (errno != 0))
+				return COMMAND_LINE_ERROR_UNEXPECTED_VALUE;
+			else
+				version = v;
+		}
 	}
 
 	if (!(freerdp_settings_set_uint16(settings, FreeRDP_TLSMinVersion, version) &&
