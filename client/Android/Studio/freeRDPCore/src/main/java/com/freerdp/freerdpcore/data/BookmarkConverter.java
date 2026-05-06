@@ -40,7 +40,6 @@ public final class BookmarkConverter
 		perf.setDesktopComposition(e.perfDesktopComposition);
 
 		BookmarkBase.AdvancedSettings adv = bm.getAdvancedSettings();
-		adv.setEnable3GSettings(e.enable3gSettings);
 		adv.setRedirectSDCard(e.redirectSdcard);
 		adv.setRedirectSound(e.redirectSound);
 		adv.setRedirectMicrophone(e.redirectMicrophone);
@@ -48,23 +47,8 @@ public final class BookmarkConverter
 		adv.setRemoteProgram(e.remoteProgram);
 		adv.setWorkDir(e.workDir);
 		adv.setConsoleMode(e.consoleMode);
-
-		BookmarkBase.ScreenSettings screen3g = adv.getScreen3G();
-		screen3g.setColors(e.screen3gColors);
-		screen3g.setResolution(e.screen3gResolution);
-		screen3g.setWidth(e.screen3gWidth);
-		screen3g.setHeight(e.screen3gHeight);
-
-		BookmarkBase.PerformanceFlags perf3g = adv.getPerformance3G();
-		perf3g.setRemoteFX(e.perf3gRemoteFx);
-		perf3g.setGfx(e.perf3gGfx);
-		perf3g.setH264(e.perf3gGfxH264);
-		perf3g.setWallpaper(e.perf3gWallpaper);
-		perf3g.setTheming(e.perf3gTheming);
-		perf3g.setFullWindowDrag(e.perf3gFullWindowDrag);
-		perf3g.setMenuAnimations(e.perf3gMenuAnimations);
-		perf3g.setFontSmoothing(e.perf3gFontSmoothing);
-		perf3g.setDesktopComposition(e.perf3gDesktopComposition);
+		adv.setTlsSecLevel(e.tlsSecLevel);
+		adv.setTlsMinLevel(e.tlsMinLevel);
 
 		bm.setEnableGatewaySettings(e.enableGatewaySettings);
 		BookmarkBase.GatewaySettings gw = bm.getGatewaySettings();
@@ -114,7 +98,6 @@ public final class BookmarkConverter
 		e.perfDesktopComposition = perf.getDesktopComposition();
 
 		BookmarkBase.AdvancedSettings adv = bm.getAdvancedSettings();
-		e.enable3gSettings = adv.getEnable3GSettings();
 		e.redirectSdcard = adv.getRedirectSDCard();
 		e.redirectSound = adv.getRedirectSound();
 		e.redirectMicrophone = adv.getRedirectMicrophone();
@@ -122,23 +105,8 @@ public final class BookmarkConverter
 		e.remoteProgram = adv.getRemoteProgram();
 		e.workDir = adv.getWorkDir();
 		e.consoleMode = adv.getConsoleMode();
-
-		BookmarkBase.ScreenSettings screen3g = adv.getScreen3G();
-		e.screen3gColors = screen3g.getColors();
-		e.screen3gResolution = screen3g.getResolution();
-		e.screen3gWidth = screen3g.getWidth();
-		e.screen3gHeight = screen3g.getHeight();
-
-		BookmarkBase.PerformanceFlags perf3g = adv.getPerformance3G();
-		e.perf3gRemoteFx = perf3g.getRemoteFX();
-		e.perf3gGfx = perf3g.getGfx();
-		e.perf3gGfxH264 = perf3g.getH264();
-		e.perf3gWallpaper = perf3g.getWallpaper();
-		e.perf3gTheming = perf3g.getTheming();
-		e.perf3gFullWindowDrag = perf3g.getFullWindowDrag();
-		e.perf3gMenuAnimations = perf3g.getMenuAnimations();
-		e.perf3gFontSmoothing = perf3g.getFontSmoothing();
-		e.perf3gDesktopComposition = perf3g.getDesktopComposition();
+		e.tlsSecLevel = adv.getTlsSecLevel();
+		e.tlsMinLevel = adv.getTlsMinLevel();
 
 		e.enableGatewaySettings = bm.getEnableGatewaySettings();
 		BookmarkBase.GatewaySettings gw = bm.getGatewaySettings();

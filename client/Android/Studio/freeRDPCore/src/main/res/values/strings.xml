@@ -118,14 +118,45 @@
     <string name="settings_perf_theming">Visual Styles</string>
     <string name="settings_advanced">Advanced</string>
     <string name="settings_cat_advanced">Advanced Settings</string>
-    <string name="settings_enable_3g_settings">3G Settings</string>
-    <string name="settings_screen_3g">3G Screen</string>
-    <string name="settings_performance_3g">3G Performance</string>
+    <string name="settings_tlsSecLevel">TLS Security Level</string>
+    <string name="settings_tlsMinLevel">Required TLS Version</string>
     <string name="settings_cat_gateway">Gateway</string>
     <string name="settings_enable_gateway_settings">Enable Gateway</string>
     <string name="settings_gateway_settings">Gateway Settings</string>
     <string name="settings_redirect_sdcard">Redirect SD card</string>
     <string name="settings_redirect_sound">Redirect Sound</string>
+    <string-array name="tlsSecLevel_array">
+        <item>Use default</item>
+        <item>everything permitted</item>
+        <item>80 bits</item>
+        <item>112 bits</item>
+        <item>128 bits</item>
+        <item>192 bits</item>
+        <item>256 bits</item>
+    </string-array>
+    <string-array name="tlsSecLevel_values_array" translatable="false">
+        <item>-1</item>
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+        <item>5</item>
+    </string-array>
+    <string-array name="tlsMinLevel_array">
+        <item>Use default</item>
+        <item>TLS 1.0</item>
+        <item>TLS 1.1</item>
+        <item>TLS 1.2</item>
+        <item>TLS 1.3</item>
+    </string-array>
+    <string-array name="tlsMinLevel_values_array" translatable="false">
+        <item>-1</item>
+        <item>0x0301</item>
+        <item>0x0302</item>
+        <item>0x0303</item>
+        <item>0x0304</item>
+    </string-array>
     <string-array name="redirect_sound_array">
         <item>Do not play</item>
         <item>Play on Server</item>
@@ -256,6 +287,5 @@
         <item>TRACE</item>
     </string-array>
 
-    <string name="preference_key_h264_3g" translatable="false">bookmark.perf_gfx_h264</string>
     <string name="preference_key_h264" translatable="false">bookmark.perf_gfx_h264</string>
 </resources>

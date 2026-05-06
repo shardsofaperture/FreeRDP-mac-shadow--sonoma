@@ -89,9 +89,6 @@
     <string name="settings_perf_theming">視覺樣式</string>
     <string name="settings_advanced">進階</string>
     <string name="settings_cat_advanced">進階設定</string>
-    <string name="settings_enable_3g_settings">3G 設定</string>
-    <string name="settings_screen_3g">3G 螢幕</string>
-    <string name="settings_performance_3g">3G 效能</string>
     <string name="settings_cat_gateway">閘道</string>
     <string name="settings_enable_gateway_settings">啟用閘道伺服器</string>
     <string name="settings_gateway_settings">閘道設定</string>

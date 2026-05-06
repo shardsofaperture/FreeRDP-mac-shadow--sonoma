@@ -89,9 +89,6 @@
     <string name="settings_perf_theming">테마 스타일</string>
     <string name="settings_advanced">고급</string>
     <string name="settings_cat_advanced">고급 설정</string>
-    <string name="settings_enable_3g_settings">3G 설정</string>
-    <string name="settings_screen_3g">3G 화면</string>
-    <string name="settings_performance_3g">3G 성능</string>
     <string name="settings_cat_gateway">게이트웨이</string>
     <string name="settings_enable_gateway_settings">게이트웨이 사용</string>
     <string name="settings_gateway_settings">게이트웨이 설정</string>

@@ -23,6 +23,7 @@ import com.freerdp.freerdpcore.domain.BookmarkBase;
 import com.freerdp.freerdpcore.presentation.ApplicationSettingsActivity;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -253,6 +254,34 @@ public class LibFreeRDP
 
 		args.add("/v:" + hostname);
 		args.add("/port:" + port);
+
+		final int level = advanced.getTlsSecLevel();
+		List<String> tls = new ArrayList<>();
+
+		if (level >= 0)
+		{
+			tls.add("seclevel:" + level);
+		}
+
+		final int tlsMinLevel = advanced.getTlsMinLevel();
+		if (tlsMinLevel >= 0)
+		{
+			tls.add("enforce:" + tlsMinLevel);
+		}
+
+		if (!tls.isEmpty())
+		{
+			StringBuilder sb = new StringBuilder();
+			for (String s : tls)
+			{
+				if (sb.length() > 0)
+				{
+					sb.append(',');
+				}
+				sb.append(s);
+			}
+			args.add("/tls:" + sb);
+		}
 
 		arg = bookmark.getUsername();
 		if (!arg.isEmpty())
