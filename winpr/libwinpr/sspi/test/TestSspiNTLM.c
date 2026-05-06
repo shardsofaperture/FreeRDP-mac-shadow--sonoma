@@ -856,7 +856,7 @@ static SECURITY_STATUS testFailCallback(void* client, const SEC_WINNT_AUTH_IDENT
 	return SEC_E_DECRYPT_FAILURE;
 }
 
-int TestNTLM(int argc, char* argv[])
+int TestSspiNTLM(int argc, char* argv[])
 {
 	WINPR_UNUSED(argc);
 	WINPR_UNUSED(argv);
