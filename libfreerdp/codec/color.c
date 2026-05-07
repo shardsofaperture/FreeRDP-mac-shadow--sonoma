@@ -820,10 +820,10 @@ static inline BOOL overlapping(const BYTE* pDstData, UINT32 nYDst, UINT32 nDstSt
 	const uintptr_t dststart = dst + 1ULL * nDstStep * nYDst;
 	const uintptr_t dstend = dststart + 1ULL * nDstStep * nHeight;
 
-	if ((dststart >= srcstart) && (dststart <= srcend))
+	if ((dststart >= srcstart) && (dststart < srcend))
 		return TRUE;
 
-	if ((dstend >= srcstart) && (dstend <= srcend))
+	if ((dstend > srcstart) && (dstend <= srcend))
 		return TRUE;
 
 	return FALSE;
