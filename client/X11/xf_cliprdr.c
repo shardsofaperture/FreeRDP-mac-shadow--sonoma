@@ -2269,6 +2269,7 @@ xf_cliprdr_server_format_data_response(CliprdrClientContext* context,
 {
 	BOOL bSuccess = FALSE;
 	BOOL bRawCached = FALSE;
+	BOOL bFileContextUpdated = FALSE;
 
 	WINPR_ASSERT(context);
 	WINPR_ASSERT(formatDataResponse);
@@ -2338,9 +2339,14 @@ xf_cliprdr_server_format_data_response(CliprdrClientContext* context,
 
 			if (strcmp(format->formatName, type_FileGroupDescriptorW) == 0)
 			{
-				if (!cliprdr_file_context_update_server_data(clipboard->file, clipboard->system,
-				                                             data, size))
-					WLog_WARN(TAG, "failed to update file descriptors");
+				if (!bFileContextUpdated)
+				{
+					if (!cliprdr_file_context_update_server_data(clipboard->file, clipboard->system,
+					                                             data, size))
+						WLog_WARN(TAG, "failed to update file descriptors");
+					else
+						bFileContextUpdated = TRUE;
+				}
 
 				srcFormatId = ClipboardGetFormatId(clipboard->system, type_FileGroupDescriptorW);
 				const xfCliprdrFormat* dstTargetFormat = xf_cliprdr_get_client_format_by_atom(

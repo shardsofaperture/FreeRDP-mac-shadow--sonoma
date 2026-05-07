@@ -131,12 +131,6 @@ typedef struct
 	fuse_req_t fuse_req;
 	UINT32 stream_id;
 } CliprdrFuseRequest;
-
-typedef struct
-{
-	CliprdrFuseFile* parent;
-	char* parent_path;
-} CliprdrFuseFindParentContext;
 #endif
 
 typedef struct
@@ -169,6 +163,7 @@ struct cliprdr_file_context
 #endif
 
 	wHashTable* inode_table;
+	wHashTable* dir_table;
 	wHashTable* clip_data_table;
 	wHashTable* request_table;
 
@@ -398,6 +393,10 @@ static BOOL maybe_steal_inode(const void* key, void* value, void* arg)
 			WLog_Print(file_context->log, WLOG_ERROR,
 			           "Failed to append FUSE file to list for deletion");
 
+		if (!clear_context->all_files && fuse_file->is_directory)
+		{
+			HashTable_Remove(file_context->dir_table, fuse_file->filename_with_root);
+		}
 		HashTable_Remove(file_context->inode_table, key);
 	}
 
@@ -487,6 +486,10 @@ static bool clear_selection(CliprdrFileContext* file_context, BOOL all_selection
 
 	if (!HashTable_Foreach(file_context->request_table, maybe_clear_fuse_request, &clear_context))
 		res = false;
+	if (all_selections)
+	{
+		HashTable_Clear(file_context->dir_table);
+	}
 	if (!HashTable_Foreach(file_context->inode_table, maybe_steal_inode, &clear_context))
 		res = false;
 	HashTable_Unlock(file_context->inode_table);
@@ -1799,6 +1802,15 @@ static CliprdrFuseFile* clip_data_dir_new(CliprdrFileContext* file_context, BOOL
 		return nullptr;
 	}
 
+	if (!HashTable_Insert(file_context->dir_table, clip_data_dir->filename_with_root,
+	                      clip_data_dir))
+	{
+		WLog_Print(file_context->log, WLOG_ERROR, "Failed to insert inode into dir table");
+		ArrayList_Remove(root_dir->children, clip_data_dir);
+		fuse_file_free(clip_data_dir);
+		return nullptr;
+	}
+
 	return clip_data_dir;
 }
 
@@ -1821,47 +1833,19 @@ static char* get_parent_path(const char* filepath)
 	return parent_path;
 }
 
-static BOOL is_fuse_file_not_parent(WINPR_ATTR_UNUSED const void* key, void* value, void* arg)
-{
-	CliprdrFuseFile* fuse_file = value;
-	CliprdrFuseFindParentContext* find_context = arg;
-
-	if (!fuse_file->is_directory)
-		return TRUE;
-
-	if (strncmp(find_context->parent_path, fuse_file->filename_with_root,
-	            fuse_file->filename_with_root_len + 1) == 0)
-	{
-		find_context->parent = fuse_file;
-		return FALSE;
-	}
-
-	return TRUE;
-}
-
 static CliprdrFuseFile* get_parent_directory(CliprdrFileContext* file_context, const char* path)
 {
-	CliprdrFuseFindParentContext find_context = WINPR_C_ARRAY_INIT;
 
 	WINPR_ASSERT(file_context);
 	WINPR_ASSERT(path);
 
-	find_context.parent_path = get_parent_path(path);
-	if (!find_context.parent_path)
+	char* parent_path = get_parent_path(path);
+	if (!parent_path)
 		return nullptr;
 
-	WINPR_ASSERT(!find_context.parent);
-
-	if (HashTable_Foreach(file_context->inode_table, is_fuse_file_not_parent, &find_context))
-	{
-		free(find_context.parent_path);
-		return nullptr;
-	}
-	WINPR_ASSERT(find_context.parent);
-
-	free(find_context.parent_path);
-
-	return find_context.parent;
+	CliprdrFuseFile* parent = HashTable_GetItemValue(file_context->dir_table, parent_path);
+	free(parent_path);
+	return parent;
 }
 
 // NOLINTBEGIN(clang-analyzer-unix.Malloc) HashTable_Insert owns fuse_file
@@ -1945,6 +1929,16 @@ static BOOL selection_handle_file(CliprdrFileContext* file_context,
 	{
 		WLog_Print(file_context->log, WLOG_ERROR, "Failed to insert inode into inode table");
 		goto end;
+	}
+
+	if (fuse_file->is_directory)
+	{
+
+		if (!HashTable_Insert(file_context->dir_table, fuse_file->filename_with_root, fuse_file))
+		{
+			WLog_Print(file_context->log, WLOG_ERROR, "Failed to insert inode into dir table");
+			goto end;
+		}
 	}
 
 	crc = TRUE;
@@ -2131,6 +2125,7 @@ void cliprdr_file_context_free(CliprdrFileContext* file)
 
 	HashTable_Free(file->request_table);
 	HashTable_Free(file->clip_data_table);
+	HashTable_Free(file->dir_table);
 	HashTable_Free(file->inode_table);
 
 #endif
@@ -2418,6 +2413,12 @@ CliprdrFuseFile* fuse_file_new_root(CliprdrFileContext* file_context)
 		return nullptr;
 	}
 
+	if (!HashTable_Insert(file_context->dir_table, root_dir->filename_with_root, root_dir))
+	{
+		fuse_file_free(root_dir);
+		return nullptr;
+	}
+
 	return root_dir;
 }
 #endif
@@ -2454,9 +2455,10 @@ CliprdrFileContext* cliprdr_file_context_new(void* context)
 
 #if defined(WITH_FUSE)
 	file->inode_table = HashTable_New(FALSE);
+	file->dir_table = HashTable_New(FALSE);
 	file->clip_data_table = HashTable_New(FALSE);
 	file->request_table = HashTable_New(FALSE);
-	if (!file->inode_table || !file->clip_data_table || !file->request_table)
+	if (!file->inode_table || !file->dir_table || !file->clip_data_table || !file->request_table)
 		goto fail;
 
 	{
@@ -2468,6 +2470,13 @@ CliprdrFileContext* cliprdr_file_context_new(void* context)
 		wObject* ctobj = HashTable_ValueObject(file->clip_data_table);
 		WINPR_ASSERT(ctobj);
 		ctobj->fnObjectFree = clip_data_entry_free;
+	}
+	{
+		if (!HashTable_SetHashFunction(file->dir_table, HashTable_StringHash))
+			goto fail;
+		wObject* kobj = HashTable_KeyObject(file->dir_table);
+		WINPR_ASSERT(kobj);
+		kobj->fnObjectEquals = HashTable_StringCompare;
 	}
 #endif
 
