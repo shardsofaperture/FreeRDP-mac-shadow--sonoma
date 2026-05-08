@@ -80,22 +80,7 @@ static char* crypto_print_name(const X509_NAME* name)
 
 	if (X509_NAME_print_ex(outBIO, name, 0, XN_FLAG_ONELINE) > 0)
 	{
-		UINT64 size = BIO_number_written(outBIO);
-		if (size > INT_MAX)
-			goto fail;
-		buffer = calloc(1, (size_t)size + 1);
-
-		if (!buffer)
-			goto fail;
-
-		ERR_clear_error();
-		const int rc = BIO_read(outBIO, buffer, (int)size);
-		if (rc <= 0)
-		{
-			free(buffer);
-			buffer = nullptr;
-			goto fail;
-		}
+		buffer = x509_utils_bio_read(outBIO, nullptr);
 	}
 
 fail:
@@ -931,4 +916,37 @@ BOOL x509_utils_verify(X509* xcert, STACK_OF(X509) * chain, const char* certific
 	X509_STORE_free(cert_ctx);
 end:
 	return status;
+}
+
+char* x509_utils_bio_read(BIO* bio, size_t* plen)
+{
+	char* buffer = nullptr;
+	WINPR_ASSERT(bio);
+
+	if (plen)
+		*plen = 0;
+
+	BIO_flush(bio);
+
+	const UINT64 size = BIO_number_written(bio);
+	if (size > INT_MAX)
+		return nullptr;
+
+	buffer = calloc(1, (size_t)size + 1ull);
+
+	if (!buffer)
+		return nullptr;
+
+	ERR_clear_error();
+	const int rc = BIO_read(bio, buffer, (int)size);
+	if (rc <= 0)
+		goto fail;
+
+	if (plen)
+		*plen = size;
+	return buffer;
+
+fail:
+	free(buffer);
+	return nullptr;
 }
