@@ -85,6 +85,16 @@ extern "C"
 	int result;
 	DEFINE_EVENT_END(ConnectionResult)
 
+	DEFINE_EVENT_BEGIN(ChannelInitialized)
+	const char* name;
+	void* pInterface;
+	DEFINE_EVENT_END(ChannelInitialized)
+
+	DEFINE_EVENT_BEGIN(ChannelTerminated)
+	const char* name;
+	void* pInterface;
+	DEFINE_EVENT_END(ChannelTerminated)
+
 	DEFINE_EVENT_BEGIN(ChannelConnected)
 	const char* name;
 	void* pInterface;
