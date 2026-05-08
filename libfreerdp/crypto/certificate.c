@@ -1530,70 +1530,6 @@ fail:
 	return nullptr;
 }
 
-static BOOL bio_read_pem(BIO* bio, char** ppem, size_t* plength)
-{
-	BOOL rc = FALSE;
-
-	WINPR_ASSERT(bio);
-	WINPR_ASSERT(ppem);
-
-	const size_t blocksize = 2048;
-	size_t offset = 0;
-	size_t length = blocksize;
-	char* pem = nullptr;
-
-	*ppem = nullptr;
-	if (plength)
-		*plength = 0;
-
-	while (offset < length)
-	{
-		char* tmp = realloc(pem, length + 1);
-		if (!tmp)
-			goto fail;
-		pem = tmp;
-
-		ERR_clear_error();
-
-		const int status = BIO_read(bio, &pem[offset], (int)(length - offset));
-		if (status <= 0)
-		{
-			if (BIO_should_retry(bio))
-				continue;
-		}
-
-		if (status < 0)
-		{
-			WLog_ERR(TAG, "failed to read certificate");
-			goto fail;
-		}
-
-		if (status == 0)
-			break;
-
-		offset += (size_t)status;
-		if (length - offset > 0)
-			break;
-		length += blocksize;
-	}
-
-	if (pem)
-	{
-		if (offset >= length)
-			goto fail;
-		pem[offset] = '\0';
-	}
-	*ppem = pem;
-	if (plength)
-		*plength = offset;
-	rc = TRUE;
-fail:
-	if (!rc)
-		free(pem);
-
-	return rc;
-}
-
 char* freerdp_certificate_get_pem(const rdpCertificate* cert, size_t* pLength)
 {
 	return freerdp_certificate_get_pem_ex(cert, pLength, TRUE);
@@ -1643,7 +1579,7 @@ char* freerdp_certificate_get_pem_ex(const rdpCertificate* cert, size_t* pLength
 		}
 	}
 
-	(void)bio_read_pem(bio, &pem, pLength);
+	pem = x509_utils_bio_read(bio, pLength);
 
 fail:
 	BIO_free_all(bio);

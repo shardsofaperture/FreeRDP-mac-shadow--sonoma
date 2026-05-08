@@ -89,6 +89,9 @@ extern "C"
 	FREERDP_LOCAL BOOL x509_utils_verify(X509* xcert, STACK_OF(X509) * chain,
 	                                     const char* certificate_store_path);
 
+	WINPR_ATTR_MALLOC(free, 1)
+	FREERDP_LOCAL char* x509_utils_bio_read(BIO* bio, size_t* plen);
+
 #ifdef __cplusplus
 }
 #endif
