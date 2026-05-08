@@ -314,7 +314,8 @@ bool sdlClip::handleEvent(const SDL_ClipboardEvent& ev)
 		           ClipboardGetFormatIdString(format->formatId), format->formatName);
 	}
 
-	std::ignore = cliprdr_file_context_notify_new_client_format_list(_file);
+	if (cliprdr_file_context_notify_new_client_format_list(_file) != CHANNEL_RC_OK)
+		return false;
 
 	WINPR_ASSERT(_ctx);
 	WINPR_ASSERT(_ctx->ClientFormatList);
@@ -538,13 +539,16 @@ UINT sdlClip::ReceiveServerFormatList(CliprdrClientContext* context,
 		}
 	}
 
+	clipboard->_current_mimetypes.clear();
+
 	{
 		ClipboardLockGuard systemlock(clipboard->_system);
 		std::scoped_lock lock(clipboard->_lock);
-		std::ignore = cliprdr_file_context_notify_new_server_format_list(filecontext);
+		auto res = cliprdr_file_context_notify_new_server_format_list(filecontext);
+		if (res != CHANNEL_RC_OK)
+			return res;
 	}
 
-	clipboard->_current_mimetypes.clear();
 	if (text)
 	{
 		clipboard->_current_mimetypes.insert(clipboard->_current_mimetypes.end(),
