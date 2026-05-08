@@ -325,13 +325,12 @@ void freerdp_channels_register_instance(WINPR_ATTR_UNUSED rdpChannels* channels,
 UINT freerdp_channels_pre_connect(rdpChannels* channels, freerdp* instance)
 {
 	UINT error = CHANNEL_RC_OK;
-	CHANNEL_CLIENT_DATA* pChannelClientData = nullptr;
 
 	MessageQueue_Clear(channels->queue);
 
 	for (int index = 0; index < channels->clientDataCount; index++)
 	{
-		pChannelClientData = &channels->clientDataList[index];
+		CHANNEL_CLIENT_DATA* pChannelClientData = &channels->clientDataList[index];
 
 		if (pChannelClientData->pChannelInitEventProc)
 		{
@@ -345,8 +344,20 @@ UINT freerdp_channels_pre_connect(rdpChannels* channels, freerdp* instance)
 			                                            CHANNEL_EVENT_INITIALIZED, nullptr, 0);
 		}
 
-		if (CHANNEL_RC_OK != getChannelError(instance->context))
+		error = getChannelError(instance->context);
+		if (CHANNEL_RC_OK != error)
 			break;
+
+		CHANNEL_OPEN_DATA* pChannelOpenData = &channels->openDataList[index];
+		ChannelInitializedEventArgs e = WINPR_C_ARRAY_INIT;
+		EventArgsInit(&e, "freerdp");
+		e.name = pChannelOpenData->name;
+		e.pInterface = pChannelOpenData->pInterface;
+		if (PubSub_OnChannelInitialized(instance->context->pubSub, instance->context, &e) < 0)
+		{
+			error = ERROR_INTERNAL_ERROR;
+			break;
+		}
 	}
 
 	return error;
@@ -377,7 +388,6 @@ UINT freerdp_channels_attach(freerdp* instance)
 			void* pv;
 		} cnv;
 		ChannelAttachedEventArgs e = WINPR_C_ARRAY_INIT;
-		CHANNEL_OPEN_DATA* pChannelOpenData = nullptr;
 
 		cnv.cpv = hostname;
 		pChannelClientData = &channels->clientDataList[index];
@@ -400,7 +410,7 @@ UINT freerdp_channels_attach(freerdp* instance)
 		if (error != CHANNEL_RC_OK)
 			goto fail;
 
-		pChannelOpenData = &channels->openDataList[index];
+		CHANNEL_OPEN_DATA* pChannelOpenData = &channels->openDataList[index];
 		EventArgsInit(&e, "freerdp");
 		e.name = pChannelOpenData->name;
 		e.pInterface = pChannelOpenData->pInterface;
@@ -491,9 +501,6 @@ fail:
 UINT freerdp_channels_post_connect(rdpChannels* channels, freerdp* instance)
 {
 	UINT error = CHANNEL_RC_OK;
-	const char* hostname = nullptr;
-	size_t hostnameLength = 0;
-	CHANNEL_CLIENT_DATA* pChannelClientData = nullptr;
 
 	WINPR_ASSERT(channels);
 	WINPR_ASSERT(instance);
@@ -501,9 +508,10 @@ UINT freerdp_channels_post_connect(rdpChannels* channels, freerdp* instance)
 	WINPR_ASSERT(instance->context->settings);
 
 	channels->connected = TRUE;
-	hostname = freerdp_settings_get_string(instance->context->settings, FreeRDP_ServerHostname);
+	const char* hostname =
+	    freerdp_settings_get_string(instance->context->settings, FreeRDP_ServerHostname);
 	WINPR_ASSERT(hostname);
-	hostnameLength = strnlen(hostname, MAX_PATH);
+	const size_t hostnameLength = strnlen(hostname, MAX_PATH);
 
 	for (int index = 0; index < channels->clientDataCount; index++)
 	{
@@ -512,9 +520,9 @@ UINT freerdp_channels_post_connect(rdpChannels* channels, freerdp* instance)
 			const void* pcb;
 			void* pb;
 		} cnv;
-		ChannelConnectedEventArgs e = WINPR_C_ARRAY_INIT;
-		CHANNEL_OPEN_DATA* pChannelOpenData = nullptr;
-		pChannelClientData = &channels->clientDataList[index];
+
+		CHANNEL_CLIENT_DATA* pChannelClientData = &channels->clientDataList[index];
+		CHANNEL_OPEN_DATA* pChannelOpenData = &channels->openDataList[index];
 
 		cnv.pcb = hostname;
 		if (pChannelClientData->pChannelInitEventProc)
@@ -534,7 +542,7 @@ UINT freerdp_channels_post_connect(rdpChannels* channels, freerdp* instance)
 		if (error != CHANNEL_RC_OK)
 			goto fail;
 
-		pChannelOpenData = &channels->openDataList[index];
+		ChannelConnectedEventArgs e = WINPR_C_ARRAY_INIT;
 		EventArgsInit(&e, "freerdp");
 		e.name = pChannelOpenData->name;
 		e.pInterface = pChannelOpenData->pInterface;
@@ -949,9 +957,6 @@ UINT freerdp_channels_disconnect(rdpChannels* channels, freerdp* instance)
 
 void freerdp_channels_close(rdpChannels* channels, freerdp* instance)
 {
-	CHANNEL_OPEN_DATA* pChannelOpenData = nullptr;
-	CHANNEL_CLIENT_DATA* pChannelClientData = nullptr;
-
 	WINPR_ASSERT(channels);
 	WINPR_ASSERT(instance);
 
@@ -961,7 +966,7 @@ void freerdp_channels_close(rdpChannels* channels, freerdp* instance)
 	/* tell all libraries we are shutting down */
 	for (int index = 0; index < channels->clientDataCount; index++)
 	{
-		pChannelClientData = &channels->clientDataList[index];
+		CHANNEL_CLIENT_DATA* pChannelClientData = &channels->clientDataList[index];
 
 		if (pChannelClientData->pChannelInitEventProc)
 		{
@@ -974,11 +979,21 @@ void freerdp_channels_close(rdpChannels* channels, freerdp* instance)
 			                                            pChannelClientData->pInitHandle,
 			                                            CHANNEL_EVENT_TERMINATED, nullptr, 0);
 		}
+
+		CHANNEL_OPEN_DATA* pChannelOpenData = &channels->openDataList[index];
+		ChannelTerminatedEventArgs e = WINPR_C_ARRAY_INIT;
+		EventArgsInit(&e, "freerdp");
+		e.name = pChannelOpenData->name;
+		e.pInterface = pChannelOpenData->pInterface;
+		if (PubSub_OnChannelTerminated(instance->context->pubSub, instance->context, &e) < 0)
+		{
+			WLog_WARN(TAG, "PubSub_OnChannelTerminated(%s) failed", pChannelOpenData->name);
+		}
 	}
 
 	for (int index = 0; index < channels->openDataCount; index++)
 	{
-		pChannelOpenData = &channels->openDataList[index];
+		CHANNEL_OPEN_DATA* pChannelOpenData = &channels->openDataList[index];
 		HashTable_Remove(g_ChannelHandles, (void*)(UINT_PTR)pChannelOpenData->OpenHandle);
 	}
 
