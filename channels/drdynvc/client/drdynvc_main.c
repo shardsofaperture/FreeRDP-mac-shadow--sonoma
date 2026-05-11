@@ -407,6 +407,26 @@ static void dvcman_channel_free(DVCMAN_CHANNEL* channel)
 	if (!channel)
 		return;
 
+	if (channel->dvcman)
+	{
+		drdynvcPlugin* plugin = channel->dvcman->drdynvc;
+		if (plugin)
+		{
+			rdpContext* context = plugin->rdpcontext;
+			if (context)
+			{
+				ChannelTerminatedEventArgs e = WINPR_C_ARRAY_INIT;
+				EventArgsInit(&e, "freerdp");
+				e.name = channel->channel_name;
+				e.pInterface = channel->pInterface;
+
+				const int rc = PubSub_OnChannelTerminated(context->pubSub, context, &e);
+				if (rc < 0)
+					WLog_WARN(TAG, "PubSub_OnChannelTerminated(%s) failed", channel->channel_name);
+			}
+		}
+	}
+
 	if (channel->dvc_data)
 		Stream_Release(channel->dvc_data);
 
@@ -542,15 +562,13 @@ static UINT dvcman_channel_close(DVCMAN_CHANNEL* channel, BOOL perRequest, BOOL 
 	return error;
 }
 
-static DVCMAN_CHANNEL* dvcman_channel_new(WINPR_ATTR_UNUSED drdynvcPlugin* drdynvc,
+static DVCMAN_CHANNEL* dvcman_channel_new(drdynvcPlugin* drdynvc,
                                           IWTSVirtualChannelManager* pChannelMgr, UINT32 ChannelId,
                                           const char* ChannelName)
 {
-	DVCMAN_CHANNEL* channel = nullptr;
-
 	WINPR_ASSERT(drdynvc);
 	WINPR_ASSERT(pChannelMgr);
-	channel = (DVCMAN_CHANNEL*)calloc(1, sizeof(DVCMAN_CHANNEL));
+	DVCMAN_CHANNEL* channel = (DVCMAN_CHANNEL*)calloc(1, sizeof(DVCMAN_CHANNEL));
 
 	if (!channel)
 		return nullptr;
@@ -569,6 +587,22 @@ static DVCMAN_CHANNEL* dvcman_channel_new(WINPR_ATTR_UNUSED drdynvcPlugin* drdyn
 
 	if (!InitializeCriticalSectionEx(&(channel->lock), 0, 0))
 		goto fail;
+
+	if (drdynvc)
+	{
+		rdpContext* context = drdynvc->rdpcontext;
+		if (context)
+		{
+			ChannelInitializedEventArgs e = WINPR_C_ARRAY_INIT;
+			EventArgsInit(&e, "freerdp");
+			e.name = channel->channel_name;
+			e.pInterface = channel->pInterface;
+
+			const int rc = PubSub_OnChannelInitialized(context->pubSub, context, &e);
+			if (rc < 0)
+				WLog_WARN(TAG, "PubSub_OnChannelInitialized(%s) failed", channel->channel_name);
+		}
+	}
 
 	return channel;
 fail:
