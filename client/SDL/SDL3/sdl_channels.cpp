@@ -24,6 +24,7 @@
 #include <freerdp/client/rail.h>
 #include <freerdp/client/cliprdr.h>
 #include <freerdp/client/disp.h>
+#include <freerdp/channels/rdpewa.h>
 
 #include "sdl_channels.hpp"
 #include "sdl_context.hpp"
@@ -97,6 +98,9 @@ void sdl_OnUserNotificationEventHandler(void* context, const UserNotificationEve
 	WINPR_UNUSED(context);
 	WINPR_ASSERT(e);
 	WINPR_ASSERT(e->e.Sender);
+
+	if (strcmp(e->e.Sender, RDPEWA_CHANNEL_NAME) != 0)
+		return;
 
 	if (e->cancelPreviousNotification)
 		return;
