@@ -2479,7 +2479,6 @@ BOOL freerdp_client_use_relative_mouse_events(rdpClientContext* cctx)
 
 #if defined(WITH_AAD)
 WINPR_ATTR_MALLOC(free, 1)
-WINPR_ATTR_NODISCARD
 static char* get_redirect_uri(const rdpSettings* settings)
 {
 	char* redirect_uri = nullptr;
