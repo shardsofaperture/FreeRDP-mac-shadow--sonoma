@@ -77,13 +77,12 @@ static char* crypto_print_name(const X509_NAME* name)
 {
 	char* buffer = nullptr;
 	BIO* outBIO = BIO_new(BIO_s_mem());
+	if (!outBIO)
+		return nullptr;
 
 	if (X509_NAME_print_ex(outBIO, name, 0, XN_FLAG_ONELINE) > 0)
-	{
 		buffer = x509_utils_bio_read(outBIO, nullptr);
-	}
 
-fail:
 	BIO_free_all(outBIO);
 	return buffer;
 }
