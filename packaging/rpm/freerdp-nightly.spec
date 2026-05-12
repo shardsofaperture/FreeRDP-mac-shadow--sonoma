@@ -99,7 +99,7 @@ BuildRequires: dbus-glib-devel
 BuildRequires: libjpeg-turbo-devel
 BuildRequires: libasan
 BuildRequires: compiler-rt
-BuildRequires: (webkit2gtk4.1-devel or webkit2gtk4.0-devel)
+BuildRequires: (webkitgtk6.0-devel or webkit2gtk4.1-devel or webkit2gtk4.0-devel)
 BuildRequires: libjpeg-turbo-devel
 BuildRequires: wayland-devel
 %endif
