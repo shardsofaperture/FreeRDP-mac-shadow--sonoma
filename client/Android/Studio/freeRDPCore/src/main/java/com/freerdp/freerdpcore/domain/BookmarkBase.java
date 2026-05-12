@@ -20,6 +20,50 @@ import java.util.Locale;
 
 public class BookmarkBase implements Parcelable, Cloneable
 {
+	private static final String keyLabel = "bookmark.label";
+	private static final String keyUsername = "bookmark.username";
+	private static final String keyPassword = "bookmark.password";
+	private static final String keyDomain = "bookmark.domain";
+
+	private static final String keyColors = "bookmark.colors";
+	private static final String keyResolution = "bookmark.resolution";
+	private static final String keyWidth = "bookmark.width";
+	private static final String keyHeight = "bookmark.height";
+
+	private static final String keyRFX = "bookmark.perf_remotefx";
+	private static final String keyGFX = "bookmark.perf_gfx";
+	private static final String keyH264 = "bookmark.perf_gfx_h264";
+	private static final String keyFlagWallpaper = "bookmark.perf_wallpaper";
+	private static final String keyFlagFonts = "bookmark.perf_font_smoothing";
+	private static final String keyFlagComposition = "bookmark.perf_desktop_composition";
+	private static final String keyFlagWindowDrag = "bookmark.perf_window_dragging";
+	private static final String keyFlagMenuAnim = "bookmark.perf_menu_animation";
+	private static final String keyFlagTheming = "bookmark.perf_themes";
+
+	private static final String keyTlsSecLevel = "bookmark.tlsSecLevel";
+	private static final String keyTlsMinLevel = "bookmark.tlsMinLevel";
+	private static final String keyLoadBalanceInfo = "bookmark.loadBalanceInfo";
+	private static final String keyRedirectSDCard = "bookmark.redirect_sdcard";
+	private static final String keySound = "bookmark.redirect_sound";
+	private static final String keyMicrophone = "bookmark.redirect_microphone";
+	private static final String keySecurity = "bookmark.security";
+	private static final String keyRemoteApp = "bookmark.remote_program";
+	private static final String keyWorkDir = "bookmark.work_dir";
+	private static final String keyConsoleMode = "bookmark.console_mode";
+
+	private static final String keyAsyncChannel = "bookmark.async_channel";
+	private static final String keyAsyncUpdate = "bookmark.async_update";
+	private static final String keyDebugLevel = "bookmark.debug_level";
+
+	private static final String keyHostname = "bookmark.hostname";
+	private static final String keyPort = "bookmark.port";
+	private static final String keyGatewayEnabled = "bookmark.enable_gateway_settings";
+	private static final String keyGatewayHostname = "bookmark.gateway_hostname";
+	private static final String keyGatewayPort = "bookmark.gateway_port";
+	private static final String keyGatewyUser = "bookmark.gateway_username";
+	private static final String keyGatewayPassword = "bookmark.gateway_password";
+	private static final String keyGatewayDomain = "bookmark.gateway_domain";
+
 	public static final int TYPE_INVALID = -1;
 	public static final int TYPE_MANUAL = 1;
 	public static final int TYPE_QUICKCONNECT = 2;
@@ -36,21 +80,21 @@ public class BookmarkBase implements Parcelable, Cloneable
 			    return new BookmarkBase[size];
 		    }
 	    };
-	protected int type;
-	private long id;
-	private String label;
-	private String username;
-	private String password;
-	private String domain;
-	private ScreenSettings screenSettings;
-	private PerformanceFlags performanceFlags;
-	private AdvancedSettings advancedSettings;
-	private DebugSettings debugSettings;
-	private String hostname;
-	private int port;
-	private boolean enableGatewaySettings;
-	private GatewaySettings gatewaySettings;
-	private boolean directConnect;
+	protected int type = TYPE_MANUAL;
+	private long id = -1;
+	private String label = "";
+	private String username = "";
+	private String password = "";
+	private String domain = "";
+	private ScreenSettings screenSettings = new ScreenSettings();
+	private PerformanceFlags performanceFlags = new PerformanceFlags();
+	private AdvancedSettings advancedSettings = new AdvancedSettings();
+	private DebugSettings debugSettings = new DebugSettings();
+	private String hostname = "";
+	private int port = 3389;
+	private boolean enableGatewaySettings = false;
+	private GatewaySettings gatewaySettings = new GatewaySettings();
+	private boolean directConnect = false;
 
 	public BookmarkBase(Parcel parcel)
 	{
@@ -74,28 +118,6 @@ public class BookmarkBase implements Parcelable, Cloneable
 
 	public BookmarkBase()
 	{
-		init();
-	}
-
-	private void init()
-	{
-		type = TYPE_MANUAL;
-		id = -1;
-		label = "";
-		username = "";
-		password = "";
-		domain = "";
-
-		screenSettings = new ScreenSettings();
-		performanceFlags = new PerformanceFlags();
-		advancedSettings = new AdvancedSettings();
-		debugSettings = new DebugSettings();
-
-		hostname = "";
-		port = 3389;
-		enableGatewaySettings = false;
-		gatewaySettings = new GatewaySettings();
-		directConnect = false;
 	}
 
 	public int getType()
@@ -163,19 +185,9 @@ public class BookmarkBase implements Parcelable, Cloneable
 		return screenSettings;
 	}
 
-	public void setScreenSettings(ScreenSettings screenSettings)
-	{
-		this.screenSettings = screenSettings;
-	}
-
 	public PerformanceFlags getPerformanceFlags()
 	{
 		return performanceFlags;
-	}
-
-	public void setPerformanceFlags(PerformanceFlags performanceFlags)
-	{
-		this.performanceFlags = performanceFlags;
 	}
 
 	public AdvancedSettings getAdvancedSettings()
@@ -183,19 +195,9 @@ public class BookmarkBase implements Parcelable, Cloneable
 		return advancedSettings;
 	}
 
-	public void setAdvancedSettings(AdvancedSettings advancedSettings)
-	{
-		this.advancedSettings = advancedSettings;
-	}
-
 	public DebugSettings getDebugSettings()
 	{
 		return debugSettings;
-	}
-
-	public void setDebugSettings(DebugSettings debugSettings)
-	{
-		this.debugSettings = debugSettings;
 	}
 
 	public String getHostname()
@@ -231,11 +233,6 @@ public class BookmarkBase implements Parcelable, Cloneable
 	public GatewaySettings getGatewaySettings()
 	{
 		return gatewaySettings;
-	}
-
-	public void setGatewaySettings(GatewaySettings gatewaySettings)
-	{
-		this.gatewaySettings = gatewaySettings;
 	}
 
 	public boolean isDirectConnect()
@@ -286,56 +283,54 @@ public class BookmarkBase implements Parcelable, Cloneable
 	// write to shared preferences
 	public void writeToSharedPreferences(SharedPreferences sharedPrefs)
 	{
-
 		Locale locale = Locale.ENGLISH;
 
 		SharedPreferences.Editor editor = sharedPrefs.edit();
 		editor.clear();
-		editor.putString("bookmark.label", label);
-		editor.putString("bookmark.username", username);
-		editor.putString("bookmark.password", password);
-		editor.putString("bookmark.domain", domain);
+		editor.putString(keyLabel, label);
+		editor.putString(keyUsername, username);
+		editor.putString(keyPassword, password);
+		editor.putString(keyDomain, domain);
 
-		editor.putInt("bookmark.colors", screenSettings.getColors());
-		editor.putString("bookmark.resolution",
-		                 screenSettings.getResolutionString().toLowerCase(locale));
-		editor.putInt("bookmark.width", screenSettings.getWidth());
-		editor.putInt("bookmark.height", screenSettings.getHeight());
+		editor.putInt(keyColors, screenSettings.getColors());
+		editor.putString(keyResolution, screenSettings.getResolutionString().toLowerCase(locale));
+		editor.putInt(keyWidth, screenSettings.getWidth());
+		editor.putInt(keyHeight, screenSettings.getHeight());
 
-		editor.putBoolean("bookmark.perf_remotefx", performanceFlags.getRemoteFX());
-		editor.putBoolean("bookmark.perf_gfx", performanceFlags.getGfx());
-		editor.putBoolean("bookmark.perf_gfx_h264", performanceFlags.getH264());
-		editor.putBoolean("bookmark.perf_wallpaper", performanceFlags.getWallpaper());
-		editor.putBoolean("bookmark.perf_font_smoothing", performanceFlags.getFontSmoothing());
-		editor.putBoolean("bookmark.perf_desktop_composition",
-		                  performanceFlags.getDesktopComposition());
-		editor.putBoolean("bookmark.perf_window_dragging", performanceFlags.getFullWindowDrag());
-		editor.putBoolean("bookmark.perf_menu_animation", performanceFlags.getMenuAnimations());
-		editor.putBoolean("bookmark.perf_themes", performanceFlags.getTheming());
+		editor.putBoolean(keyRFX, performanceFlags.getRemoteFX());
+		editor.putBoolean(keyGFX, performanceFlags.getGfx());
+		editor.putBoolean(keyH264, performanceFlags.getH264());
+		editor.putBoolean(keyFlagWallpaper, performanceFlags.getWallpaper());
+		editor.putBoolean(keyFlagFonts, performanceFlags.getFontSmoothing());
+		editor.putBoolean(keyFlagComposition, performanceFlags.getDesktopComposition());
+		editor.putBoolean(keyFlagWindowDrag, performanceFlags.getFullWindowDrag());
+		editor.putBoolean(keyFlagMenuAnim, performanceFlags.getMenuAnimations());
+		editor.putBoolean(keyFlagTheming, performanceFlags.getTheming());
 
-		editor.putInt("bookmark.tlsSecLevel", advancedSettings.tlsSecLevel);
-		editor.putInt("bookmark.tlsMinLevel", advancedSettings.tlsMinLevel);
+		editor.putInt(keyTlsSecLevel, advancedSettings.tlsSecLevel);
+		editor.putInt(keyTlsMinLevel, advancedSettings.tlsMinLevel);
 
-		editor.putBoolean("bookmark.redirect_sdcard", advancedSettings.getRedirectSDCard());
-		editor.putInt("bookmark.redirect_sound", advancedSettings.getRedirectSound());
-		editor.putBoolean("bookmark.redirect_microphone", advancedSettings.getRedirectMicrophone());
-		editor.putInt("bookmark.security", advancedSettings.getSecurity());
-		editor.putString("bookmark.remote_program", advancedSettings.getRemoteProgram());
-		editor.putString("bookmark.work_dir", advancedSettings.getWorkDir());
-		editor.putBoolean("bookmark.console_mode", advancedSettings.getConsoleMode());
+		editor.putString(keyLoadBalanceInfo, advancedSettings.getLoadBalanceInfo());
+		editor.putBoolean(keyRedirectSDCard, advancedSettings.getRedirectSDCard());
+		editor.putInt(keySound, advancedSettings.getRedirectSound());
+		editor.putBoolean(keyMicrophone, advancedSettings.getRedirectMicrophone());
+		editor.putInt(keySecurity, advancedSettings.getSecurity());
+		editor.putString(keyRemoteApp, advancedSettings.getRemoteProgram());
+		editor.putString(keyWorkDir, advancedSettings.getWorkDir());
+		editor.putBoolean(keyConsoleMode, advancedSettings.getConsoleMode());
 
-		editor.putBoolean("bookmark.async_channel", debugSettings.getAsyncChannel());
-		editor.putBoolean("bookmark.async_update", debugSettings.getAsyncUpdate());
-		editor.putString("bookmark.debug_level", debugSettings.getDebugLevel());
+		editor.putBoolean(keyAsyncChannel, debugSettings.getAsyncChannel());
+		editor.putBoolean(keyAsyncUpdate, debugSettings.getAsyncUpdate());
+		editor.putString(keyDebugLevel, debugSettings.getDebugLevel());
 
-		editor.putString("bookmark.hostname", hostname);
-		editor.putInt("bookmark.port", port);
-		editor.putBoolean("bookmark.enable_gateway_settings", enableGatewaySettings);
-		editor.putString("bookmark.gateway_hostname", gatewaySettings.getHostname());
-		editor.putInt("bookmark.gateway_port", gatewaySettings.getPort());
-		editor.putString("bookmark.gateway_username", gatewaySettings.getUsername());
-		editor.putString("bookmark.gateway_password", gatewaySettings.getPassword());
-		editor.putString("bookmark.gateway_domain", gatewaySettings.getDomain());
+		editor.putString(keyHostname, hostname);
+		editor.putInt(keyPort, port);
+		editor.putBoolean(keyGatewayEnabled, enableGatewaySettings);
+		editor.putString(keyGatewayHostname, gatewaySettings.getHostname());
+		editor.putInt(keyGatewayPort, gatewaySettings.getPort());
+		editor.putString(keyGatewyUser, gatewaySettings.getUsername());
+		editor.putString(keyGatewayPassword, gatewaySettings.getPassword());
+		editor.putString(keyGatewayDomain, gatewaySettings.getDomain());
 
 		editor.apply();
 	}
@@ -343,55 +338,50 @@ public class BookmarkBase implements Parcelable, Cloneable
 	// read from shared preferences
 	public void readFromSharedPreferences(SharedPreferences sharedPrefs)
 	{
-		label = sharedPrefs.getString("bookmark.label", "");
-		username = sharedPrefs.getString("bookmark.username", "");
-		password = sharedPrefs.getString("bookmark.password", "");
-		domain = sharedPrefs.getString("bookmark.domain", "");
+		label = sharedPrefs.getString(keyLabel, "");
+		username = sharedPrefs.getString(keyUsername, "");
+		password = sharedPrefs.getString(keyPassword, "");
+		domain = sharedPrefs.getString(keyDomain, "");
 
-		screenSettings.setColors(sharedPrefs.getInt("bookmark.colors", 16));
-		screenSettings.setResolution(sharedPrefs.getString("bookmark.resolution", "automatic"),
-		                             sharedPrefs.getInt("bookmark.width", 800),
-		                             sharedPrefs.getInt("bookmark.height", 600));
+		screenSettings.setColors(sharedPrefs.getInt(keyColors, 32));
+		screenSettings.setResolution(sharedPrefs.getString(keyResolution, "automatic"),
+		                             sharedPrefs.getInt(keyWidth, 800),
+		                             sharedPrefs.getInt(keyHeight, 600));
 
-		performanceFlags.setRemoteFX(sharedPrefs.getBoolean("bookmark.perf_remotefx", false));
-		performanceFlags.setGfx(sharedPrefs.getBoolean("bookmark.perf_gfx", true));
-		performanceFlags.setH264(sharedPrefs.getBoolean("bookmark.perf_gfx_h264", true));
-		performanceFlags.setWallpaper(sharedPrefs.getBoolean("bookmark.perf_wallpaper", false));
-		performanceFlags.setFontSmoothing(
-		    sharedPrefs.getBoolean("bookmark.perf_font_smoothing", false));
-		performanceFlags.setDesktopComposition(
-		    sharedPrefs.getBoolean("bookmark.perf_desktop_composition", false));
-		performanceFlags.setFullWindowDrag(
-		    sharedPrefs.getBoolean("bookmark.perf_window_dragging", false));
-		performanceFlags.setMenuAnimations(
-		    sharedPrefs.getBoolean("bookmark.perf_menu_animation", false));
-		performanceFlags.setTheming(sharedPrefs.getBoolean("bookmark.perf_themes", false));
+		performanceFlags.setRemoteFX(sharedPrefs.getBoolean(keyRFX, false));
+		performanceFlags.setGfx(sharedPrefs.getBoolean(keyGFX, true));
+		performanceFlags.setH264(sharedPrefs.getBoolean(keyH264, true));
+		performanceFlags.setWallpaper(sharedPrefs.getBoolean(keyFlagWallpaper, false));
+		performanceFlags.setFontSmoothing(sharedPrefs.getBoolean(keyFlagFonts, false));
+		performanceFlags.setDesktopComposition(sharedPrefs.getBoolean(keyFlagComposition, false));
+		performanceFlags.setFullWindowDrag(sharedPrefs.getBoolean(keyFlagWindowDrag, false));
+		performanceFlags.setMenuAnimations(sharedPrefs.getBoolean(keyFlagMenuAnim, false));
+		performanceFlags.setTheming(sharedPrefs.getBoolean(keyFlagTheming, false));
 
-		advancedSettings.setTlsSecLevel(sharedPrefs.getInt("bookmark.tlsSecLevel", -1));
-		advancedSettings.setTlsMinLevel(sharedPrefs.getInt("bookmark.tlsMinLevel", -1));
+		advancedSettings.setTlsSecLevel(sharedPrefs.getInt(keyTlsSecLevel, -1));
+		advancedSettings.setTlsMinLevel(sharedPrefs.getInt(keyTlsMinLevel, -1));
 
-		advancedSettings.setRedirectSDCard(
-		    sharedPrefs.getBoolean("bookmark.redirect_sdcard", false));
-		advancedSettings.setRedirectSound(sharedPrefs.getInt("bookmark.redirect_sound", 0));
-		advancedSettings.setRedirectMicrophone(
-		    sharedPrefs.getBoolean("bookmark.redirect_microphone", false));
-		advancedSettings.setSecurity(sharedPrefs.getInt("bookmark.security", 0));
-		advancedSettings.setRemoteProgram(sharedPrefs.getString("bookmark.remote_program", ""));
-		advancedSettings.setWorkDir(sharedPrefs.getString("bookmark.work_dir", ""));
-		advancedSettings.setConsoleMode(sharedPrefs.getBoolean("bookmark.console_mode", false));
+		advancedSettings.setLoadBalanceInfo(sharedPrefs.getString(keyLoadBalanceInfo, ""));
+		advancedSettings.setRedirectSDCard(sharedPrefs.getBoolean(keyRedirectSDCard, false));
+		advancedSettings.setRedirectSound(sharedPrefs.getInt(keySound, 0));
+		advancedSettings.setRedirectMicrophone(sharedPrefs.getBoolean(keyMicrophone, false));
+		advancedSettings.setSecurity(sharedPrefs.getInt(keySecurity, 0));
+		advancedSettings.setRemoteProgram(sharedPrefs.getString(keyRemoteApp, ""));
+		advancedSettings.setWorkDir(sharedPrefs.getString(keyWorkDir, ""));
+		advancedSettings.setConsoleMode(sharedPrefs.getBoolean(keyConsoleMode, false));
 
-		debugSettings.setAsyncChannel(sharedPrefs.getBoolean("bookmark.async_channel", true));
-		debugSettings.setAsyncUpdate(sharedPrefs.getBoolean("bookmark.async_update", true));
-		debugSettings.setDebugLevel(sharedPrefs.getString("bookmark.debug_level", "INFO"));
+		debugSettings.setAsyncChannel(sharedPrefs.getBoolean(keyAsyncChannel, true));
+		debugSettings.setAsyncUpdate(sharedPrefs.getBoolean(keyAsyncUpdate, true));
+		debugSettings.setDebugLevel(sharedPrefs.getString(keyDebugLevel, "INFO"));
 
-		hostname = sharedPrefs.getString("bookmark.hostname", "");
-		port = sharedPrefs.getInt("bookmark.port", 3389);
-		enableGatewaySettings = sharedPrefs.getBoolean("bookmark.enable_gateway_settings", false);
-		gatewaySettings.setHostname(sharedPrefs.getString("bookmark.gateway_hostname", ""));
-		gatewaySettings.setPort(sharedPrefs.getInt("bookmark.gateway_port", 443));
-		gatewaySettings.setUsername(sharedPrefs.getString("bookmark.gateway_username", ""));
-		gatewaySettings.setPassword(sharedPrefs.getString("bookmark.gateway_password", ""));
-		gatewaySettings.setDomain(sharedPrefs.getString("bookmark.gateway_domain", ""));
+		hostname = sharedPrefs.getString(keyHostname, "");
+		port = sharedPrefs.getInt(keyPort, 3389);
+		enableGatewaySettings = sharedPrefs.getBoolean(keyGatewayEnabled, false);
+		gatewaySettings.setHostname(sharedPrefs.getString(keyGatewayHostname, ""));
+		gatewaySettings.setPort(sharedPrefs.getInt(keyGatewayPort, 443));
+		gatewaySettings.setUsername(sharedPrefs.getString(keyGatewyUser, ""));
+		gatewaySettings.setPassword(sharedPrefs.getString(keyGatewayPassword, ""));
+		gatewaySettings.setDomain(sharedPrefs.getString(keyGatewayDomain, ""));
 	}
 
 	// Cloneable
@@ -872,6 +862,7 @@ public class BookmarkBase implements Parcelable, Cloneable
 			    }
 		    };
 
+		private String loadBalanceInfo = "";
 		private boolean redirectSDCard = false;
 		private int redirectSound = 0;
 		private boolean redirectMicrophone = false;
@@ -888,6 +879,7 @@ public class BookmarkBase implements Parcelable, Cloneable
 
 		public AdvancedSettings(Parcel parcel)
 		{
+			loadBalanceInfo = parcel.readString();
 			redirectSDCard = parcel.readInt() != 0;
 			redirectSound = parcel.readInt();
 			redirectMicrophone = parcel.readInt() != 0;
@@ -945,6 +937,15 @@ public class BookmarkBase implements Parcelable, Cloneable
 			return tlsMinLevel;
 		}
 
+		public String getLoadBalanceInfo()
+		{
+			return loadBalanceInfo;
+		}
+
+		public void setLoadBalanceInfo(String info)
+		{
+			loadBalanceInfo = info;
+		}
 		public boolean getRedirectSDCard()
 		{
 			return redirectSDCard;
@@ -1024,6 +1025,7 @@ public class BookmarkBase implements Parcelable, Cloneable
 
 		@Override public void writeToParcel(Parcel out, int flags)
 		{
+			out.writeString(loadBalanceInfo);
 			out.writeInt(redirectSDCard ? 1 : 0);
 			out.writeInt(redirectSound);
 			out.writeInt(redirectMicrophone ? 1 : 0);
@@ -1050,19 +1052,14 @@ public class BookmarkBase implements Parcelable, Cloneable
 				    return new GatewaySettings[size];
 			    }
 		    };
-		private String hostname;
-		private int port;
-		private String username;
-		private String password;
-		private String domain;
+		private String hostname = "";
+		private int port = 443;
+		private String username = "";
+		private String password = "";
+		private String domain = "";
 
 		public GatewaySettings()
 		{
-			hostname = "";
-			port = 443;
-			username = "";
-			password = "";
-			domain = "";
 		}
 
 		public GatewaySettings(Parcel parcel)
