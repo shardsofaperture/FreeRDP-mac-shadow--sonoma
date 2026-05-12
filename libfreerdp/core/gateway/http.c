@@ -155,6 +155,7 @@ HttpContext* http_context_new(void)
 
 		key->fnObjectFree = winpr_ObjectStringFree;
 		key->fnObjectNew = winpr_ObjectStringClone;
+		key->fnObjectEquals = strings_equals_nocase;
 		value->fnObjectFree = winpr_ObjectStringFree;
 		value->fnObjectNew = winpr_ObjectStringClone;
 	}
@@ -594,12 +595,10 @@ static BOOL write_headers(const void* pkey, void* pvalue, void* arg)
 
 wStream* http_request_write(HttpContext* context, HttpRequest* request)
 {
-	wStream* s = nullptr;
-
 	if (!context || !request)
 		return nullptr;
 
-	s = Stream_New(nullptr, 1024);
+	wStream* s = Stream_New(nullptr, 1024);
 
 	if (!s)
 		return nullptr;
