@@ -373,6 +373,11 @@ public class LibFreeRDP
 			args.add("/drive:sdcard," + path);
 		}
 
+		String info = advanced.getLoadBalanceInfo();
+		if (!info.isEmpty())
+		{
+			args.add("/load-balance-info:" + info);
+		}
 		args.add("/clipboard");
 
 		// Gateway enabled?

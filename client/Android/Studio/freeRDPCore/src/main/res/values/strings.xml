@@ -288,4 +288,5 @@
     </string-array>
 
     <string name="preference_key_h264" translatable="false">bookmark.perf_gfx_h264</string>
+    <string name="settings_loadBalanceInfo">LoadBalanceInfo</string>
 </resources>

@@ -61,6 +61,8 @@ import androidx.room.PrimaryKey;
 
 	@ColumnInfo(name = "gateway_domain") public String gatewayDomain = "";
 
+	@ColumnInfo(name = "loadbalanceinfo") public String loadbalanceinfo = "";
+
 	@ColumnInfo(name = "redirect_sdcard") public boolean redirectSdcard = false;
 
 	/** 0=off, 1=local, 2=remote */

@@ -40,6 +40,7 @@ public final class BookmarkConverter
 		perf.setDesktopComposition(e.perfDesktopComposition);
 
 		BookmarkBase.AdvancedSettings adv = bm.getAdvancedSettings();
+		adv.setLoadBalanceInfo(e.loadbalanceinfo);
 		adv.setRedirectSDCard(e.redirectSdcard);
 		adv.setRedirectSound(e.redirectSound);
 		adv.setRedirectMicrophone(e.redirectMicrophone);
@@ -98,6 +99,7 @@ public final class BookmarkConverter
 		e.perfDesktopComposition = perf.getDesktopComposition();
 
 		BookmarkBase.AdvancedSettings adv = bm.getAdvancedSettings();
+		e.loadbalanceinfo = adv.getLoadBalanceInfo();
 		e.redirectSdcard = adv.getRedirectSDCard();
 		e.redirectSound = adv.getRedirectSound();
 		e.redirectMicrophone = adv.getRedirectMicrophone();

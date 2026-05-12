@@ -15,10 +15,17 @@
         <SwitchPreferenceCompat
             android:key="bookmark.enable_gateway_settings"
             android:title="@string/settings_enable_gateway_settings" />
+
         <Preference
             android:key="bookmark.gateway_settings"
             android:title="@string/settings_gateway_settings"
             app:fragment="com.freerdp.freerdpcore.presentation.BookmarkActivity$GatewayFragment" />
+
+        <EditTextPreference
+            android:key="bookmark.loadBalanceInfo"
+            android:singleLine="true"
+            android:title="@string/settings_loadBalanceInfo"
+            app:useSimpleSummaryProvider="true" />
 
         <com.freerdp.freerdpcore.utils.IntListPreference
             android:entries="@array/tlsSecLevel_array"

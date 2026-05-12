@@ -22,7 +22,7 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory;
           exportSchema = false)
 public abstract class AppDatabase extends RoomDatabase
 {
-	static final int DB_VERSION = 12;
+	static final int DB_VERSION = 13;
 	private static final String DB_NAME = "bookmarks.db";
 
 	static
@@ -50,6 +50,7 @@ public abstract class AppDatabase extends RoomDatabase
 					               .openHelperFactory(new SupportOpenHelperFactory(key))
 					               .addMigrations(MIGRATION_10_11)
 					               .addMigrations(MIGRATION_11_12)
+					               .addMigrations(MIGRATION_12_13)
 					               .build();
 				}
 			}
@@ -155,6 +156,13 @@ public abstract class AppDatabase extends RoomDatabase
 			sb.append(String.format(java.util.Locale.US, "%02x", b));
 		return sb.toString();
 	}
+
+	private static final Migration MIGRATION_12_13 = new Migration(12, 13) {
+		@Override public void migrate(@NonNull SupportSQLiteDatabase db)
+		{
+			db.execSQL("ALTER TABLE 'bookmarks' ADD 'loadbalanceinfo' TEXT");
+		}
+	};
 
 	private static final Migration MIGRATION_11_12 = new Migration(11, 12) {
 		@Override public void migrate(@NonNull SupportSQLiteDatabase db)
