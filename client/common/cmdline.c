@@ -2264,10 +2264,10 @@ static int parse_tls_enforce(rdpSettings* settings, const char* Value)
 			errno = 0;
 			const long v = strtol(Value, nullptr, 0);
 
-			if ((v < -1) || (v == LONG_MAX) && (errno != 0))
+			if ((v < -1) || ((v == LONG_MAX) && (errno != 0)) || (v > UINT16_MAX))
 				return COMMAND_LINE_ERROR_UNEXPECTED_VALUE;
 			else
-				version = v;
+				version = WINPR_ASSERTING_INT_CAST(UINT16, v);
 		}
 	}
 
@@ -5672,8 +5672,7 @@ static void warn_credential_args(const COMMAND_LINE_ARGUMENT_A* args)
 static int freerdp_client_settings_parse_command_line_arguments_int(
     rdpSettings* settings, int argc, char* argv[], BOOL allowUnknown,
     COMMAND_LINE_ARGUMENT_A* largs, WINPR_ATTR_UNUSED size_t count,
-    freerdp_command_line_handle_option_t handle_option, void* handle_userdata,
-    FREERDP_SETTINGS_CMD_PARSE_FLAGS cmdflags)
+    freerdp_command_line_handle_option_t handle_option, void* handle_userdata, UINT32 cmdflags)
 {
 	char* user = nullptr;
 	int status = 0;

@@ -149,7 +149,8 @@ BOOL sdl_webview_get_access_token(freerdp* instance, AccessTokenType tokenType, 
 				          count);
 			return sdl_webview_get_avd_access_token(instance, token);
 		default:
-			WLog_ERR(TAG, "Unexpected value for AccessTokenType [%" PRIuz "], aborting", tokenType);
+			WLog_ERR(TAG, "Unexpected value for AccessTokenType [%" PRIu32 "], aborting",
+			         tokenType);
 			return FALSE;
 	}
 }

@@ -587,17 +587,9 @@ BOOL sdl_auth_dialog_show(const SDL_UserAuthArg* args)
 		}
 		else if (args->result != AUTH_SMARTCARD_PIN)
 		{
-			if (args->result == AUTH_RDSTLS)
-			{
-				initial = { args->user ? args->user : "", args->password ? args->password : "" };
-				flags = { 0, SdlInputWidgetPair::SDL_INPUT_MASK };
-			}
-			else
-			{
-				initial = { args->user ? args->user : "", args->domain ? args->domain : "",
-					        args->password ? args->password : "" };
-				flags = { 0, 0, SdlInputWidgetPair::SDL_INPUT_MASK };
-			}
+			initial = { args->user ? args->user : "", args->domain ? args->domain : "",
+				        args->password ? args->password : "" };
+			flags = { 0, 0, SdlInputWidgetPair::SDL_INPUT_MASK };
 		}
 
 		ssize_t selected = -1;
@@ -605,6 +597,7 @@ BOOL sdl_auth_dialog_show(const SDL_UserAuthArg* args)
 		{
 			case AUTH_SMARTCARD_PIN:
 			case AUTH_RDSTLS:
+			case AUTH_FIDO_PIN:
 				break;
 			default:
 				if (args->user)
