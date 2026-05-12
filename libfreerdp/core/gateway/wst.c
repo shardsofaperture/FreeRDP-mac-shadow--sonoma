@@ -301,14 +301,12 @@ static BOOL wst_tls_connect(rdpWst* wst, rdpTls* tls, UINT32 timeout)
 static wStream* wst_build_http_request(rdpWst* wst)
 {
 	wStream* s = nullptr;
-	HttpRequest* request = nullptr;
-	const char* uri = nullptr;
 
 	if (!wst)
 		return nullptr;
 
-	uri = http_context_get_uri(wst->http);
-	request = http_request_new();
+	const char* uri = http_context_get_uri(wst->http);
+	HttpRequest* request = http_request_new();
 
 	if (!request)
 		return nullptr;
