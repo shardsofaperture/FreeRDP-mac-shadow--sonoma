@@ -25,8 +25,6 @@ android {
                         "-DWITH_OPUS=ON",   "-DWITH_WEBP=ON",
                         "-DWITH_JPEG=ON",   "-DWITH_PNG=ON",
                         "-DWITH_CJSON=ON",  "-DWITH_OPENSSL=ON"
-
-                abiFilters "arm64-v8a", "armeabi-v7a", "x86_64", "x86"
             }
         }
     }
@@ -35,9 +33,19 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.txt'
+            externalNativeBuild {
+                cmake {
+                    abiFilters "arm64-v8a", "armeabi-v7a", "x86_64", "x86"
+                }
+            }
         }
         debug {
             jniDebuggable true
+            externalNativeBuild {
+                cmake {
+                    abiFilters "arm64-v8a", "armeabi-v7a", "x86_64", "x86"
+                }
+            }
         }
         qa {
             jniDebuggable false
