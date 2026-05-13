@@ -342,13 +342,47 @@ static UINT rail_client_system_command(RailClientContext* context,
  */
 static UINT rail_client_handshake(RailClientContext* context, const RAIL_HANDSHAKE_ORDER* handshake)
 {
-	railPlugin* rail = nullptr;
-
 	if (!context || !handshake)
 		return ERROR_INVALID_PARAMETER;
 
-	rail = (railPlugin*)context->handle;
+	railPlugin* rail = (railPlugin*)context->handle;
+	WINPR_ASSERT(rail);
+	WLog_Print(rail->log, WLOG_DEBUG, "build=0x%08" PRIx32, handshake->buildNumber);
 	return rail_send_handshake_order(rail, handshake);
+}
+
+static UINT rail_server_handshake(RailClientContext* context, const RAIL_HANDSHAKE_ORDER* handshake)
+{
+	WINPR_ASSERT(context);
+	WINPR_ASSERT(handshake);
+
+	railPlugin* rail = (railPlugin*)context->handle;
+	WINPR_ASSERT(rail);
+
+	WLog_Print(rail->log, WLOG_DEBUG, "build=0x%08" PRIx32, handshake->buildNumber);
+
+	const UINT32 buildnumber =
+	    freerdp_settings_get_uint32(rail->rdpcontext->settings, FreeRDP_ClientBuild);
+	const RAIL_HANDSHAKE_ORDER clientHandshake = { buildnumber };
+	return context->ClientHandshake(context, &clientHandshake);
+}
+
+static UINT rail_server_handshake_ex(RailClientContext* context,
+                                     const RAIL_HANDSHAKE_EX_ORDER* handshakeEx)
+{
+	WINPR_ASSERT(context);
+	WINPR_ASSERT(handshakeEx);
+
+	railPlugin* rail = (railPlugin*)context->handle;
+	WINPR_ASSERT(rail);
+
+	const RAIL_HANDSHAKE_ORDER handshake = { handshakeEx->buildNumber };
+
+	char buffer[128] = WINPR_C_ARRAY_INIT;
+	WLog_Print(
+	    rail->log, WLOG_DEBUG, "build=0x%08" PRIx32 ", flags=%s", handshakeEx->buildNumber,
+	    rail_handshake_ex_flags_to_string(handshakeEx->railHandshakeFlags, buffer, sizeof(buffer)));
+	return rail_server_handshake(context, &handshake);
 }
 
 /**
@@ -571,19 +605,8 @@ static VOID VCAPITYPE rail_virtual_channel_open_event_ex(LPVOID lpUserParam, DWO
 static UINT rail_virtual_channel_event_connected(railPlugin* rail, WINPR_ATTR_UNUSED LPVOID pData,
                                                  WINPR_ATTR_UNUSED UINT32 dataLength)
 {
-	RailClientContext* context = rail_get_client_interface(rail);
-	UINT status = CHANNEL_RC_OK;
-
 	WINPR_ASSERT(rail);
 
-	if (context)
-	{
-		IFCALLRET(context->OnOpen, status, context, &rail->sendHandshake);
-
-		if (status != CHANNEL_RC_OK)
-			WLog_ERR(TAG, "context->OnOpen failed with %s [%08" PRIX32 "]",
-			         WTSErrorToString(status), status);
-	}
 	rail->MsgsHandle = channel_client_create_handler(rail->rdpcontext, rail, rail_order_recv,
 	                                                 RAIL_SVC_CHANNEL_NAME);
 	if (!rail->MsgsHandle)
@@ -692,8 +715,6 @@ FREERDP_ENTRY_POINT(BOOL VCAPITYPE VirtualChannelEntryEx(PCHANNEL_ENTRY_POINTS_E
 		return FALSE;
 	}
 
-	/* Default to automatically replying to server handshakes */
-	rail->sendHandshake = TRUE;
 	rail->channelDef.options = CHANNEL_OPTION_INITIALIZED | CHANNEL_OPTION_ENCRYPT_RDP |
 	                           CHANNEL_OPTION_COMPRESS_RDP | CHANNEL_OPTION_SHOW_PROTOCOL;
 	(void)sprintf_s(rail->channelDef.name, ARRAYSIZE(rail->channelDef.name), RAIL_SVC_CHANNEL_NAME);
@@ -718,6 +739,8 @@ FREERDP_ENTRY_POINT(BOOL VCAPITYPE VirtualChannelEntryEx(PCHANNEL_ENTRY_POINTS_E
 		context->ClientSystemParam = rail_client_system_param;
 		context->ClientSystemCommand = rail_client_system_command;
 		context->ClientHandshake = rail_client_handshake;
+		context->ServerHandshake = rail_server_handshake;
+		context->ServerHandshakeEx = rail_server_handshake_ex;
 		context->ClientNotifyEvent = rail_client_notify_event;
 		context->ClientWindowMove = rail_client_window_move;
 		context->ClientInformation = rail_client_information;
