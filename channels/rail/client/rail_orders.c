@@ -364,16 +364,6 @@ static UINT rail_recv_handshake_order(railPlugin* rail, wStream* s)
 
 	rail->channelBuildNumber = serverHandshake.buildNumber;
 
-	if (rail->sendHandshake)
-	{
-		RAIL_HANDSHAKE_ORDER clientHandshake = WINPR_C_ARRAY_INIT;
-		clientHandshake.buildNumber = 0x00001DB0;
-		error = context->ClientHandshake(context, &clientHandshake);
-	}
-
-	if (error != CHANNEL_RC_OK)
-		return error;
-
 	if (context->custom)
 	{
 		IFCALLRET(context->ServerHandshake, error, context, &serverHandshake);
@@ -485,18 +475,6 @@ static UINT rail_recv_handshake_ex_order(railPlugin* rail, wStream* s)
 		         rail_handshake_ex_flags_to_string(rail->channelFlags, buffer, sizeof(buffer)),
 		         rail->channelBuildNumber);
 	}
-
-	if (rail->sendHandshake)
-	{
-		RAIL_HANDSHAKE_ORDER clientHandshake = WINPR_C_ARRAY_INIT;
-		clientHandshake.buildNumber = 0x00001DB0;
-		/* 2.2.2.2.3 HandshakeEx PDU (TS_RAIL_ORDER_HANDSHAKE_EX)
-		 * Client response is really a Handshake PDU */
-		error = context->ClientHandshake(context, &clientHandshake);
-	}
-
-	if (error != CHANNEL_RC_OK)
-		return error;
 
 	if (context->custom)
 	{

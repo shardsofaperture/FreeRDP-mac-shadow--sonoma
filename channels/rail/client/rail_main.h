@@ -51,7 +51,6 @@ typedef struct
 	DWORD channelBuildNumber;
 	DWORD channelFlags;
 	RAIL_CLIENT_STATUS_ORDER clientStatus;
-	BOOL sendHandshake;
 } railPlugin;
 
 WINPR_ATTR_NODISCARD FREERDP_LOCAL RailClientContext* rail_get_client_interface(railPlugin* rail);
