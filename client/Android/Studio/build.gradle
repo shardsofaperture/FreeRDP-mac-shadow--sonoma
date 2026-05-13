@@ -20,7 +20,7 @@ ext {
 
     compileApi = releaseProperties.get('COMPILE_API', 36)
     targetApi = releaseProperties.get('TARGET_API', 36)
-    minApi = releaseProperties.get('MIN_API', 23)
+    minApi = releaseProperties.get('MIN_API', 29)
     toolsVersion = releaseProperties.get('TOOLS_VERSION', '36.0.0')
 
     println '----------------- Project configuration -------------------'
