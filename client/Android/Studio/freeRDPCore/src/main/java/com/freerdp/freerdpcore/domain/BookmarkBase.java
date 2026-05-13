@@ -14,9 +14,10 @@ import android.content.SharedPreferences;
 import android.os.Parcel;
 import android.os.Parcelable;
 
-import com.freerdp.freerdpcore.application.GlobalApp;
+import androidx.annotation.NonNull;
 
 import java.util.Locale;
+import java.util.Objects;
 
 public class BookmarkBase implements Parcelable, Cloneable
 {
@@ -82,37 +83,52 @@ public class BookmarkBase implements Parcelable, Cloneable
 	    };
 	protected int type = TYPE_MANUAL;
 	private long id = -1;
-	private String label = "";
-	private String username = "";
-	private String password = "";
-	private String domain = "";
-	private ScreenSettings screenSettings = new ScreenSettings();
-	private PerformanceFlags performanceFlags = new PerformanceFlags();
-	private AdvancedSettings advancedSettings = new AdvancedSettings();
-	private DebugSettings debugSettings = new DebugSettings();
-	private String hostname = "";
+
+	@NonNull private String label = "";
+
+	@NonNull private String username = "";
+
+	@NonNull private String password = "";
+
+	@NonNull private String domain = "";
+
+	@NonNull private ScreenSettings screenSettings = new ScreenSettings();
+
+	@NonNull private PerformanceFlags performanceFlags = new PerformanceFlags();
+
+	@NonNull private AdvancedSettings advancedSettings = new AdvancedSettings();
+
+	@NonNull private DebugSettings debugSettings = new DebugSettings();
+
+	@NonNull private String hostname = "";
 	private int port = 3389;
 	private boolean enableGatewaySettings = false;
-	private GatewaySettings gatewaySettings = new GatewaySettings();
+
+	@NonNull private GatewaySettings gatewaySettings = new GatewaySettings();
 	private boolean directConnect = false;
 
 	public BookmarkBase(Parcel parcel)
 	{
 		type = parcel.readInt();
 		id = parcel.readLong();
-		label = parcel.readString();
-		username = parcel.readString();
-		password = parcel.readString();
-		domain = parcel.readString();
+		label = Objects.requireNonNull(parcel.readString());
+		username = Objects.requireNonNull(parcel.readString());
+		password = Objects.requireNonNull(parcel.readString());
+		domain = Objects.requireNonNull(parcel.readString());
 
-		screenSettings = parcel.readParcelable(ScreenSettings.class.getClassLoader());
-		performanceFlags = parcel.readParcelable(PerformanceFlags.class.getClassLoader());
-		advancedSettings = parcel.readParcelable(AdvancedSettings.class.getClassLoader());
-		debugSettings = parcel.readParcelable(DebugSettings.class.getClassLoader());
-		hostname = parcel.readString();
+		screenSettings =
+		    Objects.requireNonNull(parcel.readParcelable(ScreenSettings.class.getClassLoader()));
+		performanceFlags =
+		    Objects.requireNonNull(parcel.readParcelable(PerformanceFlags.class.getClassLoader()));
+		advancedSettings =
+		    Objects.requireNonNull(parcel.readParcelable(AdvancedSettings.class.getClassLoader()));
+		debugSettings =
+		    Objects.requireNonNull(parcel.readParcelable(DebugSettings.class.getClassLoader()));
+		hostname = Objects.requireNonNull(parcel.readString());
 		port = parcel.readInt();
 		enableGatewaySettings = (parcel.readInt() == 1);
-		gatewaySettings = parcel.readParcelable(GatewaySettings.class.getClassLoader());
+		gatewaySettings =
+		    Objects.requireNonNull(parcel.readParcelable(GatewaySettings.class.getClassLoader()));
 		directConnect = (parcel.readInt() == 1);
 	}
 
@@ -140,72 +156,72 @@ public class BookmarkBase implements Parcelable, Cloneable
 		this.id = id;
 	}
 
-	public String getLabel()
+	@NonNull public String getLabel()
 	{
 		return label;
 	}
 
-	public void setLabel(String label)
+	public void setLabel(@NonNull String label)
 	{
 		this.label = label;
 	}
 
-	public String getUsername()
+	@NonNull public String getUsername()
 	{
 		return username;
 	}
 
-	public void setUsername(String username)
+	public void setUsername(@NonNull String username)
 	{
 		this.username = username;
 	}
 
-	public String getPassword()
+	@NonNull public String getPassword()
 	{
 		return password;
 	}
 
-	public void setPassword(String password)
+	public void setPassword(@NonNull String password)
 	{
 		this.password = password;
 	}
 
-	public String getDomain()
+	@NonNull public String getDomain()
 	{
 		return domain;
 	}
 
-	public void setDomain(String domain)
+	public void setDomain(@NonNull String domain)
 	{
 		this.domain = domain;
 	}
 
-	public ScreenSettings getScreenSettings()
+	@NonNull public ScreenSettings getScreenSettings()
 	{
 		return screenSettings;
 	}
 
-	public PerformanceFlags getPerformanceFlags()
+	@NonNull public PerformanceFlags getPerformanceFlags()
 	{
 		return performanceFlags;
 	}
 
-	public AdvancedSettings getAdvancedSettings()
+	@NonNull public AdvancedSettings getAdvancedSettings()
 	{
 		return advancedSettings;
 	}
 
-	public DebugSettings getDebugSettings()
+	@NonNull public DebugSettings getDebugSettings()
 	{
 		return debugSettings;
 	}
 
-	public String getHostname()
+	@NonNull public String getHostname()
 	{
 		return hostname;
 	}
 
-	public void setHostname(String hostname)
+	public void setHostname(@NonNull String hostname)
 	{
 		this.hostname = hostname;
 	}
@@ -230,7 +246,7 @@ public class BookmarkBase implements Parcelable, Cloneable
 		this.enableGatewaySettings = enableGatewaySettings;
 	}
 
-	public GatewaySettings getGatewaySettings()
+	@NonNull public GatewaySettings getGatewaySettings()
 	{
 		return gatewaySettings;
 	}
@@ -245,12 +261,12 @@ public class BookmarkBase implements Parcelable, Cloneable
 		this.directConnect = directConnect;
 	}
 
-	public ScreenSettings getActiveScreenSettings()
+	@NonNull public ScreenSettings getActiveScreenSettings()
 	{
 		return screenSettings;
 	}
 
-	public PerformanceFlags getActivePerformanceFlags()
+	@NonNull public PerformanceFlags getActivePerformanceFlags()
 	{
 		return performanceFlags;
 	}
@@ -275,13 +291,13 @@ public class BookmarkBase implements Parcelable, Cloneable
 		out.writeParcelable(debugSettings, flags);
 		out.writeString(hostname);
 		out.writeInt(port);
-		out.writeInt(enableGatewaySettings ? 1 : 0);
+		out.writeBoolean(enableGatewaySettings);
 		out.writeParcelable(gatewaySettings, flags);
-		out.writeInt(directConnect ? 1 : 0);
+		out.writeBoolean(directConnect);
 	}
 
 	// write to shared preferences
-	public void writeToSharedPreferences(SharedPreferences sharedPrefs)
+	public void writeToSharedPreferences(@NonNull SharedPreferences sharedPrefs)
 	{
 		Locale locale = Locale.ENGLISH;
 
@@ -336,7 +352,7 @@ public class BookmarkBase implements Parcelable, Cloneable
 	}
 
 	// read from shared preferences
-	public void readFromSharedPreferences(SharedPreferences sharedPrefs)
+	public void readFromSharedPreferences(@NonNull SharedPreferences sharedPrefs)
 	{
 		label = sharedPrefs.getString(keyLabel, "");
 		username = sharedPrefs.getString(keyUsername, "");
@@ -384,17 +400,9 @@ public class BookmarkBase implements Parcelable, Cloneable
 		gatewaySettings.setDomain(sharedPrefs.getString(keyGatewayDomain, ""));
 	}
 
-	// Cloneable
-	public Object clone()
+	@Override public Object clone() throws CloneNotSupportedException
 	{
-		try
-		{
-			return super.clone();
-		}
-		catch (CloneNotSupportedException e)
-		{
-			return null;
-		}
+		return super.clone();
 	}
 
 	// performance flags
@@ -402,12 +410,12 @@ public class BookmarkBase implements Parcelable, Cloneable
 	{
 		public static final Parcelable.Creator<PerformanceFlags> CREATOR =
 		    new Parcelable.Creator<PerformanceFlags>() {
-			    public PerformanceFlags createFromParcel(Parcel in)
+			    @NonNull public PerformanceFlags createFromParcel(Parcel in)
 			    {
 				    return new PerformanceFlags(in);
 			    }
 
-			    @Override public PerformanceFlags[] newArray(int size)
+			    @NonNull @Override public PerformanceFlags[] newArray(int size)
 			    {
 				    return new PerformanceFlags[size];
 			    }
@@ -428,15 +436,15 @@ public class BookmarkBase implements Parcelable, Cloneable
 
 		public PerformanceFlags(Parcel parcel)
 		{
-			remotefx = parcel.readInt() != 0;
-			gfx = parcel.readInt() != 0;
-			h264 = parcel.readInt() != 0;
-			wallpaper = parcel.readInt() != 0;
-			theming = parcel.readInt() != 0;
-			fullWindowDrag = (parcel.readInt() != 0);
-			menuAnimations = parcel.readInt() != 0;
-			fontSmoothing = parcel.readInt() != 0;
-			desktopComposition = parcel.readInt() != 0;
+			remotefx = parcel.readBoolean();
+			gfx = parcel.readBoolean();
+			h264 = parcel.readBoolean();
+			wallpaper = parcel.readBoolean();
+			theming = parcel.readBoolean();
+			fullWindowDrag = parcel.readBoolean();
+			menuAnimations = parcel.readBoolean();
+			fontSmoothing = parcel.readBoolean();
+			desktopComposition = parcel.readBoolean();
 		}
 
 		public boolean getRemoteFX()
@@ -534,17 +542,17 @@ public class BookmarkBase implements Parcelable, Cloneable
 			return 0;
 		}
 
-		@Override public void writeToParcel(Parcel out, int flags)
+		@Override public void writeToParcel(@NonNull Parcel out, int flags)
 		{
-			out.writeInt(remotefx ? 1 : 0);
-			out.writeInt(gfx ? 1 : 0);
-			out.writeInt(h264 ? 1 : 0);
-			out.writeInt(wallpaper ? 1 : 0);
-			out.writeInt(theming ? 1 : 0);
-			out.writeInt(fullWindowDrag ? 1 : 0);
-			out.writeInt(menuAnimations ? 1 : 0);
-			out.writeInt(fontSmoothing ? 1 : 0);
-			out.writeInt(desktopComposition ? 1 : 0);
+			out.writeBoolean(remotefx);
+			out.writeBoolean(gfx);
+			out.writeBoolean(h264);
+			out.writeBoolean(wallpaper);
+			out.writeBoolean(theming);
+			out.writeBoolean(fullWindowDrag);
+			out.writeBoolean(menuAnimations);
+			out.writeBoolean(fontSmoothing);
+			out.writeBoolean(desktopComposition);
 		}
 	}
 
@@ -557,12 +565,12 @@ public class BookmarkBase implements Parcelable, Cloneable
 		public static final int PREDEFINED = 1;
 		public static final Parcelable.Creator<ScreenSettings> CREATOR =
 		    new Parcelable.Creator<ScreenSettings>() {
-			    public ScreenSettings createFromParcel(Parcel in)
+			    @NonNull public ScreenSettings createFromParcel(Parcel in)
 			    {
 				    return new ScreenSettings(in);
 			    }
 
-			    @Override public ScreenSettings[] newArray(int size)
+			    @NonNull @Override public ScreenSettings[] newArray(int size)
 			    {
 				    return new ScreenSettings[size];
 			    }
@@ -622,7 +630,7 @@ public class BookmarkBase implements Parcelable, Cloneable
 			}
 		}
 
-		public void setResolution(String resolution, int width, int height)
+		public void setResolution(@NonNull String resolution, int width, int height)
 		{
 			if (resolution.contains("x"))
 			{
@@ -665,7 +673,7 @@ public class BookmarkBase implements Parcelable, Cloneable
 			}
 		}
 
-		public String getResolutionString()
+		@NonNull public String getResolutionString()
 		{
 			if (isPredefined())
 				return (width + "x" + height);
@@ -735,7 +743,7 @@ public class BookmarkBase implements Parcelable, Cloneable
 			return 0;
 		}
 
-		@Override public void writeToParcel(Parcel out, int flags)
+		@Override public void writeToParcel(@NonNull Parcel out, int flags)
 		{
 			out.writeInt(resolution);
 			out.writeInt(colors);
@@ -746,44 +754,35 @@ public class BookmarkBase implements Parcelable, Cloneable
 
 	public static class DebugSettings implements Parcelable
 	{
-
 		public static final Parcelable.Creator<DebugSettings> CREATOR =
 		    new Parcelable.Creator<DebugSettings>() {
-			    public DebugSettings createFromParcel(Parcel in)
+			    @NonNull public DebugSettings createFromParcel(Parcel in)
 			    {
 				    return new DebugSettings(in);
 			    }
 
-			    @Override public DebugSettings[] newArray(int size)
+			    @NonNull @Override public DebugSettings[] newArray(int size)
 			    {
 				    return new DebugSettings[size];
 			    }
 		    };
-		private String debug;
-		private boolean asyncChannel;
-		private boolean asyncTransport;
-		private boolean asyncUpdate;
+
+		@NonNull private String debug = "INFO";
+		private boolean asyncChannel = true;
+		private boolean asyncTransport = false;
+		private boolean asyncUpdate = true;
 
 		public DebugSettings()
 		{
-			init();
 		}
 
 		// Session Settings
-		public DebugSettings(Parcel parcel)
+		public DebugSettings(@NonNull Parcel parcel)
 		{
-			asyncChannel = parcel.readInt() != 0;
-			asyncTransport = parcel.readInt() != 0;
-			asyncUpdate = parcel.readInt() != 0;
-			debug = parcel.readString();
-		}
-
-		private void init()
-		{
-			debug = "INFO";
-			asyncChannel = true;
-			asyncTransport = false;
-			asyncUpdate = true;
+			asyncChannel = parcel.readBoolean();
+			asyncTransport = parcel.readBoolean();
+			asyncUpdate = parcel.readBoolean();
+			debug = Objects.requireNonNull(parcel.readString());
 		}
 
 		private void validate()
@@ -801,13 +800,13 @@ public class BookmarkBase implements Parcelable, Cloneable
 			this.debug = "INFO";
 		}
 
-		public String getDebugLevel()
+		@NonNull public String getDebugLevel()
 		{
 			validate();
 			return debug;
 		}
 
-		public void setDebugLevel(String debug)
+		public void setDebugLevel(@NonNull String debug)
 		{
 			this.debug = debug;
 		}
@@ -837,11 +836,11 @@ public class BookmarkBase implements Parcelable, Cloneable
 			return 0;
 		}
 
-		@Override public void writeToParcel(Parcel out, int flags)
+		@Override public void writeToParcel(@NonNull Parcel out, int flags)
 		{
-			out.writeInt(asyncChannel ? 1 : 0);
-			out.writeInt(asyncTransport ? 1 : 0);
-			out.writeInt(asyncUpdate ? 1 : 0);
+			out.writeBoolean(asyncChannel);
+			out.writeBoolean(asyncTransport);
+			out.writeBoolean(asyncUpdate);
 			out.writeString(debug);
 		}
 	}
@@ -851,25 +850,27 @@ public class BookmarkBase implements Parcelable, Cloneable
 	{
 		public static final Parcelable.Creator<AdvancedSettings> CREATOR =
 		    new Parcelable.Creator<AdvancedSettings>() {
-			    public AdvancedSettings createFromParcel(Parcel in)
+			    @NonNull public AdvancedSettings createFromParcel(Parcel in)
 			    {
 				    return new AdvancedSettings(in);
 			    }
 
-			    @Override public AdvancedSettings[] newArray(int size)
+			    @NonNull @Override public AdvancedSettings[] newArray(int size)
 			    {
 				    return new AdvancedSettings[size];
 			    }
 		    };
 
-		private String loadBalanceInfo = "";
+		@NonNull private String loadBalanceInfo = "";
 		private boolean redirectSDCard = false;
 		private int redirectSound = 0;
 		private boolean redirectMicrophone = false;
 		private int security = 0;
 		private boolean consoleMode = false;
-		private String remoteProgram = "";
-		private String workDir = "";
+
+		@NonNull private String remoteProgram = "";
+
+		@NonNull private String workDir = "";
 		private int tlsSecLevel = -1;
 		private int tlsMinLevel = -1;
 
@@ -877,16 +878,16 @@ public class BookmarkBase implements Parcelable, Cloneable
 		{
 		}
 
-		public AdvancedSettings(Parcel parcel)
+		public AdvancedSettings(@NonNull Parcel parcel)
 		{
-			loadBalanceInfo = parcel.readString();
-			redirectSDCard = parcel.readInt() != 0;
+			loadBalanceInfo = Objects.requireNonNull(parcel.readString());
+			redirectSDCard = parcel.readBoolean();
 			redirectSound = parcel.readInt();
-			redirectMicrophone = parcel.readInt() != 0;
+			redirectMicrophone = parcel.readBoolean();
 			security = parcel.readInt();
-			consoleMode = parcel.readInt() != 0;
-			remoteProgram = parcel.readString();
-			workDir = parcel.readString();
+			consoleMode = parcel.readBoolean();
+			remoteProgram = Objects.requireNonNull(parcel.readString());
+			workDir = Objects.requireNonNull(parcel.readString());
 			tlsSecLevel = parcel.readInt();
 			tlsMinLevel = parcel.readInt();
 		}
@@ -937,12 +938,12 @@ public class BookmarkBase implements Parcelable, Cloneable
 			return tlsMinLevel;
 		}
 
-		public String getLoadBalanceInfo()
+		@NonNull public String getLoadBalanceInfo()
 		{
 			return loadBalanceInfo;
 		}
 
-		public void setLoadBalanceInfo(String info)
+		public void setLoadBalanceInfo(@NonNull String info)
 		{
 			loadBalanceInfo = info;
 		}
@@ -998,22 +999,22 @@ public class BookmarkBase implements Parcelable, Cloneable
 			this.consoleMode = consoleMode;
 		}
 
-		public String getRemoteProgram()
+		@NonNull public String getRemoteProgram()
 		{
 			return remoteProgram;
 		}
 
-		public void setRemoteProgram(String remoteProgram)
+		public void setRemoteProgram(@NonNull String remoteProgram)
 		{
 			this.remoteProgram = remoteProgram;
 		}
 
-		public String getWorkDir()
+		@NonNull public String getWorkDir()
 		{
 			return workDir;
 		}
 
-		public void setWorkDir(String workDir)
+		public void setWorkDir(@NonNull String workDir)
 		{
 			this.workDir = workDir;
 		}
@@ -1023,14 +1024,14 @@ public class BookmarkBase implements Parcelable, Cloneable
 			return 0;
 		}
 
-		@Override public void writeToParcel(Parcel out, int flags)
+		@Override public void writeToParcel(@NonNull Parcel out, int flags)
 		{
 			out.writeString(loadBalanceInfo);
-			out.writeInt(redirectSDCard ? 1 : 0);
+			out.writeBoolean(redirectSDCard);
 			out.writeInt(redirectSound);
-			out.writeInt(redirectMicrophone ? 1 : 0);
+			out.writeBoolean(redirectMicrophone);
 			out.writeInt(security);
-			out.writeInt(consoleMode ? 1 : 0);
+			out.writeBoolean(consoleMode);
 			out.writeString(remoteProgram);
 			out.writeString(workDir);
 			out.writeInt(tlsSecLevel);
@@ -1042,21 +1043,25 @@ public class BookmarkBase implements Parcelable, Cloneable
 	{
 		public static final Parcelable.Creator<GatewaySettings> CREATOR =
 		    new Parcelable.Creator<GatewaySettings>() {
-			    public GatewaySettings createFromParcel(Parcel in)
+			    @NonNull public GatewaySettings createFromParcel(Parcel in)
 			    {
 				    return new GatewaySettings(in);
 			    }
 
-			    @Override public GatewaySettings[] newArray(int size)
+			    @NonNull @Override public GatewaySettings[] newArray(int size)
 			    {
 				    return new GatewaySettings[size];
 			    }
 		    };
-		private String hostname = "";
+
+		@NonNull private String hostname = "";
 		private int port = 443;
-		private String username = "";
-		private String password = "";
-		private String domain = "";
+
+		@NonNull private String username = "";
+
+		@NonNull private String password = "";
+
+		@NonNull private String domain = "";
 
 		public GatewaySettings()
 		{
@@ -1064,19 +1069,19 @@ public class BookmarkBase implements Parcelable, Cloneable
 
 		public GatewaySettings(Parcel parcel)
 		{
-			hostname = parcel.readString();
+			hostname = Objects.requireNonNull(parcel.readString());
 			port = parcel.readInt();
-			username = parcel.readString();
-			password = parcel.readString();
-			domain = parcel.readString();
+			username = Objects.requireNonNull(parcel.readString());
+			password = Objects.requireNonNull(parcel.readString());
+			domain = Objects.requireNonNull(parcel.readString());
 		}
 
-		public String getHostname()
+		@NonNull public String getHostname()
 		{
 			return hostname;
 		}
 
-		public void setHostname(String hostname)
+		public void setHostname(@NonNull String hostname)
 		{
 			this.hostname = hostname;
 		}
@@ -1091,32 +1096,32 @@ public class BookmarkBase implements Parcelable, Cloneable
 			this.port = port;
 		}
 
-		public String getUsername()
+		@NonNull public String getUsername()
 		{
 			return username;
 		}
 
-		public void setUsername(String username)
+		public void setUsername(@NonNull String username)
 		{
 			this.username = username;
 		}
 
-		public String getPassword()
+		@NonNull public String getPassword()
 		{
 			return password;
 		}
 
-		public void setPassword(String password)
+		public void setPassword(@NonNull String password)
 		{
 			this.password = password;
 		}
 
-		public String getDomain()
+		@NonNull public String getDomain()
 		{
 			return domain;
 		}
 
-		public void setDomain(String domain)
+		public void setDomain(@NonNull String domain)
 		{
 			this.domain = domain;
 		}
@@ -1126,7 +1131,7 @@ public class BookmarkBase implements Parcelable, Cloneable
 			return 0;
 		}
 
-		@Override public void writeToParcel(Parcel out, int flags)
+		@Override public void writeToParcel(@NonNull Parcel out, int flags)
 		{
 			out.writeString(hostname);
 			out.writeInt(port);

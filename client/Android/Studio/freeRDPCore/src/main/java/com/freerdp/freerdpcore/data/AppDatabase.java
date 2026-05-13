@@ -7,7 +7,12 @@ import android.content.Context;
 import androidx.annotation.NonNull;
 
 import java.io.File;
+import java.util.HashMap;
+import java.util.Map;
+
+import androidx.room.ColumnInfo;
 import androidx.room.Database;
+import androidx.room.PrimaryKey;
 import androidx.room.Room;
 import androidx.room.RoomDatabase;
 import androidx.room.migration.Migration;
@@ -22,7 +27,7 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory;
           exportSchema = false)
 public abstract class AppDatabase extends RoomDatabase
 {
-	static final int DB_VERSION = 13;
+	static final int DB_VERSION = 14;
 	private static final String DB_NAME = "bookmarks.db";
 
 	static
@@ -51,6 +56,7 @@ public abstract class AppDatabase extends RoomDatabase
 					               .addMigrations(MIGRATION_10_11)
 					               .addMigrations(MIGRATION_11_12)
 					               .addMigrations(MIGRATION_12_13)
+					               .addMigrations(MIGRATION_13_14)
 					               .build();
 				}
 			}
@@ -157,20 +163,107 @@ public abstract class AppDatabase extends RoomDatabase
 		return sb.toString();
 	}
 
+	private static final Migration MIGRATION_13_14 = new Migration(13, 14) {
+		@Override public void migrate(@NonNull SupportSQLiteDatabase db)
+		{
+			final String[] columns = new String[] {
+				"label",          "hostname",         "username",         "password",
+				"domain",         "gateway_hostname", "gateway_username", "gateway_password",
+				"gateway_domain", "remote_program",   "work_dir",         "loadbalanceinfo"
+			};
+			for (String column : columns)
+			{
+				db.execSQL("ALTER TABLE 'bookmarks' ADD '" + column +
+				           "_with_default' TEXT NOT NULL DEFAULT '';");
+				db.execSQL("UPDATE 'bookmarks' SET '" + column + "_with_default' = '" + column +
+				           "';");
+				db.execSQL("ALTER TABLE 'bookmarks' DROP '" + column + "';");
+				db.execSQL("ALTER TABLE 'bookmarks' RENAME COLUMN '" + column +
+				           "_with_default' to '" + column + "';");
+			}
+
+			final String[] debugColumns = new String[] { "debug_level" };
+			for (String column : debugColumns)
+			{
+				db.execSQL("ALTER TABLE 'bookmarks' ADD '" + column +
+				           "_with_default' TEXT NOT NULL DEFAULT 'INFO';");
+				db.execSQL("UPDATE 'bookmarks' SET '" + column + "_with_default' = '" + column +
+				           "';");
+				db.execSQL("ALTER TABLE 'bookmarks' DROP '" + column + "';");
+				db.execSQL("ALTER TABLE 'bookmarks' RENAME COLUMN '" + column +
+				           "_with_default' to '" + column + "';");
+			}
+			final Map<String, Integer> intColumns = new HashMap<>();
+			intColumns.put("port", 3389);
+			intColumns.put("colors", 32);
+			intColumns.put("resolution", -1);
+			intColumns.put("width", 0);
+			intColumns.put("height", 0);
+			intColumns.put("gateway_port", 443);
+			intColumns.put("redirect_sound", 0);
+			intColumns.put("security", 0);
+			intColumns.put("tlsSecLevel", -1);
+			intColumns.put("tlsMinLevel", -1);
+
+			for (Map.Entry<String, Integer> column : intColumns.entrySet())
+			{
+				db.execSQL("ALTER TABLE 'bookmarks' ADD '" + column.getKey() +
+				           "_with_default' INTEGER NOT NULL DEFAULT " +
+				           column.getValue().toString() + ";");
+				db.execSQL("UPDATE 'bookmarks' SET '" + column.getKey() + "_with_default' = '" +
+				           column.getKey() + "';");
+				db.execSQL("ALTER TABLE 'bookmarks' DROP '" + column.getKey() + "';");
+				db.execSQL("ALTER TABLE 'bookmarks' RENAME COLUMN '" + column.getKey() +
+				           "_with_default' to '" + column.getKey() + "';");
+			}
+
+			final Map<String, Boolean> boolColumns = new HashMap<>();
+			boolColumns.put("perf_remotefx", true);
+			boolColumns.put("perf_gfx", true);
+			boolColumns.put("perf_gfx_h264", true);
+			boolColumns.put("perf_wallpaper", true);
+			boolColumns.put("perf_theming", true);
+			boolColumns.put("perf_full_window_drag", true);
+			boolColumns.put("perf_menu_animations", true);
+			boolColumns.put("perf_font_smoothing", true);
+			boolColumns.put("perf_desktop_composition", true);
+			boolColumns.put("enable_gateway_settings", false);
+			boolColumns.put("redirect_sdcard", false);
+			boolColumns.put("redirect_microphone", false);
+			boolColumns.put("console_mode", false);
+			boolColumns.put("async_channel", false);
+			boolColumns.put("async_update", false);
+
+			for (Map.Entry<String, Boolean> column : boolColumns.entrySet())
+			{
+				db.execSQL("ALTER TABLE 'bookmarks' ADD '" + column.getKey() +
+				           "_with_default' INTEGER NOT NULL DEFAULT " +
+				           column.getValue().toString() + ";");
+				db.execSQL("UPDATE 'bookmarks' SET '" + column.getKey() + "_with_default' = '" +
+				           column.getKey() + "';");
+				db.execSQL("ALTER TABLE 'bookmarks' DROP '" + column.getKey() + "';");
+				db.execSQL("ALTER TABLE 'bookmarks' RENAME COLUMN '" + column.getKey() +
+				           "_with_default' to '" + column.getKey() + "';");
+			}
+		}
+	};
+
 	private static final Migration MIGRATION_12_13 = new Migration(12, 13) {
 		@Override public void migrate(@NonNull SupportSQLiteDatabase db)
 		{
-			db.execSQL("ALTER TABLE 'bookmarks' ADD 'loadbalanceinfo' TEXT");
+			db.execSQL("ALTER TABLE 'bookmarks' ADD 'loadbalanceinfo' TEXT NOT NULL DEFAULT '';");
 		}
 	};
 
 	private static final Migration MIGRATION_11_12 = new Migration(11, 12) {
 		@Override public void migrate(@NonNull SupportSQLiteDatabase db)
 		{
-			db.execSQL("ALTER TABLE 'bookmarks' ADD 'tlsSecLevel' CONSTRAINT chk_tlsSecLevel "
-			           + "CHECK (tlsSecLevel >= -1 AND tlsSecLevel <= 5) INTEGER DEFAULT -1;");
-			db.execSQL("ALTER TABLE 'bookmarks' ADD 'tlsMinLevel' CONSTRAINT chk_tlsMinLevel "
-			           + "CHECK (tlsSecLevel >= -1) INTEGER DEFAULT -1;");
+			db.execSQL("ALTER TABLE 'bookmarks' ADD 'tlsSecLevel' INTEGER NOT NULL CONSTRAINT "
+			           + "chk_tlsSecLevel "
+			           + "CHECK (tlsSecLevel >= -1 AND tlsSecLevel <= 5)  DEFAULT -1;");
+			db.execSQL("ALTER TABLE 'bookmarks' ADD 'tlsMinLevel' INTEGER NOT NULL CONSTRAINT "
+			           + "chk_tlsMinLevel "
+			           + "CHECK (tlsMinLevel >= -1) DEFAULT -1;");
 			final String list[] = { "screen_3g_colors",
 				                    "screen_3g_resolution",
 				                    "screen_3g_width",

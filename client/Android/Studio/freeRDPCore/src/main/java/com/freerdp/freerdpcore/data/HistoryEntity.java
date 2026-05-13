@@ -11,9 +11,9 @@ import java.util.Date;
 
 @Entity(tableName = "quick_connect_history") public class HistoryEntity
 {
-	@PrimaryKey @ColumnInfo(name = "item") @NonNull public String item;
+	@PrimaryKey @ColumnInfo(name = "item", defaultValue = "") @NonNull public String item;
 
-	@ColumnInfo(name = "timestamp") public long timestamp;
+	@ColumnInfo(name = "timestamp", defaultValue = "0") public long timestamp;
 
 	public HistoryEntity(@NonNull String item)
 	{
