@@ -71,7 +71,7 @@ Build-Depends:
  opencl-c-headers,
  libasan5 | libasan6 | libasan8
 Standards-Version: 3.9.5
-Homepage: http://www.freerdp.com/
+Homepage: https://freerdp.com/
 Vcs-Browser: http://github.com/FreeRDP/FreeRDP.git
 Vcs-Git: git://github.com/FreeRDP/FreeRDP.git
 
