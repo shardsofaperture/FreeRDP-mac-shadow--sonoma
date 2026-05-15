@@ -11,6 +11,7 @@
 package com.freerdp.freerdpcore.application;
 
 import android.app.Application;
+import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.content.ContextCompat;
 import android.content.Context;
 import android.content.Intent;
@@ -137,6 +138,7 @@ public class GlobalApp extends Application implements LibFreeRDP.EventListener
 
 		/* Initialize preferences. */
 		ApplicationSettingsActivity.get(this);
+		AppCompatDelegate.setDefaultNightMode(ApplicationSettingsActivity.getNightMode(this));
 
 		sessionMap = Collections.synchronizedMap(new HashMap<Long, SessionState>());
 
