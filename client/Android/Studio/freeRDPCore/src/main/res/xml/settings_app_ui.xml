@@ -21,8 +21,8 @@
         android:key="@string/preference_key_ui_ask_on_exit"
         android:title="@string/settings_ui_ask_on_exit" />
     <CheckBoxPreference
-        android:key="@string/preference_key_ui_hide_action_bar"
-        android:title="@string/settings_ui_hide_action_bar" />
+        android:key="@string/preference_key_ui_fit_rounded_corners"
+        android:title="@string/settings_ui_fit_rounded_corners" />
     <CheckBoxPreference
         android:key="@string/preference_key_ui_use_back_as_altf4"
         android:title="@string/settings_ui_use_back_as_altf4" />

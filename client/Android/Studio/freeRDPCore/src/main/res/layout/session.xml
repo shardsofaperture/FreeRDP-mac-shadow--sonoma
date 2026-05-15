@@ -12,6 +12,7 @@
     android:id="@+id/session_root_view"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@android:color/black"
     android:fitsSystemWindows="true">
 
     <!-- children are specified bottom-up so that we have a correct z-order in our final layout -->

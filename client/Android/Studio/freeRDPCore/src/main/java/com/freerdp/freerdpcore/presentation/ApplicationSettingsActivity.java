@@ -241,11 +241,11 @@ public class ApplicationSettingsActivity
 		    context.getString(R.string.preference_key_ui_hide_navigation_bar), false);
 	}
 
-	public static boolean getHideActionBar(Context context)
+	public static boolean getFitRoundedCorners(Context context)
 	{
 		SharedPreferences preferences = get(context);
-		return preferences.getBoolean(context.getString(R.string.preference_key_ui_hide_action_bar),
-		                              false);
+		return preferences.getBoolean(
+		    context.getString(R.string.preference_key_ui_fit_rounded_corners), false);
 	}
 
 	public static boolean getUseBackAsAltf4(Context context)

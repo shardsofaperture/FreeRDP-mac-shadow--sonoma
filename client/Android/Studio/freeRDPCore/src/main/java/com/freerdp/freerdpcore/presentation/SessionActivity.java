@@ -10,12 +10,8 @@
 
 package com.freerdp.freerdpcore.presentation;
 
-import android.app.AlertDialog;
-import android.app.UiModeManager;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.Config;
@@ -31,7 +27,10 @@ import android.os.Message;
 
 import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
@@ -39,13 +38,13 @@ import androidx.lifecycle.ViewModelProvider;
 
 import android.util.Log;
 import android.view.KeyEvent;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewTreeObserver.OnGlobalLayoutListener;
+import android.view.RoundedCorner;
+import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.widget.Toast;
 
@@ -58,7 +57,6 @@ import com.freerdp.freerdpcore.services.LibFreeRDP;
 import com.freerdp.freerdpcore.utils.ClipboardManagerProxy;
 
 import java.util.Collection;
-import java.util.Iterator;
 
 public class SessionActivity extends AppCompatActivity
     implements LibFreeRDP.UIEventListener, ClipboardManagerProxy.OnClipboardChangedListener
@@ -119,21 +117,23 @@ public class SessionActivity extends AppCompatActivity
 	{
 		boolean hideStatusBar = ApplicationSettingsActivity.getHideStatusBar(this);
 		boolean hideNavBar = ApplicationSettingsActivity.getHideNavigationBar(this);
-		boolean hideActionBar = ApplicationSettingsActivity.getHideActionBar(this);
 
-		// Action bar is independent of status bar and API level.
+		WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+
 		if (getSupportActionBar() != null)
-		{
-			if (hideActionBar)
-				getSupportActionBar().hide();
-			else
-				getSupportActionBar().show();
-		}
+			getSupportActionBar().hide();
+
+		WindowInsetsControllerCompat controller =
+		    WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+		controller.setAppearanceLightStatusBars(false);
+		controller.setAppearanceLightNavigationBars(false);
+
+		getWindow().setStatusBarColor(android.graphics.Color.TRANSPARENT);
+		getWindow().setNavigationBarColor(android.graphics.Color.TRANSPARENT);
+		getWindow().setNavigationBarContrastEnforced(false);
 
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
 		{
-			WindowInsetsControllerCompat controller =
-			    WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
 			int toHide = 0;
 			if (hideStatusBar)
 				toHide |= WindowInsetsCompat.Type.statusBars();
@@ -153,17 +153,28 @@ public class SessionActivity extends AppCompatActivity
 		}
 		else
 		{
-			// API < 30: use deprecated setSystemUiVisibility.
-			int flags = 0;
+			// API 29: layout flags must be set explicitly to keep drawing behind system bars.
+			int flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
+			            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
 			if (hideStatusBar)
 				flags |= View.SYSTEM_UI_FLAG_FULLSCREEN;
 			if (hideNavBar)
 				flags |= View.SYSTEM_UI_FLAG_HIDE_NAVIGATION;
-			if (flags != 0)
+			if ((flags & (View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION)) !=
+			    0)
 				flags |= View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
 
 			getWindow().getDecorView().setSystemUiVisibility(flags);
 		}
+
+		WindowManager.LayoutParams lp = getWindow().getAttributes();
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
+			lp.layoutInDisplayCutoutMode =
+			    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
+		else
+			lp.layoutInDisplayCutoutMode =
+			    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+		getWindow().setAttributes(lp);
 	}
 
 	@Override public void onCreate(Bundle savedInstanceState)
@@ -184,6 +195,9 @@ public class SessionActivity extends AppCompatActivity
 		// A bit weird looking
 		// but this is the only way ...
 		final View activityRootView = findViewById(R.id.session_root_view);
+		activityRootView.setFitsSystemWindows(false);
+		ViewCompat.setOnApplyWindowInsetsListener(activityRootView,
+		                                          (v, insets) -> onWindowInsetsChanged(v, insets));
 		activityRootView.getViewTreeObserver().addOnGlobalLayoutListener(
 		    new OnGlobalLayoutListener() {
 			    @Override public void onGlobalLayout()
@@ -318,6 +332,60 @@ public class SessionActivity extends AppCompatActivity
 		inputManager.reloadKeyboards();
 
 		hideSystemBars();
+	}
+
+	private WindowInsetsCompat onWindowInsetsChanged(View rootView, WindowInsetsCompat windowInsets)
+	{
+		boolean fitSafeArea = ApplicationSettingsActivity.getFitRoundedCorners(this);
+		boolean hideStatusBar = ApplicationSettingsActivity.getHideStatusBar(this);
+
+		int insetsTop = windowInsets
+		                    .getInsets(WindowInsetsCompat.Type.statusBars() |
+		                               WindowInsetsCompat.Type.displayCutout())
+		                    .top;
+		rootView.setPadding(0, hideStatusBar ? 0 : insetsTop, 0, 0);
+
+		int safeLeft = 0, safeTop = 0, safeRight = 0, safeBottom = 0;
+		if (fitSafeArea && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+		{
+			WindowInsets platformInsets = windowInsets.toWindowInsets();
+			if (platformInsets != null)
+			{
+				boolean landscape = getResources().getConfiguration().orientation ==
+				                    Configuration.ORIENTATION_LANDSCAPE;
+
+				int radTL = cornerRadius(platformInsets, RoundedCorner.POSITION_TOP_LEFT);
+				int radBL = cornerRadius(platformInsets, RoundedCorner.POSITION_BOTTOM_LEFT);
+				int radTR = cornerRadius(platformInsets, RoundedCorner.POSITION_TOP_RIGHT);
+				int radBR = cornerRadius(platformInsets, RoundedCorner.POSITION_BOTTOM_RIGHT);
+
+				if (landscape)
+				{
+					safeLeft = Math.max(0, Math.max(radTL, radBL) - rootView.getPaddingLeft());
+					safeRight = Math.max(0, Math.max(radTR, radBR) - rootView.getPaddingRight());
+				}
+				else
+				{
+					safeTop = Math.max(0, Math.max(radTL, radTR) - rootView.getPaddingTop());
+					safeBottom = Math.max(0, Math.max(radBL, radBR) - rootView.getPaddingBottom());
+				}
+			}
+		}
+
+		scrollView.setPadding(Math.max(safeLeft, navInsets.left), safeTop,
+		                      Math.max(safeRight, navInsets.right),
+		                      Math.max(safeBottom, navInsets.bottom));
+		if (inputManager != null)
+			inputManager.setSafeInsets(safeLeft, safeTop);
+
+		return WindowInsetsCompat.CONSUMED;
+	}
+
+	@RequiresApi(Build.VERSION_CODES.S)
+	private static int cornerRadius(WindowInsets insets, int position)
+	{
+		RoundedCorner corner = insets.getRoundedCorner(position);
+		return (corner != null) ? corner.getRadius() : 0;
 	}
 
 	private void processIntent(Intent intent)
@@ -458,6 +526,9 @@ public class SessionActivity extends AppCompatActivity
 		inputManager.attachSession(session.getInstance(), surface);
 		inputManager.setScreenSize(screen_width, screen_height);
 		hideSystemBars();
+		View rootView = findViewById(R.id.session_root_view);
+		if (rootView != null)
+			ViewCompat.requestApplyInsets(rootView);
 	}
 
 	private void closeSessionActivity(int resultCode)
@@ -465,39 +536,6 @@ public class SessionActivity extends AppCompatActivity
 		// Go back to home activity (and send intent data back to home)
 		setResult(resultCode, getIntent());
 		finish();
-	}
-
-	@Override public boolean onCreateOptionsMenu(Menu menu)
-	{
-		getMenuInflater().inflate(R.menu.session_menu, menu);
-		return true;
-	}
-
-	@Override public boolean onOptionsItemSelected(MenuItem item)
-	{
-		// refer to http://tools.android.com/tips/non-constant-fields why we
-		// can't use switch/case here ..
-		int itemId = item.getItemId();
-
-		if (itemId == R.id.session_touch_pointer)
-		{
-			inputManager.toggleTouchPointer();
-		}
-		else if (itemId == R.id.session_sys_keyboard)
-		{
-			inputManager.toggleSystemKeyboard();
-		}
-		else if (itemId == R.id.session_ext_keyboard)
-		{
-			inputManager.toggleExtendedKeyboard();
-		}
-		else if (itemId == R.id.session_disconnect)
-		{
-			inputManager.hideKeyboards();
-			LibFreeRDP.disconnect(session.getInstance());
-		}
-
-		return true;
 	}
 
 	public void handleBackPressed()
@@ -680,7 +718,8 @@ public class SessionActivity extends AppCompatActivity
 	@Override public void onClipboardChanged(String data)
 	{
 		Log.v(TAG, "onClipboardChanged: " + data);
-		LibFreeRDP.sendClipboardData(session.getInstance(), data);
+		if (session != null)
+			LibFreeRDP.sendClipboardData(session.getInstance(), data);
 	}
 
 	private void onConnectionStateChanged(SessionViewModel.ConnectionState state)

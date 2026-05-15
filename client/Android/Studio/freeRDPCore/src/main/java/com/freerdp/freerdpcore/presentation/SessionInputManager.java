@@ -55,6 +55,15 @@ public class SessionInputManager
 	private Keyboard numpadKeyboard;
 	private Keyboard cursorKeyboard;
 
+	private int safeInsetLeft = 0;
+	private int safeInsetTop = 0;
+
+	public void setSafeInsets(int left, int top)
+	{
+		safeInsetLeft = left;
+		safeInsetTop = top;
+	}
+
 	// Native FreeRDP instance handle. 0 until attachSession() is called (i.e. before connect).
 	private long instance = 0;
 	private Bitmap bitmap;
@@ -312,10 +321,16 @@ public class SessionInputManager
 
 	private Point mapScreenCoordToSessionCoord(int x, int y)
 	{
-		int mappedX = (int)((float)(x + scrollView.getScrollX()) / sessionView.getZoom());
-		int mappedY = (int)((float)(y + scrollView.getScrollY()) / sessionView.getZoom());
+		int mappedX =
+		    (int)((float)(x - safeInsetLeft + scrollView.getScrollX()) / sessionView.getZoom());
+		int mappedY =
+		    (int)((float)(y - safeInsetTop + scrollView.getScrollY()) / sessionView.getZoom());
 		if (bitmap != null)
 		{
+			if (mappedX < 0)
+				mappedX = 0;
+			if (mappedY < 0)
+				mappedY = 0;
 			if (mappedX > bitmap.getWidth())
 				mappedX = bitmap.getWidth();
 			if (mappedY > bitmap.getHeight())

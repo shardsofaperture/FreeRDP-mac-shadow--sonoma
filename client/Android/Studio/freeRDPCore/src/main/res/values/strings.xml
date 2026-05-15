@@ -266,6 +266,8 @@
     <string name="preference_key_ui_hide_zoom_controls" translatable="false">ui.hide_zoom_controls</string>
     <string name="preference_key_ui_hide_action_bar" translatable="false">ui.hide_action_bar</string>
     <string name="preference_key_ui_use_back_as_altf4" translatable="false">ui.use_back_as_altf4</string>
+    <string name="preference_key_ui_fit_rounded_corners" translatable="false">ui.fit_rounded_corners</string>
+    <string name="settings_ui_fit_rounded_corners">Fit to Rounded Corners</string>
     <string-array name="debug_array" translatable="false">
         <item>OFF</item>
         <item>FATAL</item>
