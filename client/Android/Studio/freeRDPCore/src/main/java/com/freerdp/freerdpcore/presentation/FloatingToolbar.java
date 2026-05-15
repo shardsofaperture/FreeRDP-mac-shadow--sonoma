@@ -19,14 +19,20 @@ public class FloatingToolbar
 		void onToggleExtKeyboard();
 	}
 
-	private enum Edge { LEFT, RIGHT, TOP, BOTTOM }
+	private enum Edge
+	{
+		LEFT,
+		RIGHT,
+		TOP,
+		BOTTOM
+	}
 
 	private final LinearLayout container;
 	private final LinearLayout buttons;
 	private boolean expanded = false;
 	private int insetLeft = 0, insetTop = 0, insetRight = 0, insetBottom = 0;
 	private Edge snappedEdge = Edge.LEFT;
-	private float snappedFraction = 0.75f;
+	private float snappedFraction = 0.4f;
 
 	public void setInsets(int left, int top, int right, int bottom)
 	{
@@ -43,8 +49,8 @@ public class FloatingToolbar
 		View handle = activity.findViewById(R.id.floating_toolbar_handle);
 		setTooltip(handle);
 
-		GestureDetector gestureDetector = new GestureDetector(
-		    activity, new GestureDetector.SimpleOnGestureListener() {
+		GestureDetector gestureDetector =
+		    new GestureDetector(activity, new GestureDetector.SimpleOnGestureListener() {
 			    @Override public boolean onSingleTapConfirmed(MotionEvent e)
 			    {
 				    toggle();
@@ -71,11 +77,11 @@ public class FloatingToolbar
 				if (parent == null)
 					return;
 				positionInitial(parent);
-				parent.addOnLayoutChangeListener(
-				    (v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
-					    if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop)
-						    resnapToSameEdge();
-				    });
+				parent.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop,
+				                                  oldRight, oldBottom) -> {
+					if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop)
+						resnapToSameEdge();
+				});
 			}
 		});
 	}
@@ -85,11 +91,12 @@ public class FloatingToolbar
 		container.setOrientation(LinearLayout.VERTICAL);
 		buttons.setOrientation(LinearLayout.VERTICAL);
 		snappedEdge = Edge.LEFT;
-		snappedFraction = 0.75f;
+		snappedFraction = 0.4f;
 		float ph = parent.getHeight();
 		float ch = container.getHeight();
 		container.setX(insetLeft);
-		container.setY(Math.max(insetTop, insetTop + (ph - insetTop - insetBottom - ch) / 2f));
+		container.setY(
+		    Math.max(insetTop, insetTop + snappedFraction * (ph - insetTop - insetBottom - ch)));
 	}
 
 	private void resnapToSameEdge()
@@ -159,8 +166,7 @@ public class FloatingToolbar
 	private View.OnTouchListener buildDragListener(Activity activity,
 	                                               GestureDetector gestureDetector, View handle)
 	{
-		int touchSlop =
-		    android.view.ViewConfiguration.get(activity).getScaledTouchSlop();
+		int touchSlop = android.view.ViewConfiguration.get(activity).getScaledTouchSlop();
 		return new View.OnTouchListener() {
 			private float startX, startY, offsetX, offsetY;
 			private boolean dragging;
@@ -265,12 +271,14 @@ public class FloatingToolbar
 			if (snappedEdge == Edge.LEFT || snappedEdge == Edge.RIGHT)
 			{
 				float available = ph - insetTop - insetBottom - h;
-				snappedFraction = available > 0 ? Math.max(0f, Math.min(1f, (ty - insetTop) / available)) : 0.5f;
+				snappedFraction =
+				    available > 0 ? Math.max(0f, Math.min(1f, (ty - insetTop) / available)) : 0.5f;
 			}
 			else
 			{
 				float available = pw - insetLeft - insetRight - w;
-				snappedFraction = available > 0 ? Math.max(0f, Math.min(1f, (tx - insetLeft) / available)) : 0.5f;
+				snappedFraction =
+				    available > 0 ? Math.max(0f, Math.min(1f, (tx - insetLeft) / available)) : 0.5f;
 			}
 			container.animate().x(tx).y(ty).setDuration(250).start();
 		});

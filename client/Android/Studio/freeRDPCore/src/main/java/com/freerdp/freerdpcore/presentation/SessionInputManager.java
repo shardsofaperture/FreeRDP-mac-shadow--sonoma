@@ -321,10 +321,14 @@ public class SessionInputManager
 
 	private Point mapScreenCoordToSessionCoord(int x, int y)
 	{
+		int usableW = scrollView.getWidth() - scrollView.getPaddingLeft() - scrollView.getPaddingRight();
+		int usableH = scrollView.getHeight() - scrollView.getPaddingTop() - scrollView.getPaddingBottom();
+		int centerOffsetX = Math.max(0, (usableW - sessionView.getWidth()) / 2);
+		int centerOffsetY = Math.max(0, (usableH - sessionView.getHeight()) / 2);
 		int mappedX =
-		    (int)((float)(x - safeInsetLeft + scrollView.getScrollX()) / sessionView.getZoom());
+		    (int)((float)(x - safeInsetLeft - centerOffsetX + scrollView.getScrollX()) / sessionView.getZoom());
 		int mappedY =
-		    (int)((float)(y - safeInsetTop + scrollView.getScrollY()) / sessionView.getZoom());
+		    (int)((float)(y - safeInsetTop - centerOffsetY + scrollView.getScrollY()) / sessionView.getZoom());
 		if (bitmap != null)
 		{
 			if (mappedX < 0)

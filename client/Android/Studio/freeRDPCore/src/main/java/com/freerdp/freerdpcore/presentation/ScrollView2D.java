@@ -1198,7 +1198,18 @@ public class ScrollView2D extends FrameLayout
 		}
 		mChildToScrollTo = null;
 
-		// Calling this with the present values causes it to re-clam them
+		// When child is larger than parent, gravity gives negative offsets — clamp to padding.
+		if (getChildCount() > 0)
+		{
+			View child = getChildAt(0);
+			int left = Math.max(getPaddingLeft(), child.getLeft());
+			int top = Math.max(getPaddingTop(), child.getTop());
+			if (left != child.getLeft() || top != child.getTop())
+				child.layout(left, top, left + child.getMeasuredWidth(),
+				             top + child.getMeasuredHeight());
+		}
+
+		// Calling this with the present values causes it to re-clamp them
 		scrollTo(getScrollX(), getScrollY());
 	}
 

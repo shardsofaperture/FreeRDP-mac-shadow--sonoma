@@ -26,11 +26,10 @@
     <com.freerdp.freerdpcore.presentation.ScrollView2D
         android:id="@+id/sessionScrollView"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="match_parent"
         android:layout_above="@id/extended_keyboard"
         android:layout_alignParentTop="true"
         android:drawingCacheQuality="low"
-        android:fillViewport="true"
         android:isScrollContainer="true"
         android:scrollbars="horizontal|vertical">
 
@@ -38,6 +37,7 @@
             android:id="@+id/sessionView"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_gravity="center"
             android:drawingCacheQuality="low"
             android:focusable="true"
             android:focusableInTouchMode="true" />
