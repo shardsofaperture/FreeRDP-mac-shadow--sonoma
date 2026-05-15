@@ -321,14 +321,18 @@ public class SessionInputManager
 
 	private Point mapScreenCoordToSessionCoord(int x, int y)
 	{
-		int usableW = scrollView.getWidth() - scrollView.getPaddingLeft() - scrollView.getPaddingRight();
-		int usableH = scrollView.getHeight() - scrollView.getPaddingTop() - scrollView.getPaddingBottom();
-		int centerOffsetX = Math.max(0, (usableW - sessionView.getWidth()) / 2);
-		int centerOffsetY = Math.max(0, (usableH - sessionView.getHeight()) / 2);
-		int mappedX =
-		    (int)((float)(x - safeInsetLeft - centerOffsetX + scrollView.getScrollX()) / sessionView.getZoom());
-		int mappedY =
-		    (int)((float)(y - safeInsetTop - centerOffsetY + scrollView.getScrollY()) / sessionView.getZoom());
+		int usableW =
+		    scrollView.getWidth() - scrollView.getPaddingLeft() - scrollView.getPaddingRight();
+		int usableH =
+		    scrollView.getHeight() - scrollView.getPaddingTop() - scrollView.getPaddingBottom();
+		int contentW = sessionView.getWidth() - sessionView.getTouchPointerPaddingWidth();
+		int contentH = sessionView.getHeight() - sessionView.getTouchPointerPaddingHeight();
+		int centerOffsetX = Math.max(0, (usableW - contentW) / 2);
+		int centerOffsetY = Math.max(0, (usableH - contentH) / 2);
+		int mappedX = (int)((float)(x - safeInsetLeft - centerOffsetX + scrollView.getScrollX()) /
+		                    sessionView.getZoom());
+		int mappedY = (int)((float)(y - safeInsetTop - centerOffsetY + scrollView.getScrollY()) /
+		                    sessionView.getZoom());
 		if (bitmap != null)
 		{
 			if (mappedX < 0)

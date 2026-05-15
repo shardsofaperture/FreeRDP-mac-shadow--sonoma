@@ -1198,15 +1198,25 @@ public class ScrollView2D extends FrameLayout
 		}
 		mChildToScrollTo = null;
 
-		// When child is larger than parent, gravity gives negative offsets — clamp to padding.
+		// Center the content area (excluding touch-pointer padding) within the viewport.
+		// This keeps the RDP surface visually centered regardless of pointer padding changes.
 		if (getChildCount() > 0)
 		{
 			View child = getChildAt(0);
-			int left = Math.max(getPaddingLeft(), child.getLeft());
-			int top = Math.max(getPaddingTop(), child.getTop());
-			if (left != child.getLeft() || top != child.getTop())
-				child.layout(left, top, left + child.getMeasuredWidth(),
-				             top + child.getMeasuredHeight());
+			int ptw = 0, pth = 0;
+			if (child instanceof SessionView)
+			{
+				ptw = ((SessionView)child).getTouchPointerPaddingWidth();
+				pth = ((SessionView)child).getTouchPointerPaddingHeight();
+			}
+			int contentW = child.getMeasuredWidth() - ptw;
+			int contentH = child.getMeasuredHeight() - pth;
+			int usableW = getWidth() - getPaddingLeft() - getPaddingRight();
+			int usableH = getHeight() - getPaddingTop() - getPaddingBottom();
+			int left = getPaddingLeft() + Math.max(0, (usableW - contentW) / 2);
+			int top = getPaddingTop() + Math.max(0, (usableH - contentH) / 2);
+			child.layout(left, top, left + child.getMeasuredWidth(),
+			             top + child.getMeasuredHeight());
 		}
 
 		// Calling this with the present values causes it to re-clamp them
