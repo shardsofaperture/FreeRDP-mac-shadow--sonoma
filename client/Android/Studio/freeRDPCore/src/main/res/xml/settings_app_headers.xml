@@ -3,25 +3,25 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <Preference
-        android:icon="@android:drawable/ic_menu_preferences"
+        android:icon="@drawable/ic_computer"
         android:key="settings.client"
         android:title="@string/settings_cat_client"
         app:fragment="com.freerdp.freerdpcore.presentation.ApplicationSettingsActivity$ClientFragment" />
 
     <Preference
-        android:icon="@android:drawable/ic_menu_view"
+        android:icon="@drawable/ic_tune"
         android:key="settings.ui"
         android:title="@string/settings_cat_ui"
         app:fragment="com.freerdp.freerdpcore.presentation.ApplicationSettingsActivity$UiFragment" />
 
     <Preference
-        android:icon="@android:drawable/ic_menu_manage"
+        android:icon="@drawable/ic_battery_saver"
         android:key="settings.power"
         android:title="@string/settings_cat_power"
         app:fragment="com.freerdp.freerdpcore.presentation.ApplicationSettingsActivity$PowerFragment" />
 
     <Preference
-        android:icon="@android:drawable/ic_secure"
+        android:icon="@drawable/ic_security"
         android:key="settings.security"
         android:title="@string/settings_cat_security"
         app:fragment="com.freerdp.freerdpcore.presentation.ApplicationSettingsActivity$SecurityFragment" />
