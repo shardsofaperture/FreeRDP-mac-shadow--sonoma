@@ -113,6 +113,8 @@ public class SessionActivity extends AppCompatActivity
 	private SessionInputManager inputManager;
 	private SessionDialogs dialogs;
 
+	private FloatingToolbar floatingToolbar;
+
 	private void hideSystemBars()
 	{
 		boolean hideStatusBar = ApplicationSettingsActivity.getHideStatusBar(this);
@@ -218,6 +220,24 @@ public class SessionActivity extends AppCompatActivity
 		sessionView.requestFocus();
 
 		touchPointerView = findViewById(R.id.touchPointerView);
+
+		floatingToolbar = new FloatingToolbar(this, new FloatingToolbar.Listener() {
+			@Override public void onToggleTouchPointer()
+			{
+				if (inputManager != null)
+					inputManager.toggleTouchPointer();
+			}
+			@Override public void onToggleSysKeyboard()
+			{
+				if (inputManager != null)
+					inputManager.toggleSystemKeyboard();
+			}
+			@Override public void onToggleExtKeyboard()
+			{
+				if (inputManager != null)
+					inputManager.toggleExtendedKeyboard();
+			}
+		});
 
 		KeyboardView keyboardView = findViewById(R.id.extended_keyboard);
 		KeyboardView modifiersKeyboardView = findViewById(R.id.extended_keyboard_header);
@@ -338,12 +358,19 @@ public class SessionActivity extends AppCompatActivity
 	{
 		boolean fitSafeArea = ApplicationSettingsActivity.getFitRoundedCorners(this);
 		boolean hideStatusBar = ApplicationSettingsActivity.getHideStatusBar(this);
+		boolean hideNavBar = ApplicationSettingsActivity.getHideNavigationBar(this);
 
 		int insetsTop = windowInsets
 		                    .getInsets(WindowInsetsCompat.Type.statusBars() |
 		                               WindowInsetsCompat.Type.displayCutout())
 		                    .top;
 		rootView.setPadding(0, hideStatusBar ? 0 : insetsTop, 0, 0);
+		Insets navInsets = hideNavBar
+		                       ? Insets.NONE
+		                       : windowInsets.getInsets(WindowInsetsCompat.Type.navigationBars());
+		if (floatingToolbar != null)
+			floatingToolbar.setInsets(navInsets.left, hideStatusBar ? 0 : insetsTop,
+			                          navInsets.right, navInsets.bottom);
 
 		int safeLeft = 0, safeTop = 0, safeRight = 0, safeBottom = 0;
 		if (fitSafeArea && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
