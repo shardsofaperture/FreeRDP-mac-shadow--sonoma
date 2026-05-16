@@ -72,6 +72,7 @@ public class SessionActivity extends AppCompatActivity
 	private static final int REFRESH_SESSIONVIEW = 1;
 	private static final int DISPLAY_TOAST = 2;
 	private static final int GRAPHICS_CHANGED = 6;
+	private static final int POINTER_SET = 7;
 
 	private final Handler uiHandler = new Handler(Looper.getMainLooper()) {
 		@Override public void handleMessage(Message msg)
@@ -94,6 +95,24 @@ public class SessionActivity extends AppCompatActivity
 					Toast errorToast = Toast.makeText(getApplicationContext(), msg.obj.toString(),
 					                                  Toast.LENGTH_LONG);
 					errorToast.show();
+					break;
+				}
+				case POINTER_SET:
+				{
+					Bundle data = msg.getData();
+					if (data != null && data.containsKey("pixels"))
+					{
+						int[] pixels = data.getIntArray("pixels");
+						int width = data.getInt("width");
+						int height = data.getInt("height");
+						int hotX = data.getInt("hotX");
+						int hotY = data.getInt("hotY");
+						sessionView.setRemoteCursor(pixels, width, height, hotX, hotY);
+					}
+					else
+					{
+						sessionView.setRemoteCursor(null, 0, 0, 0, 0);
+					}
 					break;
 				}
 			}
@@ -728,6 +747,29 @@ public class SessionActivity extends AppCompatActivity
 	{
 		Log.v(TAG, "OnRemoteClipboardChanged: " + data);
 		mClipboardManager.setClipboardData(data);
+	}
+
+	@Override public void OnPointerSet(int[] pixels, int width, int height, int hotX, int hotY)
+	{
+		Bundle data = new Bundle();
+		data.putIntArray("pixels", pixels);
+		data.putInt("width", width);
+		data.putInt("height", height);
+		data.putInt("hotX", hotX);
+		data.putInt("hotY", hotY);
+		Message msg = uiHandler.obtainMessage(POINTER_SET);
+		msg.setData(data);
+		uiHandler.sendMessage(msg);
+	}
+
+	@Override public void OnPointerSetNull()
+	{
+		uiHandler.sendEmptyMessage(POINTER_SET);
+	}
+
+	@Override public void OnPointerSetDefault()
+	{
+		sessionView.setDefaultCursor();
 	}
 
 	// ****************************************************************************
