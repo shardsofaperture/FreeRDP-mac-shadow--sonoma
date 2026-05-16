@@ -57,6 +57,9 @@
 
 /* Defines the JNI version supported by this library. */
 #define FREERDP_JNI_VERSION FREERDP_VERSION_FULL
+
+static jclass gJavaActivityClass;
+static jmethodID gOnPointerSetMethod;
 static void android_OnChannelConnectedEventHandler(void* context,
                                                    const ChannelConnectedEventArgs* e)
 {
@@ -212,24 +215,82 @@ static BOOL android_pre_connect(freerdp* instance)
 	return TRUE;
 }
 
+typedef struct
+{
+	rdpPointer pointer;
+	size_t size;
+	void* data;
+} androidPointer;
+
 static BOOL android_Pointer_New(rdpContext* context, rdpPointer* pointer)
 {
 	WINPR_ASSERT(context);
 	WINPR_ASSERT(pointer);
 	WINPR_ASSERT(context->gdi);
 
+	androidPointer* ptr = (androidPointer*)pointer;
+	if (!ptr)
+		return FALSE;
+
+	ptr->size = 4ULL * pointer->width * pointer->height;
+	ptr->data = winpr_aligned_malloc(ptr->size, 16);
+	if (!ptr->data)
+		return FALSE;
+
+	if (!freerdp_image_copy_from_pointer_data(
+	        ptr->data, PIXEL_FORMAT_ARGB32, 0, 0, 0, pointer->width, pointer->height,
+	        pointer->xorMaskData, pointer->lengthXorMask, pointer->andMaskData,
+	        pointer->lengthAndMask, pointer->xorBpp, &context->gdi->palette))
+	{
+		winpr_aligned_free(ptr->data);
+		ptr->data = nullptr;
+		return FALSE;
+	}
+
 	return TRUE;
 }
 
 static void android_Pointer_Free(rdpContext* context, rdpPointer* pointer)
 {
-	WINPR_ASSERT(context);
+	WINPR_UNUSED(context);
+	androidPointer* ptr = (androidPointer*)pointer;
+
+	if (ptr)
+	{
+		winpr_aligned_free(ptr->data);
+		ptr->data = nullptr;
+	}
 }
 
 static BOOL android_Pointer_Set(rdpContext* context, rdpPointer* pointer)
 {
 	WINPR_ASSERT(context);
 	WINPR_ASSERT(pointer);
+
+	androidPointer* ptr = (androidPointer*)pointer;
+	if (!ptr->data)
+		return FALSE;
+
+	const jsize nPixels = (jsize)(pointer->width * pointer->height);
+
+	JNIEnv* env = NULL;
+	jboolean attached = jni_attach_thread(&env);
+
+	if (!gJavaActivityClass || !gOnPointerSetMethod)
+		goto done;
+
+	jintArray pixels = (*env)->NewIntArray(env, nPixels);
+	if (!pixels)
+		goto done;
+
+	(*env)->SetIntArrayRegion(env, pixels, 0, nPixels, (const jint*)ptr->data);
+	(*env)->CallStaticVoidMethod(env, gJavaActivityClass, gOnPointerSetMethod,
+	                             (jlong)context->instance, pixels, (jint)pointer->width,
+	                             (jint)pointer->height, (jint)pointer->xPos, (jint)pointer->yPos);
+	(*env)->DeleteLocalRef(env, pixels);
+done:
+	if (attached)
+		jni_detach_thread();
 
 	return TRUE;
 }
@@ -245,6 +306,7 @@ static BOOL android_Pointer_SetNull(rdpContext* context)
 {
 	WINPR_ASSERT(context);
 
+	freerdp_callback("OnPointerSetNull", "(J)V", (jlong)context->instance);
 	return TRUE;
 }
 
@@ -252,6 +314,7 @@ static BOOL android_Pointer_SetDefault(rdpContext* context)
 {
 	WINPR_ASSERT(context);
 
+	freerdp_callback("OnPointerSetDefault", "(J)V", (jlong)context->instance);
 	return TRUE;
 }
 
@@ -262,7 +325,7 @@ static BOOL android_register_pointer(rdpGraphics* graphics)
 	if (!graphics)
 		return FALSE;
 
-	pointer.size = sizeof(pointer);
+	pointer.size = sizeof(androidPointer);
 	pointer.New = android_Pointer_New;
 	pointer.Free = android_Pointer_Free;
 	pointer.Set = android_Pointer_Set;
@@ -994,8 +1057,6 @@ Java_com_freerdp_freerdpcore_services_LibFreeRDP_freerdp_1get_1build_1config(JNI
 	return (*env)->NewStringUTF(env, freerdp_get_build_config());
 }
 
-static jclass gJavaActivityClass = nullptr;
-
 jint JNI_OnLoad(JavaVM* vm, void* reserved)
 {
 	JNIEnv* env;
@@ -1026,6 +1087,8 @@ jint JNI_OnLoad(JavaVM* vm, void* reserved)
 
 	/* create global reference for class */
 	gJavaActivityClass = (*env)->NewGlobalRef(env, activityClass);
+	gOnPointerSetMethod =
+	    (*env)->GetStaticMethodID(env, gJavaActivityClass, "OnPointerSet", "(J[IIIII)V");
 	g_JavaVm = vm;
 	return init_callback_environment(vm, env);
 }

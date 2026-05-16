@@ -25,6 +25,7 @@ import android.util.Log;
 import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.view.PointerIcon;
 import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.view.inputmethod.BaseInputConnection;
@@ -364,6 +365,23 @@ public class SessionView extends View
 		void onSessionViewScroll(boolean down);
 
 		void onSessionViewHScroll(boolean right);
+	}
+
+	public void setRemoteCursor(int[] pixels, int width, int height, int hotX, int hotY)
+	{
+		if (pixels == null || width == 0 || height == 0)
+		{
+			setPointerIcon(PointerIcon.getSystemIcon(getContext(), PointerIcon.TYPE_NULL));
+			return;
+		}
+		Bitmap bm = Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888);
+		PointerIcon icon = PointerIcon.create(bm, hotX, hotY);
+		setPointerIcon(icon);
+	}
+
+	public void setDefaultCursor()
+	{
+		setPointerIcon(PointerIcon.getSystemIcon(getContext(), PointerIcon.TYPE_ARROW));
 	}
 
 	private class SessionGestureListener extends GestureDetector.SimpleOnGestureListener
