@@ -115,8 +115,7 @@ public class ShortcutsActivity extends AppCompatActivity
 			        ShortcutInfoCompat shortcutInfo =
 			            new ShortcutInfoCompat.Builder(this, "shortcut_" + strRef.hashCode())
 			                .setShortLabel(label)
-			                .setIcon(IconCompat.createWithResource(
-			                    this, R.drawable.icon_launcher_freerdp))
+			                .setIcon(IconCompat.createWithResource(this, R.mipmap.ic_launcher))
 			                .setIntent(shortcutIntent)
 			                .build();
 
