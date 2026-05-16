@@ -13,6 +13,8 @@ package com.freerdp.freerdpcore.presentation;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import androidx.appcompat.app.AppCompatDelegate;
+import androidx.preference.ListPreference;
 import androidx.preference.PreferenceManager;
 import android.widget.Toast;
 
@@ -112,6 +114,13 @@ public class ApplicationSettingsActivity
 		@Override public void onCreatePreferences(Bundle savedInstanceState, String rootKey)
 		{
 			setPreferencesFromResource(R.xml.settings_app_ui, rootKey);
+			ListPreference theme = findPreference(getString(R.string.pref_key_theme));
+			if (theme != null)
+				theme.setOnPreferenceChangeListener((p, v) -> {
+					AppCompatDelegate.setDefaultNightMode(nightModeFor((String)v));
+					requireActivity().recreate();
+					return true;
+				});
 		}
 	}
 
@@ -294,5 +303,24 @@ public class ApplicationSettingsActivity
 	{
 		SharedPreferences preferences = get(context);
 		return preferences.getString(context.getString(R.string.preference_key_client_name), "");
+	}
+
+	public static int getNightMode(Context context)
+	{
+		return nightModeFor(
+		    get(context).getString(context.getString(R.string.pref_key_theme), "auto"));
+	}
+
+	private static int nightModeFor(String value)
+	{
+		switch (value)
+		{
+			case "light":
+				return AppCompatDelegate.MODE_NIGHT_NO;
+			case "dark":
+				return AppCompatDelegate.MODE_NIGHT_YES;
+			default:
+				return AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM;
+		}
 	}
 }

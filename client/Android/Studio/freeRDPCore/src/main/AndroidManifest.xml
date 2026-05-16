@@ -58,12 +58,12 @@
             android:exported="false"
             android:name=".presentation.BookmarkActivity"
             android:label="@string/title_bookmark_settings"
-            android:theme="@style/Theme.Settings" />
+            android:theme="@style/Theme.Main" />
         <activity
             android:exported="true"
             android:name=".presentation.ApplicationSettingsActivity"
             android:label="@string/title_application_settings"
-            android:theme="@style/Theme.Settings"
+            android:theme="@style/Theme.Main" />
             android:windowSoftInputMode="stateHidden" />
         <activity
             android:exported="true"
