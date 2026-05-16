@@ -175,8 +175,7 @@ public abstract class AppDatabase extends RoomDatabase
 			{
 				db.execSQL("ALTER TABLE 'bookmarks' ADD '" + column +
 				           "_with_default' TEXT NOT NULL DEFAULT '';");
-				db.execSQL("UPDATE 'bookmarks' SET '" + column + "_with_default' = '" + column +
-				           "';");
+				db.execSQL("UPDATE bookmarks SET " + column + "_with_default = " + column);
 				db.execSQL("ALTER TABLE 'bookmarks' DROP '" + column + "';");
 				db.execSQL("ALTER TABLE 'bookmarks' RENAME COLUMN '" + column +
 				           "_with_default' to '" + column + "';");
@@ -187,8 +186,7 @@ public abstract class AppDatabase extends RoomDatabase
 			{
 				db.execSQL("ALTER TABLE 'bookmarks' ADD '" + column +
 				           "_with_default' TEXT NOT NULL DEFAULT 'INFO';");
-				db.execSQL("UPDATE 'bookmarks' SET '" + column + "_with_default' = '" + column +
-				           "';");
+				db.execSQL("UPDATE bookmarks SET " + column + "_with_default = " + column);
 				db.execSQL("ALTER TABLE 'bookmarks' DROP '" + column + "';");
 				db.execSQL("ALTER TABLE 'bookmarks' RENAME COLUMN '" + column +
 				           "_with_default' to '" + column + "';");
@@ -210,8 +208,8 @@ public abstract class AppDatabase extends RoomDatabase
 				db.execSQL("ALTER TABLE 'bookmarks' ADD '" + column.getKey() +
 				           "_with_default' INTEGER NOT NULL DEFAULT " +
 				           column.getValue().toString() + ";");
-				db.execSQL("UPDATE 'bookmarks' SET '" + column.getKey() + "_with_default' = '" +
-				           column.getKey() + "';");
+				db.execSQL("UPDATE bookmarks SET " + column.getKey() +
+				           "_with_default = " + column.getKey());
 				db.execSQL("ALTER TABLE 'bookmarks' DROP '" + column.getKey() + "';");
 				db.execSQL("ALTER TABLE 'bookmarks' RENAME COLUMN '" + column.getKey() +
 				           "_with_default' to '" + column.getKey() + "';");
@@ -239,8 +237,8 @@ public abstract class AppDatabase extends RoomDatabase
 				db.execSQL("ALTER TABLE 'bookmarks' ADD '" + column.getKey() +
 				           "_with_default' INTEGER NOT NULL DEFAULT " +
 				           column.getValue().toString() + ";");
-				db.execSQL("UPDATE 'bookmarks' SET '" + column.getKey() + "_with_default' = '" +
-				           column.getKey() + "';");
+				db.execSQL("UPDATE bookmarks SET " + column.getKey() +
+				           "_with_default = " + column.getKey());
 				db.execSQL("ALTER TABLE 'bookmarks' DROP '" + column.getKey() + "';");
 				db.execSQL("ALTER TABLE 'bookmarks' RENAME COLUMN '" + column.getKey() +
 				           "_with_default' to '" + column.getKey() + "';");
