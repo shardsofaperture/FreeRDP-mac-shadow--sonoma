@@ -43,7 +43,7 @@ import java.util.Stack;
 public class SessionView extends View
 {
 	public static final float MAX_SCALE_FACTOR = 3.0f;
-	public static final float MIN_SCALE_FACTOR = 1.0f;
+	public static final float MIN_SCALE_FACTOR = 0.75f;
 	private static final String TAG = "SessionView";
 	private static final float SCALE_FACTOR_DELTA = 0.0001f;
 	private static final float TOUCH_SCROLL_DELTA = 10.0f;
