@@ -238,7 +238,7 @@ static BOOL android_Pointer_New(rdpContext* context, rdpPointer* pointer)
 		return FALSE;
 
 	if (!freerdp_image_copy_from_pointer_data(
-	        ptr->data, PIXEL_FORMAT_ARGB32, 0, 0, 0, pointer->width, pointer->height,
+	        ptr->data, PIXEL_FORMAT_BGRA32, 0, 0, 0, pointer->width, pointer->height,
 	        pointer->xorMaskData, pointer->lengthXorMask, pointer->andMaskData,
 	        pointer->lengthAndMask, pointer->xorBpp, &context->gdi->palette))
 	{
