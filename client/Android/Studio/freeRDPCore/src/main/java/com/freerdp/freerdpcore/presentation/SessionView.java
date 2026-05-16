@@ -63,6 +63,12 @@ public class SessionView extends View
 	private GestureDetector gestureDetector;
 	private SessionState currentSession;
 
+	private int[] cursorPixels = null;
+	private int cursorWidth = 0;
+	private int cursorHeight = 0;
+	private int cursorHotX = 0;
+	private int cursorHotY = 0;
+
 	// private static final String TAG = "FreeRDP.SessionView";
 	private DoubleGestureDetector doubleGestureDetector;
 	public SessionView(Context context)
@@ -165,13 +171,13 @@ public class SessionView extends View
 
 	public void setZoom(float factor)
 	{
-		// calc scale matrix and inverse scale matrix (to correctly transform the view and moues
-		// coordinates)
 		scaleFactor = factor;
 		scaleMatrix.setScale(scaleFactor, scaleFactor);
 		invScaleMatrix.setScale(1.0f / scaleFactor, 1.0f / scaleFactor);
 
-		// update layout
+		if (cursorPixels != null)
+			applyScaledCursor();
+
 		requestLayout();
 	}
 
@@ -371,11 +377,27 @@ public class SessionView extends View
 	{
 		if (pixels == null || width == 0 || height == 0)
 		{
+			cursorPixels = null;
 			setPointerIcon(PointerIcon.getSystemIcon(getContext(), PointerIcon.TYPE_NULL));
 			return;
 		}
-		Bitmap bm = Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888);
-		PointerIcon icon = PointerIcon.create(bm, hotX, hotY);
+		cursorPixels = pixels;
+		cursorWidth = width;
+		cursorHeight = height;
+		cursorHotX = hotX;
+		cursorHotY = hotY;
+		applyScaledCursor();
+	}
+
+	private void applyScaledCursor()
+	{
+		int scaledWidth = Math.max(1, (int)(cursorWidth * scaleFactor));
+		int scaledHeight = Math.max(1, (int)(cursorHeight * scaleFactor));
+		Bitmap bm =
+		    Bitmap.createBitmap(cursorPixels, cursorWidth, cursorHeight, Bitmap.Config.ARGB_8888);
+		Bitmap scaled = Bitmap.createScaledBitmap(bm, scaledWidth, scaledHeight, true);
+		PointerIcon icon =
+		    PointerIcon.create(scaled, cursorHotX * scaleFactor, cursorHotY * scaleFactor);
 		setPointerIcon(icon);
 	}
 
