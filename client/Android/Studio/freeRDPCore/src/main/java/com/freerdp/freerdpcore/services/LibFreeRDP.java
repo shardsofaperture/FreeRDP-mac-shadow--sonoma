@@ -151,6 +151,8 @@ public class LibFreeRDP
 	private static native boolean freerdp_send_unicodekey_event(long inst, int keycode,
 	                                                            boolean down);
 
+	private static native boolean freerdp_is_unicode_input_supported(long inst);
+
 	private static native boolean freerdp_send_clipboard_data(long inst, String data);
 
 	private static native String freerdp_get_last_error_string(long inst);
@@ -514,6 +516,11 @@ public class LibFreeRDP
 	public static boolean sendUnicodeKeyEvent(long inst, int keycode, boolean down)
 	{
 		return freerdp_send_unicodekey_event(inst, keycode, down);
+	}
+
+	public static boolean isUnicodeInputSupported(long inst)
+	{
+		return freerdp_is_unicode_input_supported(inst);
 	}
 
 	public static boolean sendClipboardData(long inst, String data)

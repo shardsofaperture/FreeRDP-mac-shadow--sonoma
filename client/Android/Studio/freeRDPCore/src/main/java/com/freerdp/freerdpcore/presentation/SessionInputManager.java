@@ -517,8 +517,13 @@ public class SessionInputManager
 	{
 		if (instance == 0)
 			return;
-		LibFreeRDP.sendUnicodeKeyEvent(instance, unicodeKey, true);
-		LibFreeRDP.sendUnicodeKeyEvent(instance, unicodeKey, false);
+		if (LibFreeRDP.isUnicodeInputSupported(instance))
+		{
+			LibFreeRDP.sendUnicodeKeyEvent(instance, unicodeKey, true);
+			LibFreeRDP.sendUnicodeKeyEvent(instance, unicodeKey, false);
+		}
+		else
+			keyboardMapper.processUnicodeFallback(unicodeKey);
 	}
 
 	@Override public void switchKeyboard(int keyboardType)
