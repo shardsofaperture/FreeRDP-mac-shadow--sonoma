@@ -969,6 +969,21 @@ Java_com_freerdp_freerdpcore_services_LibFreeRDP_freerdp_1send_1unicodekey_1even
 }
 
 JNIEXPORT jboolean JNICALL
+Java_com_freerdp_freerdpcore_services_LibFreeRDP_freerdp_1is_1unicode_1input_1supported(
+    JNIEnv* env, jclass cls, jlong instance)
+{
+	freerdp* inst = (freerdp*)instance;
+
+	if (!inst || !inst->context || !inst->context->settings)
+		return JNI_FALSE;
+
+	if (!freerdp_settings_get_bool(inst->context->settings, FreeRDP_UnicodeInput))
+		return JNI_FALSE;
+
+	return JNI_TRUE;
+}
+
+JNIEXPORT jboolean JNICALL
 Java_com_freerdp_freerdpcore_services_LibFreeRDP_freerdp_1send_1cursor_1event(
     JNIEnv* env, jclass cls, jlong instance, jint x, jint y, jint flags)
 {

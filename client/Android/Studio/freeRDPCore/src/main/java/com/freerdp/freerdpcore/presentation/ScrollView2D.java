@@ -25,7 +25,6 @@ import android.content.Context;
 import android.graphics.Rect;
 import android.util.AttributeSet;
 import android.view.FocusFinder;
-import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.VelocityTracker;
 import android.view.View;
@@ -266,92 +265,6 @@ public class ScrollView2D extends FrameLayout
 			    (getWidth() < childWidth + getPaddingLeft() + getPaddingRight());
 		}
 		return false;
-	}
-
-	@Override public boolean dispatchKeyEvent(KeyEvent event)
-	{
-		// Let the focused view and/or our descendants get the key first
-		boolean handled = super.dispatchKeyEvent(event);
-		if (handled)
-		{
-			return true;
-		}
-		return executeKeyEvent(event);
-	}
-
-	/**
-	 * You can call this function yourself to have the scroll view perform
-	 * scrolling from a key event, just as if the event had been dispatched to
-	 * it by the view hierarchy.
-	 *
-	 * @param event The key event to execute.
-	 * @return Return true if the event was handled, else false.
-	 */
-	public boolean executeKeyEvent(KeyEvent event)
-	{
-		mTempRect.setEmpty();
-		if (!canScroll())
-		{
-			if (isFocused())
-			{
-				View currentFocused = findFocus();
-				if (currentFocused == this)
-					currentFocused = null;
-				View nextFocused =
-				    FocusFinder.getInstance().findNextFocus(this, currentFocused, View.FOCUS_DOWN);
-				return nextFocused != null && nextFocused != this &&
-				    nextFocused.requestFocus(View.FOCUS_DOWN);
-			}
-			return false;
-		}
-		boolean handled = false;
-		if (event.getAction() == KeyEvent.ACTION_DOWN)
-		{
-			switch (event.getKeyCode())
-			{
-				case KeyEvent.KEYCODE_DPAD_UP:
-					if (!event.isAltPressed())
-					{
-						handled = arrowScroll(View.FOCUS_UP, false);
-					}
-					else
-					{
-						handled = fullScroll(View.FOCUS_UP, false);
-					}
-					break;
-				case KeyEvent.KEYCODE_DPAD_DOWN:
-					if (!event.isAltPressed())
-					{
-						handled = arrowScroll(View.FOCUS_DOWN, false);
-					}
-					else
-					{
-						handled = fullScroll(View.FOCUS_DOWN, false);
-					}
-					break;
-				case KeyEvent.KEYCODE_DPAD_LEFT:
-					if (!event.isAltPressed())
-					{
-						handled = arrowScroll(View.FOCUS_LEFT, true);
-					}
-					else
-					{
-						handled = fullScroll(View.FOCUS_LEFT, true);
-					}
-					break;
-				case KeyEvent.KEYCODE_DPAD_RIGHT:
-					if (!event.isAltPressed())
-					{
-						handled = arrowScroll(View.FOCUS_RIGHT, true);
-					}
-					else
-					{
-						handled = fullScroll(View.FOCUS_RIGHT, true);
-					}
-					break;
-			}
-		}
-		return handled;
 	}
 
 	@Override public boolean onInterceptTouchEvent(MotionEvent ev)
