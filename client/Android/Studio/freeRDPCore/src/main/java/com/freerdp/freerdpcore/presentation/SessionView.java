@@ -302,13 +302,15 @@ public class SessionView extends View
 	// Handle all physical mouse buttons here; finger taps come via onSingleTapUp.
 	@Override public boolean onGenericMotionEvent(MotionEvent event)
 	{
-		if (!event.isFromSource(InputDevice.SOURCE_MOUSE))
+		final boolean isPointer = event.isFromSource(InputDevice.SOURCE_CLASS_POINTER);
+		if (!isPointer)
 			return false;
 
+		final boolean isMouse = event.isFromSource(InputDevice.SOURCE_MOUSE);
 		int action = event.getActionMasked();
 
-		if (action == MotionEvent.ACTION_BUTTON_PRESS ||
-		    action == MotionEvent.ACTION_BUTTON_RELEASE)
+		if (isMouse && (action == MotionEvent.ACTION_BUTTON_PRESS ||
+		                action == MotionEvent.ACTION_BUTTON_RELEASE))
 		{
 			boolean down = action == MotionEvent.ACTION_BUTTON_PRESS;
 			MotionEvent mapped = mapTouchEvent(event);
