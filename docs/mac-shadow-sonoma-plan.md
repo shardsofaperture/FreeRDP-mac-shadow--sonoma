@@ -1,332 +1,346 @@
-# FreeRDP macOS Shadow Server: Sonoma and Windows 98 Plan
+<!-- markdownlint-disable MD013 -->
 
-## Goal
+# FreeRDP macOS Shadow Server: Sonoma and Windows 98 Roadmap
 
-Export the physical macOS Sonoma desktop through FreeRDP's shadow server to
-Microsoft Remote Desktop 5.2 on Windows 98 SE, using a sharp 1024x768,
-16-bit-color desktop with low interactive latency.
+## Mission and constraints
 
-The initial deliverable repairs the existing `CGDisplayStream` backend because
-Sonoma still provides that API. ScreenCaptureKit is a follow-on backend for
-newer SDKs and macOS releases, not a prerequisite for the Sonoma experiment.
+The project exports the physical macOS 14 Sonoma desktop through FreeRDP's
+shadow server to Microsoft Remote Desktop 5.2 on Windows 98 SE. The target is a
+sharp 1024×768, 16-bit-color desktop with low interactive latency.
 
-## Non-goals for the First Deliverable
+The initial work repairs the existing `CGDisplayStream` backend, which Sonoma
+still provides. ScreenCaptureKit is a later, separately reviewable capture
+backend, not a prerequisite for the Sonoma experiment.
 
-- No H.264, HEVC, AV1, or other video codec path.
-- No audio redirection, drive redirection, clipboard, multi-monitor, or Retina
-  optimization until the basic desktop is stable.
-- No direct Internet listener. The service binds to loopback and travels
-  through an SSH tunnel.
-- No global weakening of FreeRDP security defaults.
+The first validated deliverable does not include video codecs, audio, drive
+redirection, clipboard, multi-monitor support, or Retina optimization. It must
+not expose a listener directly to the Internet or weaken FreeRDP's security
+defaults globally. The intended deployment is `127.0.0.1:3390` through an SSH
+tunnel.
 
-## Current Source Baseline
+## Baseline and retained architecture
 
-- Upstream: `FreeRDP/FreeRDP`
-- Baseline commit: `9415f2d11e4cbc4e25d3d9fd0c4271e2e05d5c58`
-- Repository: `FreeRDP-mac-shadow--sonoma`
-- Codex environment: `FreeRDP-mac-shadow--sonoma`
-- Integration branch: `master`
-- Primary backend: `server/shadow/Mac/mac_shadow.c`
-- Backend state: `server/shadow/Mac/mac_shadow.h`
-- Legacy bitmap path: `server/shadow/shadow_client.c`
-- Server arguments/security negotiation: `server/shadow/shadow_server.c` and
-  `server/shadow/cli/shadow.c`
+| Item | Value |
+| --- | --- |
+| Upstream | [`FreeRDP/FreeRDP`](https://github.com/FreeRDP/FreeRDP) |
+| Baseline commit | `9415f2d11e4cbc4e25d3d9fd0c4271e2e05d5c58` |
+| Repository | `FreeRDP-mac-shadow--sonoma` |
+| Integration branch | `master` |
+| Capture backend/state | `server/shadow/Mac/mac_shadow.c`, `server/shadow/Mac/mac_shadow.h` |
+| Legacy bitmap path | `server/shadow/shadow_client.c` |
+| Arguments/security | `server/shadow/shadow_server.c`, `server/shadow/cli/shadow.c` |
 
 At less than 32-bit client color depth, the generic shadow client already
-selects `FREERDP_CODEC_INTERLEAVED`, splits updates into 64x64 rectangles, and
-compresses them with the classic bitmap path. That is the principal reason to
-repair this backend instead of creating a new remote-desktop protocol.
+selects `FREERDP_CODEC_INTERLEAVED`, splits updates into 64×64 rectangles, and
+compresses them with the classic bitmap path. Retaining the generic shadow
+server, RDP transport, classic encoder, and command-line interface minimizes
+fork-specific behavior and preserves current-client compatibility. Capture can
+later move to ScreenCaptureKit without replacing that publication and protocol
+path.
 
-## Defect and Implementation Status
+## Roadmap at a glance
 
-### Capture callback and dirty regions
+Patch 0 is the immediate, hardware-dependent blocker. No source repair can be
+called validated until that Sonoma baseline exists.
 
-Patches 1 and 2 now derive dirty rectangles from the callback's current
-`updateRef`, validate the callback context before dereferencing it, clamp dirty
-rectangles before conversion, and keep the invalid region populated through
-frame publication. The repair is implemented in source but remains pending
-compilation and runtime validation on Sonoma.
+| Patch/phase | Milestone | Status | Depends on | Exit criterion |
+| --- | --- | --- | --- | --- |
+| 0. Sonoma baseline | Baseline/correctness | **Immediate blocker; hardware work required** | Sonoma host | Reproducible baseline matrix and saved logs, including failures |
+| 1. Capture callback | Baseline/correctness | **Implemented in source; compilation and runtime validation pending** | Patch 0 environment | No first-frame null access; dirty state contains only pending work |
+| 2. Locking/publication | Baseline/correctness | **Implemented in source; compilation and runtime validation pending** | Patches 0–1 | Stress/runtime checks find no obvious race or unbalanced lock |
+| 3. First frame/refresh | Baseline/correctness | Planned | Patches 1–2 | Every initial connection and reconnect immediately gets a complete desktop |
+| 4. Lifecycle | Baseline/correctness | Planned | Patches 1–3 | Repeated start/stop and failure cycles leave no capture or worker resources |
+| 5. Input | Usability | Planned | Patch 0; coordinate with Patch 4 ownership | Written Win98 keyboard/mouse matrix passes |
+| 6. Permissions | Usability | Planned | Patch 0; precedes packaging | Missing grants produce distinct, actionable diagnostics |
+| 7. Legacy profile | Win98 compatibility | Planned | Patches 3–6 | VAIO connects through SSH without changing normal security defaults |
+| 8. Measurement/tuning | Performance | Planned | Correctness and Patch 7 | Lowest-latency stable settings selected from recorded measurements |
+| 9. Stable wrapper | Packaging | Planned | Patches 4, 6–8 | Repeatable install and start/stop procedure on the iMac |
+| 10. ScreenCaptureKit | Modernization | Later | Validated `CGDisplayStream` publication contract | Current-SDK build retains the legacy RDP client path |
+| 11. Clipboard/files | Later client/channel | Later | Stable capture, input, lifecycle, and legacy security | Predictable opt-in transfer without broader default exposure |
+| 12. Win98 companion | Later client/channel | Later | Validated Patch 7 settings | Optional launcher/add-on makes the connection repeatable |
+| 13. Open-source client | Later client/channel | Later research | Measurements from Patch 8 | Auditable client measurably improves bounded interactive latency |
 
-### Locking
+Status is defined once in this table. The milestone sections below describe
+scope, dependencies, and verification rather than repeating readiness claims.
 
-The callback now uses structured cleanup for the surface critical section and
-IOSurface lock, checks the image-copy path, and clears the invalid region only
-after publication completes. Sonoma stress testing and Thread Sanitizer or an
-equivalent runtime check are still required before this repair is considered
-validated.
+## Milestone A: Baseline and correctness
 
-### First frame and reconnect
+### Patch 0 — Reproducible Sonoma baseline
 
-When there are no clients, the callback returns before copying the current
-frame into the shadow surface. A newly connected client can therefore receive
-an empty or stale framebuffer until a later display change occurs. A client
-refresh must force a full-frame capture/update.
-
-### Lifecycle
-
-`mac_shadow_subsystem_start()` does not retain its worker thread handle.
-`mac_shadow_subsystem_stop()` does nothing. The capture stream, worker thread,
-dispatch queue, and global subsystem pointer are not shut down and released as
-one ordered lifecycle. Restart and process exit can leak or race.
-
-### Input
-
-- Keyboard logic treats `KBD_FLAGS_DOWN` as a positive flag, although an RDP
-  key-down is normally represented by the absence of the release flag.
-- Unicode keyboard input and synchronize/modifier handling are stubs.
-- A move event is posted in the move branch and then a second event is posted
-  unconditionally, sometimes with `kCGEventNull`.
-- Negative wheel movement divides by 392 while positive movement divides by
-  120.
-- Extended mouse input is a stub.
-- A fresh `CGEventSource` is allocated for nearly every event instead of being
-  retained for the subsystem lifetime.
-
-### Sonoma permissions and diagnostics
-
-The backend does not preflight Screen Recording or Accessibility permission.
-A missing grant can look like a black screen or dead input. Startup must report
-the two capabilities independently and return actionable errors.
-
-## Patch Series
-
-### Patch 0: Baseline and reproducible build
-
-1. Build unmodified FreeRDP on the Sonoma iMac with the macOS shadow subsystem.
-2. Record compiler, SDK, architecture, CMake options, installed dependencies,
-   binary path, and exact launch command.
-3. Confirm whether the stock server starts, captures, accepts a modern RDP
-   client, and accepts the Windows 98 RDP 5.2 client.
+1. Build unmodified FreeRDP on the Sonoma iMac with warnings and the macOS
+   shadow subsystem enabled.
+2. Record compiler, SDK, architecture, CMake options, dependencies, binary path,
+   and exact launch command.
+3. Check startup and capture with a modern RDP client, then Microsoft RDP 5.2.
 4. Save debug logs for black screen, first connection, reconnect, and shutdown.
 
-Exit criterion: a repeatable baseline matrix, even if several cells fail.
+This baseline gates every subsequent validation claim. Its output is the
+repeatable baseline matrix, whether individual cells pass or fail.
 
-### Patch 1: Capture callback correctness — implemented, validation pending
+### Patch 1 — Capture callback correctness
 
 1. Reject non-complete statuses before dereferencing frame/update objects.
 2. Validate subsystem, server, surface, `frameSurface`, and `updateRef`.
 3. Derive dirty rectangles from the callback's current `updateRef`.
-4. Remove indefinite `lastUpdate` accumulation; retain update state only if a
+4. Remove indefinite `lastUpdate` accumulation; retain update state only when a
    bounded handoff genuinely requires it.
 5. Clamp rectangles to the shadow-surface dimensions before conversion.
 6. Log malformed or empty updates at an appropriate debug level.
 
-Exit criterion: no first-frame null access; dirty state represents only pending
-work.
+Validation requires a warnings-enabled build plus first-frame, malformed-update,
+idle/resume, and reconnect exercises on Sonoma.
 
-Implementation status: complete in source; pending compilation and runtime
-validation on macOS 14 Sonoma.
+### Patch 2 — Surface locking and frame publication
 
-### Patch 2: Surface locking and frame publication — implemented, validation pending
+1. Keep a defined lock boundary around region mutation, extent calculation,
+   surface copy, publication, and invalid-region clearing.
+2. Eliminate unmatched critical-section exits.
+3. Ensure the encoder cannot read pixels while capture mutates them.
+4. Avoid holding the client-list lock during expensive conversion when safe.
+5. Use assertions or structured cleanup for each critical-section and IOSurface
+   lock.
 
-1. Define the lock boundary for region mutation, extent calculation, surface
-   copy, and invalid-region clearing.
-2. Eliminate the unmatched `LeaveCriticalSection`.
-3. Ensure the encoder never reads pixels while the callback is mutating them.
-4. Avoid holding the client-list lock during expensive capture conversion where
-   possible.
-5. Add assertions or structured cleanup paths for every lock and IOSurface lock.
+Validation requires Thread Sanitizer or an equivalent runtime check plus manual
+stress with rapid display changes and reconnects.
 
-Exit criterion: Thread Sanitizer/manual stress testing shows no obvious race or
-unbalanced lock across rapid screen changes and reconnects.
+### Patch 3 — First-frame and refresh behavior
 
-Implementation status: complete in source; pending compilation, Thread
-Sanitizer/manual stress testing, and runtime validation on macOS 14 Sonoma.
+1. Maintain a current framebuffer with no connected client, or take a one-shot
+   full capture when the first client arrives.
+2. Make `SHADOW_MSG_IN_REFRESH_REQUEST_ID` trigger full invalidation and fresh
+   publication rather than sending potentially stale pixels.
+3. Connect to a completely static desktop.
+4. Disconnect, wait on a static desktop, and reconnect without local motion.
 
-### Patch 3: First-frame and refresh behavior
+### Patch 4 — Clean lifecycle
 
-1. Keep a valid current framebuffer even while no client is connected, or take
-   a one-shot full capture when the first client arrives.
-2. Turn `SHADOW_MSG_IN_REFRESH_REQUEST_ID` into a full invalidation plus frame
-   publication, not publication of potentially stale pixels.
-3. Test a completely static desktop followed by first connection.
-4. Test disconnect, static interval, and reconnect without moving the mouse on
-   the Mac.
+1. Store the worker handle and explicit running/stopping state.
+2. Signal the queue, stop `CGDisplayStream`, wait for the worker, and prevent new
+   callback work during shutdown.
+3. Release the stream, dispatch queue where required, event source, retained
+   updates, and thread handle through one ownership path.
+4. Clear `g_Subsystem` safely; prefer per-instance callback context if feasible.
+5. Unwind partial initialization and make failed/repeated starts deterministic.
 
-Exit criterion: every connection receives a complete desktop immediately.
+Twenty-five start/connect/disconnect/stop cycles, failed startup, sleep/wake,
+and clean process termination are required to exit this milestone.
 
-### Patch 4: Clean lifecycle
+## Milestone B: Usability
 
-1. Store the worker thread handle and explicit running/stopping state.
-2. On stop, signal the message queue, stop `CGDisplayStream`, wait for the worker,
-   and prevent new callback work.
-3. Release the stream, dispatch queue where required by deployment target, event
-   source, retained update objects, and thread handle in one ownership path.
-4. Clear `g_Subsystem` safely; preferably replace the global callback dependency
-   with per-instance context if the API shape allows it.
-5. Make partial initialization unwind correctly.
-6. Make repeated start/stop and failed-start sequences deterministic.
+### Patch 5 — Keyboard and mouse correctness
 
-Exit criterion: repeated launch/connect/disconnect/terminate cycles leave no
-worker, listener, or capture stream behind.
-
-### Patch 5: Keyboard and mouse correctness
-
-1. Interpret key-down as not-release and preserve the extended scan-code bit.
-2. Validate failed scan-code/key-code translation before posting.
+1. Treat key-down as the absence of the release flag and preserve extended
+   scan-code state.
+2. Reject failed scan-code/key-code translations before posting.
 3. Retain one `CGEventSource` per subsystem.
-4. Implement modifier synchronization for Shift, Control, Option/Alt, Caps Lock,
-   and Command mapping decisions.
-5. Implement Unicode input with `CGEventKeyboardSetUnicodeString` for clients
-   that send Unicode events.
-6. Post exactly one motion/drag event and one button transition per RDP event.
-7. Correct wheel sign and 120-unit normalization; preserve partial deltas if the
-   old client sends them.
-8. Implement or explicitly reject extended mouse buttons with a diagnostic.
+4. Synchronize Shift, Control, Option/Alt, Caps Lock, and the documented Command
+   mapping.
+5. Implement Unicode input for clients that send Unicode events.
+6. Post exactly one move/drag event and one button transition per RDP event.
+7. Normalize both wheel directions to 120 units and preserve partial deltas.
+8. Implement extended buttons or reject them with a clear diagnostic.
 
-Exit criterion: the Windows 98 client passes a written input matrix, including
-typing, shortcuts, drag, right-click, wheel both directions, and stuck-modifier
-recovery after disconnect.
+Exit requires the written Win98 input matrix: typing, shortcuts, extended keys,
+drag, right-click, wheel both ways, and stuck-modifier recovery after disconnect.
 
-### Patch 6: Permission preflight and operator diagnostics
+### Patch 6 — Permission preflight and diagnostics
 
-1. Preflight Screen Recording permission before capture startup.
-2. Preflight Accessibility permission before input injection.
-3. Distinguish capture unavailable, permission denied, stream creation failed,
-   and input unavailable in logs and exit status.
-4. Add an optional prompt path for an interactive `.app` wrapper, but keep the
-   command-line binary useful for already-granted permissions.
-5. Document the stable executable identity required for macOS privacy grants.
+1. Preflight Screen Recording before capture startup and Accessibility before
+   input injection.
+2. Distinguish capture unavailable, permission denied, stream creation failed,
+   and input unavailable in logs and exit behavior.
+3. Permit an optional prompt in a future interactive wrapper while retaining a
+   useful CLI for already-granted permissions.
+4. Document why macOS privacy grants require a stable executable identity.
 
-Exit criterion: a missing grant produces an explicit diagnosis rather than a
-black screen or silent input failure.
+Exit requires separate, actionable results for neither grant, capture only,
+input only, and both grants.
 
-### Patch 7: Windows 98 compatibility profile
+## Milestone C: Windows 98 compatibility
 
-1. Verify the exact command-line switches for classic RDP security, disabled
-   NLA/TLS as required by RDP 5.2, 16-bit color, port 3390, and loopback bind.
+### Patch 7 — Explicit legacy-client profile
+
+1. Verify the exact switches for classic RDP security, disabled NLA/TLS where
+   RDP 5.2 requires it, 16-bit color, port 3390, and loopback bind.
 2. Add a named profile or documented wrapper only if existing switches cannot
    express the configuration clearly.
-3. Confirm the client selects interleaved bitmap compression and does not enter
-   NSCodec, RemoteFX, AVC, or GFX paths.
-4. Keep authentication/security changes local to the explicit legacy profile.
-5. Verify the SSH tunnel carries the session without exposing the listener.
+3. Confirm interleaved bitmap compression is selected instead of NSCodec,
+   RemoteFX, AVC, or GFX.
+4. Keep legacy authentication/security behavior local to this profile.
+5. Verify the entire session through SSH without network listener exposure.
 
-Exit criterion: the VAIO connects through the tunnel without weakening the
-normal server defaults.
+This milestone depends on reliable first frame, lifecycle, input, and permission
+behavior. It exits only when the VAIO repeatedly reconnects through the tunnel
+without weakening server defaults.
 
-### Patch 8: Performance tuning for 1024x768
+## Milestone D: Performance
 
-1. Instrument capture-to-send time, bytes per update, queued frames, and dropped
-   or coalesced frames.
-2. Test 8, 12, 16, and 20 FPS caps at 16-bit color.
-3. Compare bounding-box publication with multiple dirty rectangles; avoid
-   converting a large bounding box when several small regions changed.
-4. Detect and discard stale intermediate frames instead of building latency.
-5. Verify cursor exclusion plus client-side cursor updates.
+### Patch 8 — Measure before tuning
+
+1. Instrument capture-to-send time, encoded bytes, queued frames, and dropped or
+   coalesced frames.
+2. Compare caps of 8, 12, 16, and 20 FPS at 16-bit color.
+3. Compare a bounding box with multiple dirty rectangles.
+4. Discard stale intermediate frames rather than accumulating latency.
+5. Verify cursor exclusion and client-side cursor updates.
 6. Measure idle, typing, menu use, dragging, scrolling, and full-screen motion
-   independently.
+   separately.
 
-Exit criterion: choose the lowest-latency stable settings for ordinary desktop
-work, with native 1024x768 retained throughout.
+The exit artifact is a recorded comparison and a justified, bounded-latency
+configuration at native 1024×768—not a claim of video-rate performance.
 
-### Patch 9: Packaging and operation
+## Milestone E: Packaging
+
+### Patch 9 — Stable identity and operation
 
 1. Produce a signed minimal `.app` wrapper or stable launcher identity for macOS
    privacy permissions.
-2. Add LaunchAgent/start-stop scripts only after lifecycle behavior is proven.
-3. Bind to `127.0.0.1:3390` by default in the local wrapper.
-4. Document Homebrew dependencies, source build, permissions, launch, tunnel,
-   Win98 client settings, logs, and complete removal.
-5. Keep Homebrew's stock installation untouched; package the fork separately.
+2. Add LaunchAgent/start-stop tooling only after lifecycle validation.
+3. Make the local wrapper bind to `127.0.0.1:3390` by default.
+4. Document dependencies, source build, permissions, launch, tunnel, client
+   settings, logs, and complete removal only after Sonoma validation.
+5. Keep the stock Homebrew installation untouched and package the fork
+   separately.
 
-Exit criterion: one repeatable install and one start/stop command on the iMac.
+Packaging depends on lifecycle, permissions, the legacy profile, and chosen
+performance settings. Its exit artifact is a repeatable install plus one
+start/stop procedure on the target iMac.
 
-### Patch 10: ScreenCaptureKit follow-on
+## Milestone F: Modernization
 
-1. Add a small Objective-C/Objective-C++ capture adapter using ScreenCaptureKit.
-2. Preserve the same `rdpShadowSurface` publication contract used by the repaired
-   backend.
-3. Select `CGDisplayStream` for Sonoma builds where desired and
-   ScreenCaptureKit for newer SDKs/releases, or retire the old backend after
-   validation.
-4. Keep input injection separate; ScreenCaptureKit replaces capture only.
+### Patch 10 — ScreenCaptureKit follow-on
 
-Exit criterion: builds against current macOS SDKs without depending on removed
-`CGDisplayStream` declarations, while preserving the legacy RDP client path.
+1. Add a small Objective-C or Objective-C++ ScreenCaptureKit adapter.
+2. Preserve the repaired backend's `rdpShadowSurface` publication contract.
+3. Select the backend by supported SDK/OS policy, or retire `CGDisplayStream`
+   only after comparative validation.
+4. Keep input injection separate because ScreenCaptureKit replaces capture only.
 
-### Later Phase 11: Clipboard and file transfer
+This work is intentionally isolated from the Sonoma repair series. It exits
+when current macOS SDKs build without removed declarations and both modern and
+legacy clients retain the established bitmap path.
 
-1. Add clipboard redirection only after capture, input, lifecycle, and legacy
-   security behavior are stable.
-2. Define a deliberately limited file-transfer path with explicit size,
-   destination, overwrite, and cancellation behavior rather than enabling broad
-   drive redirection by default.
-3. Treat all clipboard and transferred-file content as untrusted and keep the
-   loopback-plus-SSH deployment boundary.
-4. Test text encodings and filename handling against both modern clients and
-   Windows 98 separately.
+## Milestone G: Later client and virtual-channel work
 
-Exit criterion: clipboard and opt-in file transfer work predictably without
-expanding the default server exposure or destabilizing desktop updates.
+### Phase 11 — Clipboard and limited file transfer
 
-### Later Phase 12: Windows 98 companion tools
+Add clipboard redirection only after capture, input, lifecycle, and legacy
+security are stable. File transfer must be opt-in and define size, destination,
+overwrite, and cancellation behavior instead of enabling broad drive
+redirection. Treat content as untrusted; test text encodings and filenames with
+modern and Windows 98 clients independently. Exit requires predictable behavior
+without broader default exposure or desktop-update regressions.
 
-1. Build a small Windows 98 companion launcher that applies the validated RDP
-   5.2 connection settings and establishes or guides the SSH-forwarding setup.
-2. Design a separately installable virtual-channel add-on for features the
-   stock Microsoft client cannot provide.
-3. Keep the launcher and add-on optional so the unmodified RDP 5.2 client
-   remains a supported baseline.
-4. Document installation, removal, compatibility, and recovery on the VAIO.
+### Phase 12 — Windows 98 companion launcher and add-on
 
-Exit criterion: the companion package makes the validated legacy connection
-repeatable without requiring changes to FreeRDP's general defaults.
+Build an optional Windows 98 launcher that applies validated RDP 5.2 settings
+and establishes or guides SSH forwarding. A separately installable
+virtual-channel add-on may supply features absent from the Microsoft client.
+The unmodified Microsoft client remains the supported baseline. Document
+installation, removal, compatibility, and recovery. Exit requires a repeatable
+VAIO connection without FreeRDP-wide defaults or mandatory client changes.
 
-### Later Phase 13: Latency-optimized open-source client
+### Phase 13 — Latency-optimized open-source Windows 98 client
 
-1. Evaluate maintained open-source RDP client codebases that can still target
-   the Windows 98 environment or an appropriate lightweight companion device.
-2. Optimize input prioritization, frame pacing, dirty-rectangle handling, and
-   classic bitmap decode for bounded interactive latency rather than video FPS.
-3. Retain interoperability with the explicit loopback/SSH and legacy-security
-   profile while avoiding protocol extensions that lock the server to one
-   client.
-4. Publish the client, build instructions, measurement method, and comparable
-   latency results under an open-source license.
+Evaluate open-source RDP code that can target Windows 98 or an appropriate
+lightweight companion device. Optimize input priority, frame pacing, dirty
+rectangles, and classic bitmap decode for bounded interactive latency rather
+than video FPS. Retain interoperability with the loopback/SSH and explicit
+legacy-security profile. Publish source, build instructions, measurement method,
+and comparable results. Exit requires an auditable client that meets deployment
+constraints and measurably improves on the Microsoft RDP 5.2 baseline.
 
-Exit criterion: an auditable client matches the Windows 98 deployment
-constraints and measurably improves interactive latency over the Microsoft RDP
-5.2 baseline.
+## Detailed defect analysis
 
-## Test Matrix
+### Capture callback and dirty regions
+
+The original callback could consult retained update state instead of its current
+`updateRef`, dereference callback objects without sufficient checks, pass
+unclamped dirty rectangles into conversion, and clear invalid state too early.
+Patches 1–2 derive rectangles from the current callback, validate context, clamp
+coordinates, and retain invalid state through publication.
+
+### Locking and publication
+
+The former callback had mismatched cleanup possibilities around the surface
+critical section and IOSurface lock. Image-copy failure and invalid-region
+lifetime also needed a single structured publication boundary. Stress testing
+must still prove that callback mutation and encoder reads do not race.
+
+### First frame and reconnect
+
+With no clients, the callback returns before copying the current frame into the
+shadow surface. A new client can therefore see empty or stale pixels until the
+display changes. A refresh must force a full capture and update, not merely
+republish old storage.
+
+### Lifecycle
+
+`mac_shadow_subsystem_start()` does not retain its worker-thread handle, while
+`mac_shadow_subsystem_stop()` does no ordered shutdown. The stream, worker,
+dispatch queue, and global subsystem pointer can leak or race during restart and
+exit.
+
+### Input
+
+- Keyboard logic treats `KBD_FLAGS_DOWN` as a positive flag although RDP
+  key-down is normally represented by the absence of the release flag.
+- Unicode and synchronize/modifier handlers are stubs.
+- Motion can be posted once in the move branch and again unconditionally,
+  sometimes using `kCGEventNull`.
+- Negative wheel movement divides by 392 while positive movement divides by
+  120.
+- Extended mouse input is a stub.
+- Nearly every event allocates a new `CGEventSource`.
+
+### Sonoma permissions
+
+The backend does not preflight Screen Recording or Accessibility. A missing
+capture grant can resemble a black screen, while a missing input grant can
+resemble dead input. Startup must diagnose these capabilities independently.
+
+## Validation matrix
 
 | Area | Cases |
-|---|---|
-| Build | Intel Sonoma host; Apple Silicon build if available; warnings enabled |
-| Capture | first frame, idle frame, blank status, resolution change, sleep/wake |
-| Lifecycle | start, stop, failed start, reconnect, 25 repeated cycles |
-| Client | modern RDP control client; Windows 98 RDP 5.2 target client |
-| Display | 1024x768; 16-bit target; static desktop; scroll; full-screen change |
-| Keyboard | letters, symbols, modifiers, extended keys, Unicode, disconnect while held |
-| Mouse | move, left/right/middle, drag, wheel up/down, edges/corners |
-| Permissions | neither grant, capture only, input only, both grants |
-| Network | loopback direct; SSH tunnel; forced disconnect; high-latency link |
+| --- | --- |
+| Build | Intel Sonoma host; Apple Silicon if available; warnings enabled; macOS shadow enabled |
+| Capture | First frame; idle; blank status; malformed update; resolution change; sleep/wake |
+| Lifecycle | Start; stop; failed start; reconnect; 25 repeated cycles; clean exit |
+| Client | Modern RDP control; Microsoft RDP 5.2 on Windows 98 SE |
+| Display | 1024×768; 16-bit target; static desktop; scroll; full-screen change |
+| Keyboard | Letters; symbols; modifiers; extended keys; Unicode; disconnect while held |
+| Mouse | Move; left/right/middle; drag; wheel up/down; edges/corners; local cursor |
+| Permissions | Neither grant; capture only; input only; both grants |
+| Network | Loopback direct; SSH tunnel; forced disconnect; high-latency link |
+| Security | Legacy profile only; listener visibility; unchanged default negotiation |
 
-## Performance Measurements
+## Performance record
 
-For each workload, record:
+For every idle desktop, typing, window movement, scrolling, and full-screen
+motion run, record separately:
 
-- Mac capture callback rate and CPU use.
-- Dirty pixels and encoded bytes per second.
-- VAIO CPU use and observed update rate.
-- Input-to-visible-response latency, preferably from a high-frame-rate video.
-- Whether latency stays bounded during continuous scrolling.
+- Mac callback rate and CPU use;
+- dirty pixels and encoded bytes per second;
+- VAIO CPU use and observed update rate;
+- input-to-visible-response latency, preferably from high-frame-rate video; and
+- whether latency remains bounded under continuous activity.
 
-Success is not defined as 30 FPS video. The target is pixel-sharp 1024x768
-desktop work with immediate local cursor movement, responsive typing, and no
-ever-growing update queue.
+Success means pixel-sharp 1024×768 work, immediate local cursor motion,
+responsive typing, and no ever-growing update queue. It is not defined as 30 FPS
+video.
 
-## Commit and Review Strategy
+## Integration and review order
 
-- Keep patches 1 through 7 independently reviewable.
-- Land correctness before performance changes.
-- Do not combine the ScreenCaptureKit adapter with the Sonoma repair series.
-- Maintain a fork branch for deployment experiments and prepare a smaller
-  upstreamable PR series after validation.
-- Attach baseline and post-fix logs to the relevant commits or pull requests,
-  not to unrelated source files.
+- Keep each patch independently reviewable and land correctness before tuning.
+- Do not combine capture, input, security, packaging, or ScreenCaptureKit work.
+- Attach baseline and post-fix logs to their commits or pull requests.
+- Maintain the deployment fork while preparing smaller upstreamable repairs.
+- Begin with Patch 0 on the Sonoma iMac; it is the only immediate next action.
 
-## Immediate Next Actions
+## Attribution and license
 
-1. On the iMac, execute Patch 0 and record the reproducible Sonoma baseline.
+This work retains the architecture and implementation of
+[FreeRDP](https://github.com/FreeRDP/FreeRDP) and is distributed under the
+repository's [Apache License 2.0](../LICENSE). Credit remains with the upstream
+FreeRDP contributors and the Microsoft Open Specifications on which protocol
+interoperability depends.
