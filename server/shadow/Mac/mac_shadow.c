@@ -21,6 +21,8 @@
 #include <winpr/input.h>
 #include <winpr/sysinfo.h>
 
+#include <math.h>
+
 #include <freerdp/server/server-common.h>
 #include <freerdp/codec/color.h>
 #include <freerdp/codec/region.h>
@@ -273,35 +275,68 @@ static int mac_shadow_capture_stop(macShadowSubsystem* subsystem)
 static int mac_shadow_capture_get_dirty_region(macShadowSubsystem* subsystem,
                                                CGDisplayStreamUpdateRef updateRef)
 {
-	size_t numRects;
-	const CGRect* rects;
-	RECTANGLE_16 invalidRect;
-	rdpShadowSurface* surface = subsystem->common.server->surface;
+	size_t numRects = 0;
+	const CGRect* rects = nullptr;
+	rdpShadowSurface* surface = nullptr;
+
+	if (!subsystem || !subsystem->common.server || !subsystem->common.server->surface || !updateRef)
+		return -1;
+
+	surface = subsystem->common.server->surface;
+	if ((surface->width <= 0) || (surface->height <= 0) || (surface->width > UINT16_MAX) ||
+	    (surface->height > UINT16_MAX))
+		return -1;
+
 	rects = CGDisplayStreamUpdateGetRects(updateRef, kCGDisplayStreamUpdateDirtyRects, &numRects);
 
-	if (!numRects)
+	if (!rects || (numRects == 0))
+	{
+		WLog_DBG(TAG, "Display stream update contains no dirty rectangles");
 		return -1;
+	}
 
 	for (size_t index = 0; index < numRects; index++)
 	{
-		invalidRect.left = (UINT16)rects[index].origin.x;
-		invalidRect.top = (UINT16)rects[index].origin.y;
-		invalidRect.right = invalidRect.left + (UINT16)rects[index].size.width;
-		invalidRect.bottom = invalidRect.top + (UINT16)rects[index].size.height;
+		RECTANGLE_16 invalidRect = WINPR_C_ARRAY_INIT;
+		const CGFloat scale = subsystem->retina ? 2.0 : 1.0;
+		const CGRect rect = rects[index];
+		double left = floor(CGRectGetMinX(rect) / scale);
+		double top = floor(CGRectGetMinY(rect) / scale);
+		double right = ceil(CGRectGetMaxX(rect) / scale);
+		double bottom = ceil(CGRectGetMaxY(rect) / scale);
 
-		if (subsystem->retina)
+		if (!isfinite(left) || !isfinite(top) || !isfinite(right) || !isfinite(bottom))
+			continue;
+
+		left = fmax(0.0, fmin(left, surface->width));
+		top = fmax(0.0, fmin(top, surface->height));
+		right = fmax(0.0, fmin(right, surface->width));
+		bottom = fmax(0.0, fmin(bottom, surface->height));
+
+		if ((right <= left) || (bottom <= top))
+			continue;
+
+		invalidRect.left = (UINT16)left;
+		invalidRect.top = (UINT16)top;
+		invalidRect.right = (UINT16)right;
+		invalidRect.bottom = (UINT16)bottom;
+
+		if (!region16_union_rect(&(surface->invalidRegion), &(surface->invalidRegion),
+		                         &invalidRect))
 		{
-			/* scale invalid rect */
-			invalidRect.left /= 2;
-			invalidRect.top /= 2;
-			invalidRect.right /= 2;
-			invalidRect.bottom /= 2;
+			WLog_ERR(TAG, "Failed to add display stream dirty rectangle to invalid region");
+			region16_clear(&(surface->invalidRegion));
+			return -1;
 		}
-
-		region16_union_rect(&(surface->invalidRegion), &(surface->invalidRegion), &invalidRect);
 	}
 
-	return 0;
+	if (region16_is_empty(&(surface->invalidRegion)))
+	{
+		WLog_DBG(TAG, "Display stream update has no dirty rectangles inside the framebuffer");
+		return -1;
+	}
+
+	return 1;
 }
 
 static int freerdp_image_copy_from_retina(BYTE* pDstData, DWORD DstFormat, int nDstStep, int nXDst,
@@ -324,6 +359,10 @@ static int freerdp_image_copy_from_retina(BYTE* pDstData, DWORD DstFormat, int n
 
 	dstBitsPerPixel = FreeRDPGetBitsPerPixel(DstFormat);
 	dstBytesPerPixel = FreeRDPGetBytesPerPixel(DstFormat);
+	if (!pDstData || !pSrcData || (nWidth <= 0) || (nHeight <= 0) || (nXDst < 0) || (nYDst < 0) ||
+	    (nXSrc < 0) || (nYSrc < 0) || (nSrcStep <= 0) || (srcBytesPerPixel * nWidth > nSrcStep) ||
+	    (dstBytesPerPixel <= 0))
+		return -1;
 
 	if (nDstStep < 0)
 		nDstStep = dstBytesPerPixel * nWidth;
@@ -364,15 +403,26 @@ static void (^mac_capture_stream_handler)(
   int count;
   int width;
   int height;
-  int nSrcStep;
+  size_t srcStep;
+  size_t srcWidth;
+  size_t srcHeight;
   BOOL empty;
+  BOOL surfaceLocked = FALSE;
+  BOOL surfaceRegionLocked = FALSE;
+  BOOL publish = FALSE;
   kern_return_t rc;
-  BYTE* pSrcData;
+  BYTE* pSrcData = nullptr;
   RECTANGLE_16 surfaceRect;
   const RECTANGLE_16* extents;
   macShadowSubsystem* subsystem = g_Subsystem;
-  rdpShadowServer* server = subsystem->common.server;
-  rdpShadowSurface* surface = server->surface;
+  rdpShadowServer* server = nullptr;
+  rdpShadowSurface* surface = nullptr;
+
+  if (!subsystem || !subsystem->common.server || !subsystem->common.server->surface)
+	  return;
+
+  server = subsystem->common.server;
+  surface = server->surface;
 
   if (status != kCGDisplayStreamFrameStatusFrameComplete)
   {
@@ -395,12 +445,24 @@ static void (^mac_capture_stream_handler)(
 	  return;
 
   EnterCriticalSection(&(surface->lock));
-  mac_shadow_capture_get_dirty_region(subsystem, updateRef);
-  surfaceRect.left = 0;
-  surfaceRect.top = 0;
-  surfaceRect.right = surface->width;
-  surfaceRect.bottom = surface->height;
-  region16_intersect_rect(&(surface->invalidRegion), &(surface->invalidRegion), &surfaceRect);
+  surfaceRegionLocked = TRUE;
+  if (mac_shadow_capture_get_dirty_region(subsystem, updateRef) < 0)
+	  goto cleanup;
+
+  if ((surface->width > UINT16_MAX) || (surface->height > UINT16_MAX))
+  {
+	  WLog_ERR(TAG, "Shadow surface dimensions exceed the region coordinate range");
+	  goto cleanup;
+  }
+
+  surfaceRect.left = surfaceRect.top = 0;
+  surfaceRect.right = (UINT16)surface->width;
+  surfaceRect.bottom = (UINT16)surface->height;
+  if (!region16_intersect_rect(&(surface->invalidRegion), &(surface->invalidRegion), &surfaceRect))
+  {
+	  WLog_ERR(TAG, "Failed to clamp invalid region to the shadow surface");
+	  goto cleanup;
+  }
   empty = region16_is_empty(&(surface->invalidRegion));
 
   if (!empty)
@@ -413,28 +475,68 @@ static void (^mac_capture_stream_handler)(
 	  rc = IOSurfaceLock(frameSurface, kIOSurfaceLockReadOnly, nullptr);
 	  if (rc != kIOReturnSuccess)
 	  {
-		  LeaveCriticalSection(&(surface->lock));
 		  WLog_ERR(TAG, "IOSurfaceLock failed with status 0x%08" PRIx32, (UINT32)rc);
-		  return;
+		  goto cleanup;
 	  }
+	  surfaceLocked = TRUE;
 
 	  pSrcData = (BYTE*)IOSurfaceGetBaseAddress(frameSurface);
-	  nSrcStep = (int)IOSurfaceGetBytesPerRow(frameSurface);
+	  srcStep = IOSurfaceGetBytesPerRow(frameSurface);
+	  srcWidth = IOSurfaceGetWidth(frameSurface);
+	  srcHeight = IOSurfaceGetHeight(frameSurface);
+	  if (!pSrcData || (srcStep == 0) || (srcStep > INT_MAX) || (srcWidth == 0) ||
+		  (srcHeight == 0) || (srcWidth > (SIZE_MAX / 4)) || (srcStep < (srcWidth * 4)))
+	  {
+		  WLog_ERR(TAG, "IOSurface has invalid storage dimensions, base address, or row stride");
+		  goto cleanup;
+	  }
 
 	  if (subsystem->retina)
 	  {
-		  freerdp_image_copy_from_retina(surface->data, surface->format, surface->scanline, x, y,
-			                             width, height, pSrcData, nSrcStep, x, y);
+		  if (((size_t)extents->right * 2 > srcWidth) || ((size_t)extents->bottom * 2 > srcHeight))
+		  {
+			  WLog_ERR(TAG, "Retina dirty region exceeds the IOSurface bounds");
+			  goto cleanup;
+		  }
+	  }
+	  else if (((size_t)extents->right > srcWidth) || ((size_t)extents->bottom > srcHeight))
+	  {
+		  WLog_ERR(TAG, "Dirty region exceeds the IOSurface bounds");
+		  goto cleanup;
+	  }
+
+	  if (subsystem->retina)
+	  {
+		  if (freerdp_image_copy_from_retina(surface->data, surface->format, surface->scanline, x,
+			                                 y, width, height, pSrcData, (int)srcStep, x * 2,
+			                                 y * 2) < 0)
+		  {
+			  WLog_ERR(TAG, "Failed to copy Retina IOSurface pixels");
+			  goto cleanup;
+		  }
 	  }
 	  else
 	  {
-		  freerdp_image_copy_no_overlap(surface->data, surface->format, surface->scanline, x, y,
-			                            width, height, pSrcData, PIXEL_FORMAT_BGRX32, nSrcStep, x,
-			                            y, nullptr, FREERDP_FLIP_NONE);
+		  if (!freerdp_image_copy_no_overlap(surface->data, surface->format, surface->scanline, x,
+			                                 y, width, height, pSrcData, PIXEL_FORMAT_BGRX32,
+			                                 (UINT32)srcStep, x, y, nullptr, FREERDP_FLIP_NONE))
+		  {
+			  WLog_ERR(TAG, "Failed to copy IOSurface pixels");
+			  goto cleanup;
+		  }
 	  }
-	  IOSurfaceUnlock(frameSurface, kIOSurfaceLockReadOnly, nullptr);
-	  region16_clear(&(surface->invalidRegion));
+
+	  rc = IOSurfaceUnlock(frameSurface, kIOSurfaceLockReadOnly, nullptr);
+	  surfaceLocked = FALSE;
+	  if (rc != kIOReturnSuccess)
+	  {
+		  WLog_ERR(TAG, "IOSurfaceUnlock failed with status 0x%08" PRIx32, (UINT32)rc);
+		  goto cleanup;
+	  }
+
 	  LeaveCriticalSection(&(surface->lock));
+	  surfaceRegionLocked = FALSE;
+	  publish = TRUE;
 
 	  ArrayList_Lock(server->clients);
 	  count = ArrayList_Count(server->clients);
@@ -452,9 +554,27 @@ static void (^mac_capture_stream_handler)(
 	  }
 
 	  ArrayList_Unlock(server->clients);
+
+	  EnterCriticalSection(&(surface->lock));
+	  surfaceRegionLocked = TRUE;
+	  region16_clear(&(surface->invalidRegion));
   }
-  else
+
+cleanup:
+  if (surfaceLocked)
+  {
+	  rc = IOSurfaceUnlock(frameSurface, kIOSurfaceLockReadOnly, nullptr);
+	  if (rc != kIOReturnSuccess)
+		  WLog_ERR(TAG, "IOSurfaceUnlock during cleanup failed with status 0x%08" PRIx32,
+			       (UINT32)rc);
+  }
+
+  if (surfaceRegionLocked)
+  {
+	  if (!publish)
+		  region16_clear(&(surface->invalidRegion));
 	  LeaveCriticalSection(&(surface->lock));
+  }
 };
 
 static int mac_shadow_capture_init(macShadowSubsystem* subsystem)

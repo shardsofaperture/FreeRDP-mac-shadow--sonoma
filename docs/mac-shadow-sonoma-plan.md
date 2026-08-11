@@ -23,7 +23,9 @@ newer SDKs and macOS releases, not a prerequisite for the Sonoma experiment.
 
 - Upstream: `FreeRDP/FreeRDP`
 - Baseline commit: `9415f2d11e4cbc4e25d3d9fd0c4271e2e05d5c58`
-- Development branch: `mac-shadow-sonoma`
+- Repository: `FreeRDP-mac-shadow--sonoma`
+- Codex environment: `FreeRDP-mac-shadow--sonoma`
+- Development branch: `codex/mac-capture-publication-fix`
 - Primary backend: `server/shadow/Mac/mac_shadow.c`
 - Backend state: `server/shadow/Mac/mac_shadow.h`
 - Legacy bitmap path: `server/shadow/shadow_client.c`
@@ -239,6 +241,50 @@ Exit criterion: one repeatable install and one start/stop command on the iMac.
 Exit criterion: builds against current macOS SDKs without depending on removed
 `CGDisplayStream` declarations, while preserving the legacy RDP client path.
 
+### Later Phase 11: Clipboard and file transfer
+
+1. Add clipboard redirection only after capture, input, lifecycle, and legacy
+   security behavior are stable.
+2. Define a deliberately limited file-transfer path with explicit size,
+   destination, overwrite, and cancellation behavior rather than enabling broad
+   drive redirection by default.
+3. Treat all clipboard and transferred-file content as untrusted and keep the
+   loopback-plus-SSH deployment boundary.
+4. Test text encodings and filename handling against both modern clients and
+   Windows 98 separately.
+
+Exit criterion: clipboard and opt-in file transfer work predictably without
+expanding the default server exposure or destabilizing desktop updates.
+
+### Later Phase 12: Windows 98 companion tools
+
+1. Build a small Windows 98 companion launcher that applies the validated RDP
+   5.2 connection settings and establishes or guides the SSH-forwarding setup.
+2. Design a separately installable virtual-channel add-on for features the
+   stock Microsoft client cannot provide.
+3. Keep the launcher and add-on optional so the unmodified RDP 5.2 client
+   remains a supported baseline.
+4. Document installation, removal, compatibility, and recovery on the VAIO.
+
+Exit criterion: the companion package makes the validated legacy connection
+repeatable without requiring changes to FreeRDP's general defaults.
+
+### Later Phase 13: Latency-optimized open-source client
+
+1. Evaluate maintained open-source RDP client codebases that can still target
+   the Windows 98 environment or an appropriate lightweight companion device.
+2. Optimize input prioritization, frame pacing, dirty-rectangle handling, and
+   classic bitmap decode for bounded interactive latency rather than video FPS.
+3. Retain interoperability with the explicit loopback/SSH and legacy-security
+   profile while avoiding protocol extensions that lock the server to one
+   client.
+4. Publish the client, build instructions, measurement method, and comparable
+   latency results under an open-source license.
+
+Exit criterion: an auditable client matches the Windows 98 deployment
+constraints and measurably improves interactive latency over the Microsoft RDP
+5.2 baseline.
+
 ## Test Matrix
 
 | Area | Cases |
@@ -279,10 +325,4 @@ ever-growing update queue.
 
 ## Immediate Next Actions
 
-1. Fork `FreeRDP/FreeRDP` to `shardsofaperture/FreeRDP`.
-2. Add the fork as `origin` and keep `FreeRDP/FreeRDP` as `upstream`.
-3. Push `mac-shadow-sonoma` with this plan and `AGENTS.md`.
-4. Create a Codex cloud environment named `freerdp-mac-shadow-sonoma` for the
-   fork and default it to the development branch.
-5. On the iMac, execute Patch 0 before changing functional code.
-
+1. On the iMac, execute Patch 0 and record the reproducible Sonoma baseline.
