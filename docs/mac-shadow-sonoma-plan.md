@@ -25,7 +25,7 @@ newer SDKs and macOS releases, not a prerequisite for the Sonoma experiment.
 - Baseline commit: `9415f2d11e4cbc4e25d3d9fd0c4271e2e05d5c58`
 - Repository: `FreeRDP-mac-shadow--sonoma`
 - Codex environment: `FreeRDP-mac-shadow--sonoma`
-- Development branch: `codex/mac-capture-publication-fix`
+- Integration branch: `master`
 - Primary backend: `server/shadow/Mac/mac_shadow.c`
 - Backend state: `server/shadow/Mac/mac_shadow.h`
 - Legacy bitmap path: `server/shadow/shadow_client.c`
@@ -37,25 +37,23 @@ selects `FREERDP_CODEC_INTERLEAVED`, splits updates into 64x64 rectangles, and
 compresses them with the classic bitmap path. That is the principal reason to
 repair this backend instead of creating a new remote-desktop protocol.
 
-## Known Defects to Resolve
+## Defect and Implementation Status
 
 ### Capture callback and dirty regions
 
-The callback currently asks `mac_shadow_capture_get_dirty_region()` to read
-`subsystem->lastUpdate` before the callback stores or merges the current
-`updateRef`. On the first complete frame, `lastUpdate` is null. Later frames are
-merged into persistent state that is never cleared after successful delivery.
-
-The callback also touches `frameSurface` and dirty-region state before checking
-that `status == kCGDisplayStreamFrameStatusFrameComplete` and before validating
-`frameSurface` and `updateRef`.
+Patches 1 and 2 now derive dirty rectangles from the callback's current
+`updateRef`, validate the callback context before dereferencing it, clamp dirty
+rectangles before conversion, and keep the invalid region populated through
+frame publication. The repair is implemented in source but remains pending
+compilation and runtime validation on Sonoma.
 
 ### Locking
 
-The surface critical section is left after calculating the invalid region, then
-left again after copying pixels without a matching enter. Region extents are
-also read outside the lock that protects the region. Capture, pixel copying,
-frame notification, and region clearing need an explicit ownership model.
+The callback now uses structured cleanup for the surface critical section and
+IOSurface lock, checks the image-copy path, and clears the invalid region only
+after publication completes. Sonoma stress testing and Thread Sanitizer or an
+equivalent runtime check are still required before this repair is considered
+validated.
 
 ### First frame and reconnect
 
@@ -103,7 +101,7 @@ the two capabilities independently and return actionable errors.
 
 Exit criterion: a repeatable baseline matrix, even if several cells fail.
 
-### Patch 1: Capture callback correctness
+### Patch 1: Capture callback correctness — implemented, validation pending
 
 1. Reject non-complete statuses before dereferencing frame/update objects.
 2. Validate subsystem, server, surface, `frameSurface`, and `updateRef`.
@@ -116,7 +114,10 @@ Exit criterion: a repeatable baseline matrix, even if several cells fail.
 Exit criterion: no first-frame null access; dirty state represents only pending
 work.
 
-### Patch 2: Surface locking and frame publication
+Implementation status: complete in source; pending compilation and runtime
+validation on macOS 14 Sonoma.
+
+### Patch 2: Surface locking and frame publication — implemented, validation pending
 
 1. Define the lock boundary for region mutation, extent calculation, surface
    copy, and invalid-region clearing.
@@ -128,6 +129,9 @@ work.
 
 Exit criterion: Thread Sanitizer/manual stress testing shows no obvious race or
 unbalanced lock across rapid screen changes and reconnects.
+
+Implementation status: complete in source; pending compilation, Thread
+Sanitizer/manual stress testing, and runtime validation on macOS 14 Sonoma.
 
 ### Patch 3: First-frame and refresh behavior
 
