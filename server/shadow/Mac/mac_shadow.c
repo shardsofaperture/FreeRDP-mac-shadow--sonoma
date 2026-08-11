@@ -270,14 +270,14 @@ static int mac_shadow_capture_stop(macShadowSubsystem* subsystem)
 	return 1;
 }
 
-static int mac_shadow_capture_get_dirty_region(macShadowSubsystem* subsystem)
+static int mac_shadow_capture_get_dirty_region(macShadowSubsystem* subsystem,
+                                               CGDisplayStreamUpdateRef updateRef)
 {
 	size_t numRects;
 	const CGRect* rects;
 	RECTANGLE_16 invalidRect;
 	rdpShadowSurface* surface = subsystem->common.server->surface;
-	rects = CGDisplayStreamUpdateGetRects(subsystem->lastUpdate, kCGDisplayStreamUpdateDirtyRects,
-	                                      &numRects);
+	rects = CGDisplayStreamUpdateGetRects(updateRef, kCGDisplayStreamUpdateDirtyRects, &numRects);
 
 	if (!numRects)
 		return -1;
@@ -366,26 +366,42 @@ static void (^mac_capture_stream_handler)(
   int height;
   int nSrcStep;
   BOOL empty;
+  kern_return_t rc;
   BYTE* pSrcData;
   RECTANGLE_16 surfaceRect;
   const RECTANGLE_16* extents;
   macShadowSubsystem* subsystem = g_Subsystem;
   rdpShadowServer* server = subsystem->common.server;
   rdpShadowSurface* surface = server->surface;
+
+  if (status != kCGDisplayStreamFrameStatusFrameComplete)
+  {
+	  switch (status)
+	  {
+		  case kCGDisplayStreamFrameStatusFrameIdle:
+		  case kCGDisplayStreamFrameStatusStopped:
+		  case kCGDisplayStreamFrameStatusFrameBlank:
+		  default:
+			  return;
+	  }
+  }
+
+  if (!frameSurface || !updateRef)
+	  return;
+
   count = ArrayList_Count(server->clients);
 
   if (count < 1)
 	  return;
 
   EnterCriticalSection(&(surface->lock));
-  mac_shadow_capture_get_dirty_region(subsystem);
+  mac_shadow_capture_get_dirty_region(subsystem, updateRef);
   surfaceRect.left = 0;
   surfaceRect.top = 0;
   surfaceRect.right = surface->width;
   surfaceRect.bottom = surface->height;
   region16_intersect_rect(&(surface->invalidRegion), &(surface->invalidRegion), &surfaceRect);
   empty = region16_is_empty(&(surface->invalidRegion));
-  LeaveCriticalSection(&(surface->lock));
 
   if (!empty)
   {
@@ -394,7 +410,14 @@ static void (^mac_capture_stream_handler)(
 	  y = extents->top;
 	  width = extents->right - extents->left;
 	  height = extents->bottom - extents->top;
-	  IOSurfaceLock(frameSurface, kIOSurfaceLockReadOnly, nullptr);
+	  rc = IOSurfaceLock(frameSurface, kIOSurfaceLockReadOnly, nullptr);
+	  if (rc != kIOReturnSuccess)
+	  {
+		  LeaveCriticalSection(&(surface->lock));
+		  WLog_ERR(TAG, "IOSurfaceLock failed with status 0x%08" PRIx32, (UINT32)rc);
+		  return;
+	  }
+
 	  pSrcData = (BYTE*)IOSurfaceGetBaseAddress(frameSurface);
 	  nSrcStep = (int)IOSurfaceGetBytesPerRow(frameSurface);
 
@@ -409,9 +432,10 @@ static void (^mac_capture_stream_handler)(
 			                            width, height, pSrcData, PIXEL_FORMAT_BGRX32, nSrcStep, x,
 			                            y, nullptr, FREERDP_FLIP_NONE);
 	  }
+	  IOSurfaceUnlock(frameSurface, kIOSurfaceLockReadOnly, nullptr);
+	  region16_clear(&(surface->invalidRegion));
 	  LeaveCriticalSection(&(surface->lock));
 
-	  IOSurfaceUnlock(frameSurface, kIOSurfaceLockReadOnly, nullptr);
 	  ArrayList_Lock(server->clients);
 	  count = ArrayList_Count(server->clients);
 	  shadow_subsystem_frame_update(&subsystem->common);
@@ -428,39 +452,9 @@ static void (^mac_capture_stream_handler)(
 	  }
 
 	  ArrayList_Unlock(server->clients);
-	  EnterCriticalSection(&(surface->lock));
-	  region16_clear(&(surface->invalidRegion));
-	  LeaveCriticalSection(&(surface->lock));
-  }
-
-  if (status != kCGDisplayStreamFrameStatusFrameComplete)
-  {
-	  switch (status)
-	  {
-		  case kCGDisplayStreamFrameStatusFrameIdle:
-			  break;
-
-		  case kCGDisplayStreamFrameStatusStopped:
-			  break;
-
-		  case kCGDisplayStreamFrameStatusFrameBlank:
-			  break;
-
-		  default:
-			  break;
-	  }
-  }
-  else if (!subsystem->lastUpdate)
-  {
-	  CFRetain(updateRef);
-	  subsystem->lastUpdate = updateRef;
   }
   else
-  {
-	  CGDisplayStreamUpdateRef tmpRef = subsystem->lastUpdate;
-	  subsystem->lastUpdate = CGDisplayStreamUpdateCreateMergedUpdate(tmpRef, updateRef);
-	  CFRelease(tmpRef);
-  }
+	  LeaveCriticalSection(&(surface->lock));
 };
 
 static int mac_shadow_capture_init(macShadowSubsystem* subsystem)
@@ -597,12 +591,6 @@ static int mac_shadow_subsystem_uninit(rdpShadowSubsystem* rdpsubsystem)
 	macShadowSubsystem* subsystem = (macShadowSubsystem*)rdpsubsystem;
 	if (!subsystem)
 		return -1;
-
-	if (subsystem->lastUpdate)
-	{
-		CFRelease(subsystem->lastUpdate);
-		subsystem->lastUpdate = nullptr;
-	}
 
 	return 1;
 }

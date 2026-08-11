@@ -49,7 +49,6 @@ struct mac_shadow_subsystem
 	BOOL mouseDownOther;
 	CGDisplayStreamRef stream;
 	dispatch_queue_t captureQueue;
-	CGDisplayStreamUpdateRef lastUpdate;
 };
 
 #ifdef __cplusplus
