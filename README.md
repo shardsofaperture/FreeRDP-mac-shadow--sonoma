@@ -66,7 +66,8 @@ bitmap publication path.
 - [FreeRDP build documentation](docs/README.building)
 - [Upstream compilation guide](https://github.com/FreeRDP/FreeRDP/wiki/Compilation)
 - [Apache License 2.0](LICENSE)
-- [FreeRDP project website and acknowledgments](https://www.freerdp.com/)
+- [FreeRDP project website](https://www.freerdp.com/)
+- [Upstream FreeRDP contributors](https://github.com/FreeRDP/FreeRDP/graphs/contributors)
 
 ## Upstream attribution and license
 
