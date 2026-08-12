@@ -495,6 +495,50 @@ static void (^mac_capture_stream_handler)(
 		  goto cleanup;
 	  }
 
+	  if (!subsystem->retina)
+	  {
+		  /* Core Graphics damage can cover an entire composited window for a tiny pixel change.
+		   * Compare against the previous framebuffer so legacy bitmap clients only receive the
+		   * pixels that actually changed. The X11 shadow backend uses the same comparator. */
+		  RECTANGLE_16 changedRect = WINPR_C_ARRAY_INIT;
+		  const BYTE* pOldData =
+		      &surface->data[((size_t)y * surface->scanline) + ((size_t)x * 4)];
+		  const BYTE* pNewData = &pSrcData[((size_t)y * srcStep) + ((size_t)x * 4)];
+		  const int changed = shadow_capture_compare_with_format(
+		      pOldData, surface->format, surface->scanline, width, height, pNewData,
+		      PIXEL_FORMAT_BGRX32, (UINT32)srcStep, &changedRect);
+
+		  if (changed < 0)
+		  {
+			  WLog_ERR(TAG, "Failed to compare captured pixels with the shadow surface");
+			  goto cleanup;
+		  }
+
+		  if (changed == 0)
+		  {
+			  region16_clear(&(surface->invalidRegion));
+			  goto cleanup;
+		  }
+
+		  changedRect.left += (UINT16)x;
+		  changedRect.top += (UINT16)y;
+		  changedRect.right += (UINT16)x;
+		  changedRect.bottom += (UINT16)y;
+		  region16_clear(&(surface->invalidRegion));
+		  if (!region16_union_rect(&(surface->invalidRegion), &(surface->invalidRegion),
+		                           &changedRect))
+		  {
+			  WLog_ERR(TAG, "Failed to record changed framebuffer pixels");
+			  goto cleanup;
+		  }
+
+		  extents = region16_extents(&(surface->invalidRegion));
+		  x = extents->left;
+		  y = extents->top;
+		  width = extents->right - extents->left;
+		  height = extents->bottom - extents->top;
+	  }
+
 	  if (subsystem->retina)
 	  {
 		  if (freerdp_image_copy_from_retina(surface->data, surface->format, surface->scanline, x,
