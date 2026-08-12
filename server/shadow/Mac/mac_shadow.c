@@ -244,8 +244,8 @@ static int mac_shadow_detect_monitors(macShadowSubsystem* subsystem)
 	monitor = &(subsystem->common.monitors[0]);
 	monitor->left = 0;
 	monitor->top = 0;
-	monitor->right = subsystem->width;
-	monitor->bottom = subsystem->height;
+	monitor->right = subsystem->width - 1;
+	monitor->bottom = subsystem->height - 1;
 	monitor->flags = 1;
 	return 1;
 }
@@ -690,8 +690,8 @@ static UINT32 mac_shadow_enum_monitors(MONITOR_DEF* monitors, UINT32 maxMonitors
 	monitor = &monitors[index];
 	monitor->left = 0;
 	monitor->top = 0;
-	monitor->right = (int)wide;
-	monitor->bottom = (int)high;
+	monitor->right = (int)wide - 1;
+	monitor->bottom = (int)high - 1;
 	monitor->flags = 1;
 	return numMonitors;
 }
