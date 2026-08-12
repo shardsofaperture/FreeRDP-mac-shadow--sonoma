@@ -68,18 +68,10 @@ static BOOL mac_shadow_input_keyboard_event(rdpShadowSubsystem* subsystem, rdpSh
 
 	source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
 
-	if (flags & KBD_FLAGS_DOWN)
-	{
-		kbdEvent = CGEventCreateKeyboardEvent(source, (CGKeyCode)keycode, TRUE);
-		CGEventPost(kCGHIDEventTap, kbdEvent);
-		CFRelease(kbdEvent);
-	}
-	else if (flags & KBD_FLAGS_RELEASE)
-	{
-		kbdEvent = CGEventCreateKeyboardEvent(source, (CGKeyCode)keycode, FALSE);
-		CGEventPost(kCGHIDEventTap, kbdEvent);
-		CFRelease(kbdEvent);
-	}
+	kbdEvent = CGEventCreateKeyboardEvent(source, (CGKeyCode)keycode,
+	                                      (flags & KBD_FLAGS_RELEASE) == 0);
+	CGEventPost(kCGHIDEventTap, kbdEvent);
+	CFRelease(kbdEvent);
 
 	CFRelease(source);
 	return TRUE;
@@ -244,8 +236,8 @@ static int mac_shadow_detect_monitors(macShadowSubsystem* subsystem)
 	monitor = &(subsystem->common.monitors[0]);
 	monitor->left = 0;
 	monitor->top = 0;
-	monitor->right = subsystem->width;
-	monitor->bottom = subsystem->height;
+	monitor->right = subsystem->width - 1;
+	monitor->bottom = subsystem->height - 1;
 	monitor->flags = 1;
 	return 1;
 }
@@ -256,7 +248,10 @@ static int mac_shadow_capture_start(macShadowSubsystem* subsystem)
 	err = CGDisplayStreamStart(subsystem->stream);
 
 	if (err != kCGErrorSuccess)
+	{
+		WLog_ERR(TAG, "CGDisplayStreamStart failed with status %" PRId32, (INT32)err);
 		return -1;
+	}
 
 	return 1;
 }
@@ -439,11 +434,6 @@ static void (^mac_capture_stream_handler)(
   if (!frameSurface || !updateRef)
 	  return;
 
-  count = ArrayList_Count(server->clients);
-
-  if (count < 1)
-	  return;
-
   EnterCriticalSection(&(surface->lock));
   surfaceRegionLocked = TRUE;
   if (mac_shadow_capture_get_dirty_region(subsystem, updateRef) < 0)
@@ -503,6 +493,50 @@ static void (^mac_capture_stream_handler)(
 	  {
 		  WLog_ERR(TAG, "Dirty region exceeds the IOSurface bounds");
 		  goto cleanup;
+	  }
+
+	  if (!subsystem->retina)
+	  {
+		  /* Core Graphics damage can cover an entire composited window for a tiny pixel change.
+		   * Compare against the previous framebuffer so legacy bitmap clients only receive the
+		   * pixels that actually changed. The X11 shadow backend uses the same comparator. */
+		  RECTANGLE_16 changedRect = WINPR_C_ARRAY_INIT;
+		  const BYTE* pOldData =
+		      &surface->data[((size_t)y * surface->scanline) + ((size_t)x * 4)];
+		  const BYTE* pNewData = &pSrcData[((size_t)y * srcStep) + ((size_t)x * 4)];
+		  const int changed = shadow_capture_compare_with_format(
+		      pOldData, surface->format, surface->scanline, width, height, pNewData,
+		      PIXEL_FORMAT_BGRX32, (UINT32)srcStep, &changedRect);
+
+		  if (changed < 0)
+		  {
+			  WLog_ERR(TAG, "Failed to compare captured pixels with the shadow surface");
+			  goto cleanup;
+		  }
+
+		  if (changed == 0)
+		  {
+			  region16_clear(&(surface->invalidRegion));
+			  goto cleanup;
+		  }
+
+		  changedRect.left += (UINT16)x;
+		  changedRect.top += (UINT16)y;
+		  changedRect.right += (UINT16)x;
+		  changedRect.bottom += (UINT16)y;
+		  region16_clear(&(surface->invalidRegion));
+		  if (!region16_union_rect(&(surface->invalidRegion), &(surface->invalidRegion),
+		                           &changedRect))
+		  {
+			  WLog_ERR(TAG, "Failed to record changed framebuffer pixels");
+			  goto cleanup;
+		  }
+
+		  extents = region16_extents(&(surface->invalidRegion));
+		  x = extents->left;
+		  y = extents->top;
+		  width = extents->right - extents->left;
+		  height = extents->bottom - extents->top;
 	  }
 
 	  if (subsystem->retina)
@@ -585,14 +619,33 @@ static int mac_shadow_capture_init(macShadowSubsystem* subsystem)
 	CGDirectDisplayID displayId;
 	displayId = CGMainDisplayID();
 	subsystem->captureQueue = dispatch_queue_create("mac.shadow.capture", nullptr);
+	if (!subsystem->captureQueue)
+	{
+		WLog_ERR(TAG, "Failed to create display capture queue");
+		return -1;
+	}
+
 	keys[0] = (void*)kCGDisplayStreamShowCursor;
-	values[0] = (void*)kCFBooleanFalse;
+	values[0] = subsystem->common.server->ShowMouseCursor ? (void*)kCFBooleanTrue
+	                                                     : (void*)kCFBooleanFalse;
 	opts = CFDictionaryCreate(kCFAllocatorDefault, (const void**)keys, (const void**)values, 1,
 	                          nullptr, nullptr);
+	if (!opts)
+	{
+		WLog_ERR(TAG, "Failed to create display stream options");
+		return -1;
+	}
+
 	subsystem->stream = CGDisplayStreamCreateWithDispatchQueue(
 	    displayId, subsystem->pixelWidth, subsystem->pixelHeight, 'BGRA', opts,
 	    subsystem->captureQueue, mac_capture_stream_handler);
 	CFRelease(opts);
+	if (!subsystem->stream)
+	{
+		WLog_ERR(TAG, "Failed to create CGDisplayStream");
+		return -1;
+	}
+
 	return 1;
 }
 
@@ -603,15 +656,20 @@ static int mac_shadow_screen_grab(macShadowSubsystem* subsystem)
 
 static int mac_shadow_subsystem_process_message(macShadowSubsystem* subsystem, wMessage* message)
 {
-	rdpShadowServer* server = subsystem->common.server;
-	rdpShadowSurface* surface = server->surface;
-
 	switch (message->id)
 	{
 		case SHADOW_MSG_IN_REFRESH_REQUEST_ID:
-			EnterCriticalSection(&(surface->lock));
-			shadow_subsystem_frame_update((rdpShadowSubsystem*)subsystem);
-			LeaveCriticalSection(&(surface->lock));
+			if (!subsystem->captureQueue)
+				return -1;
+
+			/*
+			 * CGDisplayStream callbacks publish from captureQueue. Serialize refresh
+			 * publication on that queue as well so updateEvent never has two producers.
+			 * Do not hold surface->lock here: clients acquire it while consuming the event.
+			 */
+			dispatch_sync(subsystem->captureQueue, ^{
+			  shadow_subsystem_frame_update((rdpShadowSubsystem*)subsystem);
+			});
 			break;
 
 		default:
@@ -690,8 +748,8 @@ static UINT32 mac_shadow_enum_monitors(MONITOR_DEF* monitors, UINT32 maxMonitors
 	monitor = &monitors[index];
 	monitor->left = 0;
 	monitor->top = 0;
-	monitor->right = (int)wide;
-	monitor->bottom = (int)high;
+	monitor->right = (int)wide - 1;
+	monitor->bottom = (int)high - 1;
 	monitor->flags = 1;
 	return numMonitors;
 }
@@ -701,9 +759,10 @@ static int mac_shadow_subsystem_init(rdpShadowSubsystem* rdpsubsystem)
 	macShadowSubsystem* subsystem = (macShadowSubsystem*)rdpsubsystem;
 	g_Subsystem = subsystem;
 
-	mac_shadow_detect_monitors(subsystem);
-	mac_shadow_capture_init(subsystem);
-	return 1;
+	if (mac_shadow_detect_monitors(subsystem) < 0)
+		return -1;
+
+	return mac_shadow_capture_init(subsystem);
 }
 
 static int mac_shadow_subsystem_uninit(rdpShadowSubsystem* rdpsubsystem)
@@ -723,7 +782,8 @@ static int mac_shadow_subsystem_start(rdpShadowSubsystem* rdpsubsystem)
 	if (!subsystem)
 		return -1;
 
-	mac_shadow_capture_start(subsystem);
+	if (mac_shadow_capture_start(subsystem) < 0)
+		return -1;
 
 	if (!(thread =
 	          CreateThread(nullptr, 0, mac_shadow_subsystem_thread, (void*)subsystem, 0, nullptr)))
