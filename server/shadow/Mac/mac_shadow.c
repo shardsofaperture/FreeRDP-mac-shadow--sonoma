@@ -68,18 +68,10 @@ static BOOL mac_shadow_input_keyboard_event(rdpShadowSubsystem* subsystem, rdpSh
 
 	source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
 
-	if (flags & KBD_FLAGS_DOWN)
-	{
-		kbdEvent = CGEventCreateKeyboardEvent(source, (CGKeyCode)keycode, TRUE);
-		CGEventPost(kCGHIDEventTap, kbdEvent);
-		CFRelease(kbdEvent);
-	}
-	else if (flags & KBD_FLAGS_RELEASE)
-	{
-		kbdEvent = CGEventCreateKeyboardEvent(source, (CGKeyCode)keycode, FALSE);
-		CGEventPost(kCGHIDEventTap, kbdEvent);
-		CFRelease(kbdEvent);
-	}
+	kbdEvent = CGEventCreateKeyboardEvent(source, (CGKeyCode)keycode,
+	                                      (flags & KBD_FLAGS_RELEASE) == 0);
+	CGEventPost(kCGHIDEventTap, kbdEvent);
+	CFRelease(kbdEvent);
 
 	CFRelease(source);
 	return TRUE;
