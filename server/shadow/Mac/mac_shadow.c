@@ -590,7 +590,8 @@ static int mac_shadow_capture_init(macShadowSubsystem* subsystem)
 	}
 
 	keys[0] = (void*)kCGDisplayStreamShowCursor;
-	values[0] = (void*)kCFBooleanFalse;
+	values[0] = subsystem->common.server->ShowMouseCursor ? (void*)kCFBooleanTrue
+	                                                     : (void*)kCFBooleanFalse;
 	opts = CFDictionaryCreate(kCFAllocatorDefault, (const void**)keys, (const void**)values, 1,
 	                          nullptr, nullptr);
 	if (!opts)
