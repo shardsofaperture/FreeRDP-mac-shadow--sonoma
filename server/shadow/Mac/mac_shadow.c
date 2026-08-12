@@ -439,11 +439,6 @@ static void (^mac_capture_stream_handler)(
   if (!frameSurface || !updateRef)
 	  return;
 
-  count = ArrayList_Count(server->clients);
-
-  if (count < 1)
-	  return;
-
   EnterCriticalSection(&(surface->lock));
   surfaceRegionLocked = TRUE;
   if (mac_shadow_capture_get_dirty_region(subsystem, updateRef) < 0)
@@ -603,15 +598,20 @@ static int mac_shadow_screen_grab(macShadowSubsystem* subsystem)
 
 static int mac_shadow_subsystem_process_message(macShadowSubsystem* subsystem, wMessage* message)
 {
-	rdpShadowServer* server = subsystem->common.server;
-	rdpShadowSurface* surface = server->surface;
-
 	switch (message->id)
 	{
 		case SHADOW_MSG_IN_REFRESH_REQUEST_ID:
-			EnterCriticalSection(&(surface->lock));
-			shadow_subsystem_frame_update((rdpShadowSubsystem*)subsystem);
-			LeaveCriticalSection(&(surface->lock));
+			if (!subsystem->captureQueue)
+				return -1;
+
+			/*
+			 * CGDisplayStream callbacks publish from captureQueue. Serialize refresh
+			 * publication on that queue as well so updateEvent never has two producers.
+			 * Do not hold surface->lock here: clients acquire it while consuming the event.
+			 */
+			dispatch_sync(subsystem->captureQueue, ^{
+			  shadow_subsystem_frame_update((rdpShadowSubsystem*)subsystem);
+			});
 			break;
 
 		default:
