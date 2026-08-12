@@ -256,7 +256,10 @@ static int mac_shadow_capture_start(macShadowSubsystem* subsystem)
 	err = CGDisplayStreamStart(subsystem->stream);
 
 	if (err != kCGErrorSuccess)
+	{
+		WLog_ERR(TAG, "CGDisplayStreamStart failed with status %" PRId32, (INT32)err);
 		return -1;
+	}
 
 	return 1;
 }
@@ -580,14 +583,32 @@ static int mac_shadow_capture_init(macShadowSubsystem* subsystem)
 	CGDirectDisplayID displayId;
 	displayId = CGMainDisplayID();
 	subsystem->captureQueue = dispatch_queue_create("mac.shadow.capture", nullptr);
+	if (!subsystem->captureQueue)
+	{
+		WLog_ERR(TAG, "Failed to create display capture queue");
+		return -1;
+	}
+
 	keys[0] = (void*)kCGDisplayStreamShowCursor;
 	values[0] = (void*)kCFBooleanFalse;
 	opts = CFDictionaryCreate(kCFAllocatorDefault, (const void**)keys, (const void**)values, 1,
 	                          nullptr, nullptr);
+	if (!opts)
+	{
+		WLog_ERR(TAG, "Failed to create display stream options");
+		return -1;
+	}
+
 	subsystem->stream = CGDisplayStreamCreateWithDispatchQueue(
 	    displayId, subsystem->pixelWidth, subsystem->pixelHeight, 'BGRA', opts,
 	    subsystem->captureQueue, mac_capture_stream_handler);
 	CFRelease(opts);
+	if (!subsystem->stream)
+	{
+		WLog_ERR(TAG, "Failed to create CGDisplayStream");
+		return -1;
+	}
+
 	return 1;
 }
 
@@ -701,9 +722,10 @@ static int mac_shadow_subsystem_init(rdpShadowSubsystem* rdpsubsystem)
 	macShadowSubsystem* subsystem = (macShadowSubsystem*)rdpsubsystem;
 	g_Subsystem = subsystem;
 
-	mac_shadow_detect_monitors(subsystem);
-	mac_shadow_capture_init(subsystem);
-	return 1;
+	if (mac_shadow_detect_monitors(subsystem) < 0)
+		return -1;
+
+	return mac_shadow_capture_init(subsystem);
 }
 
 static int mac_shadow_subsystem_uninit(rdpShadowSubsystem* rdpsubsystem)
@@ -723,7 +745,8 @@ static int mac_shadow_subsystem_start(rdpShadowSubsystem* rdpsubsystem)
 	if (!subsystem)
 		return -1;
 
-	mac_shadow_capture_start(subsystem);
+	if (mac_shadow_capture_start(subsystem) < 0)
+		return -1;
 
 	if (!(thread =
 	          CreateThread(nullptr, 0, mac_shadow_subsystem_thread, (void*)subsystem, 0, nullptr)))
