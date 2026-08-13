@@ -128,8 +128,23 @@ pre-login/FileVault screen.
 
 While the server is on but no RDP client is connected, it keeps only the
 loopback listener running. Display capture starts for the first connected
-client and stops after the last client disconnects, so macOS should show its
-Screen Recording indicator only during an active RDP session.
+client and stops after the last client disconnects. System-audio capture follows
+the same connection lifetime, so macOS should show its recording indicator only
+during an active RDP session.
+
+System audio is available as a beta feature on macOS 14.2 and later. The Sonoma
+backend uses a private Core Audio process tap, leaves local Mac playback
+unmuted, converts the captured output to 44.1 kHz stereo 16-bit PCM, and sends
+it through the standard static `rdpsnd` channel. This path has been validated
+with iTunes and Microsoft Remote Desktop 5.2 on Windows 98. The current beta
+requires the Mac output tap to provide 44.1 kHz stereo 32-bit float audio; if
+that format is unavailable, video and input continue while the log reports
+that audio capture could not start.
+
+For an end-to-end channel diagnostic that does not depend on an application
+playing audio, launch the server with `FREERDP_MAC_SHADOW_TEST_TONE=1`. This
+replaces system-audio capture with a 440 Hz tone for that server run and is not
+enabled by the menu app by default.
 
 If the server process exits unexpectedly, the menu controller restarts it
 automatically with a bounded delay that increases from 1 to 30 seconds for

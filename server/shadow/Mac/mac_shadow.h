@@ -35,6 +35,8 @@ typedef struct mac_shadow_subsystem macShadowSubsystem;
 #include <CoreVideo/CoreVideo.h>
 #include <CoreGraphics/CoreGraphics.h>
 
+#include "mac_shadow_audio.h"
+
 struct mac_shadow_subsystem
 {
 	rdpShadowSubsystem common;
@@ -56,6 +58,13 @@ struct mac_shadow_subsystem
 	BOOL captureRunning;
 	CGDisplayStreamRef stream;
 	dispatch_queue_t captureQueue;
+	BOOL testToneEnabled;
+	double testTonePhase;
+	dispatch_queue_t audioQueue;
+	dispatch_source_t audioTimer;
+	BOOL audioNegotiated;
+	BOOL audioUnavailable;
+	MacShadowAudioCapture* audioCapture;
 };
 
 #ifdef __cplusplus
