@@ -21,7 +21,11 @@
 #include <winpr/input.h>
 #include <winpr/sysinfo.h>
 
+#include <errno.h>
 #include <math.h>
+#include <spawn.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #include <freerdp/server/server-common.h>
 #include <freerdp/codec/color.h>
@@ -34,11 +38,121 @@
 
 static macShadowSubsystem* g_Subsystem = nullptr;
 
+extern char** environ;
+
+static int mac_shadow_switch_display_mode(macShadowSubsystem* subsystem, const char* command,
+	                                      const char* transition);
+
+static void mac_shadow_message_free(UINT32 id, SHADOW_MSG_OUT* msg)
+{
+	WINPR_UNUSED(id);
+	free(msg);
+}
+
+static BOOL mac_shadow_client_connect(rdpShadowSubsystem* subsystem, rdpShadowClient* client)
+{
+	SHADOW_MSG_OUT_POINTER_ALPHA_UPDATE* msg = nullptr;
+	macShadowSubsystem* mac = (macShadowSubsystem*)subsystem;
+
+	if (!subsystem || !subsystem->server || !client)
+		return FALSE;
+
+	EnterCriticalSection(&mac->connectionLock);
+	if ((mac->connectedClients == 0) && mac->connectDisplayCommand)
+	{
+		if (mac_shadow_switch_display_mode(mac, mac->connectDisplayCommand, "first client connect") <
+		    0)
+		{
+			LeaveCriticalSection(&mac->connectionLock);
+			return FALSE;
+		}
+	}
+	mac->connectedClients++;
+	LeaveCriticalSection(&mac->connectionLock);
+
+	/* When the display stream excludes the pointer, request the client's local system pointer.
+	 * The generic shadow client translates this message to SYSPTR_DEFAULT. */
+	if (subsystem->server->ShowMouseCursor)
+		return TRUE;
+
+	msg = (SHADOW_MSG_OUT_POINTER_ALPHA_UPDATE*)calloc(
+	    1, sizeof(SHADOW_MSG_OUT_POINTER_ALPHA_UPDATE));
+	if (!msg)
+	{
+		WLog_WARN(TAG, "Failed to allocate the client-side pointer update");
+		return TRUE;
+	}
+
+	msg->common.Free = mac_shadow_message_free;
+	if (!shadow_client_post_msg(client, nullptr, SHADOW_MSG_OUT_POINTER_ALPHA_UPDATE_ID,
+	                            (SHADOW_MSG_OUT*)msg, nullptr))
+	{
+		free(msg);
+		WLog_WARN(TAG, "Failed to post the client-side pointer update");
+		return TRUE;
+	}
+
+	return TRUE;
+}
+
+static void mac_shadow_client_disconnect(rdpShadowSubsystem* subsystem, rdpShadowClient* client)
+{
+	macShadowSubsystem* mac = (macShadowSubsystem*)subsystem;
+
+	if (!subsystem || !client)
+		return;
+
+	EnterCriticalSection(&mac->connectionLock);
+	if (mac->connectedClients == 0)
+	{
+		WLog_WARN(TAG, "Client disconnect received with no connected macOS shadow clients");
+	}
+	else
+	{
+		mac->connectedClients--;
+		if ((mac->connectedClients == 0) && mac->disconnectDisplayCommand)
+		{
+			if (mac_shadow_switch_display_mode(mac, mac->disconnectDisplayCommand,
+			                                   "last client disconnect") < 0)
+				WLog_ERR(TAG, "Failed to restore the display mode after the last client disconnected");
+		}
+	}
+	LeaveCriticalSection(&mac->connectionLock);
+}
+
+static CGEventFlags mac_shadow_keyboard_modifier_flag(DWORD vkcode)
+{
+	switch (vkcode & ~KBDEXT)
+	{
+		case VK_LSHIFT:
+		case VK_RSHIFT:
+			return kCGEventFlagMaskShift;
+
+		case VK_LCONTROL:
+		case VK_RCONTROL:
+			return kCGEventFlagMaskControl;
+
+		case VK_LMENU:
+		case VK_RMENU:
+			return kCGEventFlagMaskAlternate;
+
+		case VK_LWIN:
+		case VK_RWIN:
+			return kCGEventFlagMaskCommand;
+
+		default:
+			return 0;
+	}
+}
+
 static BOOL mac_shadow_input_synchronize_event(rdpShadowSubsystem* subsystem,
                                                rdpShadowClient* client, UINT32 flags)
 {
 	if (!subsystem || !client)
 		return FALSE;
+
+	macShadowSubsystem* mac = (macShadowSubsystem*)subsystem;
+	mac->keyboardFlags = (flags & KBD_SYNC_CAPS_LOCK) ? kCGEventFlagMaskAlphaShift : 0;
 
 	return TRUE;
 }
@@ -48,32 +162,53 @@ static BOOL mac_shadow_input_keyboard_event(rdpShadowSubsystem* subsystem, rdpSh
 {
 	DWORD vkcode;
 	DWORD keycode;
+	DWORD scancode;
+	CGEventFlags modifierFlag;
 	BOOL extended;
 	CGEventRef kbdEvent;
-	CGEventSourceRef source;
+	macShadowSubsystem* mac = (macShadowSubsystem*)subsystem;
 	extended = (flags & KBD_FLAGS_EXTENDED) ? TRUE : FALSE;
 
-	if (!subsystem || !client)
+	if (!subsystem || !client || !mac->eventSource)
 		return FALSE;
 
+	scancode = code;
 	if (extended)
-		code |= KBDEXT;
+		scancode |= KBDEXT;
 
-	vkcode = GetVirtualKeyCodeFromVirtualScanCode(code, 4);
+	vkcode = GetVirtualKeyCodeFromVirtualScanCode(scancode, WINPR_KBD_TYPE_IBM_ENHANCED);
 
 	if (extended)
 		vkcode |= KBDEXT;
 
-	keycode = GetKeycodeFromVirtualKeyCode(vkcode, WINPR_KEYCODE_TYPE_APPLE);
+	if (vkcode == (VK_RCONTROL | KBDEXT))
+		keycode = APPLE_VK_RightControl;
+	else
+		keycode = GetKeycodeFromVirtualKeyCode(vkcode, WINPR_KEYCODE_TYPE_APPLE);
 
-	source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
+	if ((vkcode & ~KBDEXT) == VK_CAPITAL)
+	{
+		if ((flags & KBD_FLAGS_RELEASE) == 0)
+			mac->keyboardFlags ^= kCGEventFlagMaskAlphaShift;
+	}
+	else
+	{
+		modifierFlag = mac_shadow_keyboard_modifier_flag(vkcode);
+		if ((flags & KBD_FLAGS_RELEASE) != 0)
+			mac->keyboardFlags &= ~modifierFlag;
+		else
+			mac->keyboardFlags |= modifierFlag;
+	}
 
-	kbdEvent = CGEventCreateKeyboardEvent(source, (CGKeyCode)keycode,
+	kbdEvent = CGEventCreateKeyboardEvent(mac->eventSource, (CGKeyCode)keycode,
 	                                      (flags & KBD_FLAGS_RELEASE) == 0);
+	if (!kbdEvent)
+		return FALSE;
+
+	CGEventSetFlags(kbdEvent, mac->keyboardFlags);
 	CGEventPost(kCGHIDEventTap, kbdEvent);
 	CFRelease(kbdEvent);
 
-	CFRelease(source);
 	return TRUE;
 }
 
@@ -211,14 +346,28 @@ static int mac_shadow_detect_monitors(macShadowSubsystem* subsystem)
 {
 	size_t wide, high;
 	MONITOR_DEF* monitor;
+	MONITOR_DEF* virtualScreen;
 	CGDirectDisplayID displayId;
 	displayId = CGMainDisplayID();
 	CGDisplayModeRef mode = CGDisplayCopyDisplayMode(displayId);
+	if (!mode)
+	{
+		WLog_ERR(TAG, "Failed to query the main display mode");
+		return -1;
+	}
+
 	subsystem->pixelWidth = CGDisplayModeGetPixelWidth(mode);
 	subsystem->pixelHeight = CGDisplayModeGetPixelHeight(mode);
 	wide = CGDisplayPixelsWide(displayId);
 	high = CGDisplayPixelsHigh(displayId);
 	CGDisplayModeRelease(mode);
+	if ((wide == 0) || (high == 0) || (subsystem->pixelWidth <= 0) ||
+	    (subsystem->pixelHeight <= 0))
+	{
+		WLog_ERR(TAG, "Main display reported invalid dimensions");
+		return -1;
+	}
+
 	subsystem->retina = ((subsystem->pixelWidth / wide) == 2) ? TRUE : FALSE;
 
 	if (subsystem->retina)
@@ -239,12 +388,20 @@ static int mac_shadow_detect_monitors(macShadowSubsystem* subsystem)
 	monitor->right = subsystem->width - 1;
 	monitor->bottom = subsystem->height - 1;
 	monitor->flags = 1;
+	virtualScreen = &subsystem->common.virtualScreen;
+	*virtualScreen = *monitor;
 	return 1;
 }
 
 static int mac_shadow_capture_start(macShadowSubsystem* subsystem)
 {
 	CGError err;
+	if (!subsystem || !subsystem->stream)
+		return -1;
+
+	if (subsystem->captureRunning)
+		return 1;
+
 	err = CGDisplayStreamStart(subsystem->stream);
 
 	if (err != kCGErrorSuccess)
@@ -253,17 +410,28 @@ static int mac_shadow_capture_start(macShadowSubsystem* subsystem)
 		return -1;
 	}
 
+	subsystem->captureRunning = TRUE;
 	return 1;
 }
 
 static int mac_shadow_capture_stop(macShadowSubsystem* subsystem)
 {
 	CGError err;
+	if (!subsystem || !subsystem->stream)
+		return -1;
+
+	if (!subsystem->captureRunning)
+		return 1;
+
 	err = CGDisplayStreamStop(subsystem->stream);
 
 	if (err != kCGErrorSuccess)
+	{
+		WLog_ERR(TAG, "CGDisplayStreamStop failed with status %" PRId32, (INT32)err);
 		return -1;
+	}
 
+	subsystem->captureRunning = FALSE;
 	return 1;
 }
 
@@ -618,7 +786,14 @@ static int mac_shadow_capture_init(macShadowSubsystem* subsystem)
 	CFDictionaryRef opts;
 	CGDirectDisplayID displayId;
 	displayId = CGMainDisplayID();
-	subsystem->captureQueue = dispatch_queue_create("mac.shadow.capture", nullptr);
+	if (subsystem->stream)
+	{
+		WLog_ERR(TAG, "Display stream is already initialized");
+		return -1;
+	}
+
+	if (!subsystem->captureQueue)
+		subsystem->captureQueue = dispatch_queue_create("mac.shadow.capture", nullptr);
 	if (!subsystem->captureQueue)
 	{
 		WLog_ERR(TAG, "Failed to create display capture queue");
@@ -647,6 +822,102 @@ static int mac_shadow_capture_init(macShadowSubsystem* subsystem)
 	}
 
 	return 1;
+}
+
+static int mac_shadow_capture_release_stream(macShadowSubsystem* subsystem)
+{
+	if (!subsystem || !subsystem->stream)
+		return -1;
+
+	if (mac_shadow_capture_stop(subsystem) < 0)
+		return -1;
+
+	/* CGDisplayStream callbacks run on this serial queue. Drain callbacks from the old stream
+	 * before resizing its destination surface or releasing the stream. */
+	dispatch_sync(subsystem->captureQueue, ^{
+	});
+	CFRelease(subsystem->stream);
+	subsystem->stream = nullptr;
+	return 1;
+}
+
+static int mac_shadow_run_display_command(const char* command, const char* transition)
+{
+	int rc;
+	int status = 0;
+	pid_t pid = 0;
+	char* const argv[] = { (char*)command, nullptr };
+
+	if (!command || !transition || (command[0] != '/') || (access(command, X_OK) != 0))
+	{
+		WLog_ERR(TAG, "The %s display command must be an executable absolute path: %s", transition,
+		         command ? command : "(null)");
+		return -1;
+	}
+
+	WLog_INFO(TAG, "Running %s display command: %s", transition, command);
+	rc = posix_spawn(&pid, command, nullptr, nullptr, argv, environ);
+	if (rc != 0)
+	{
+		WLog_ERR(TAG, "Failed to start %s display command '%s': %s", transition, command,
+		         strerror(rc));
+		return -1;
+	}
+
+	do
+	{
+		rc = waitpid(pid, &status, 0);
+	} while ((rc < 0) && (errno == EINTR));
+
+	if (rc < 0)
+	{
+		WLog_ERR(TAG, "Failed to wait for %s display command '%s': %s", transition, command,
+		         strerror(errno));
+		return -1;
+	}
+
+	if (!WIFEXITED(status) || (WEXITSTATUS(status) != 0))
+	{
+		if (WIFEXITED(status))
+			WLog_ERR(TAG, "%s display command exited with status %d: %s", transition,
+			         WEXITSTATUS(status), command);
+		else
+			WLog_ERR(TAG, "%s display command terminated abnormally: %s", transition, command);
+		return -1;
+	}
+
+	return 1;
+}
+
+static int mac_shadow_switch_display_mode(macShadowSubsystem* subsystem, const char* command,
+	                                      const char* transition)
+{
+	BOOL commandSucceeded = FALSE;
+
+	if (!subsystem || !subsystem->common.server || !subsystem->common.server->screen)
+		return -1;
+
+	if (mac_shadow_capture_release_stream(subsystem) < 0)
+		return -1;
+
+	commandSucceeded = mac_shadow_run_display_command(command, transition) > 0;
+	if (mac_shadow_detect_monitors(subsystem) < 0)
+		return -1;
+
+	if (!shadow_screen_resize(subsystem->common.server->screen))
+	{
+		WLog_ERR(TAG, "Failed to resize the shadow screen after %s", transition);
+		return -1;
+	}
+
+	if (mac_shadow_capture_init(subsystem) < 0)
+		return -1;
+	if (mac_shadow_capture_start(subsystem) < 0)
+		return -1;
+
+	WLog_INFO(TAG, "Display capture reconfigured to %dx%d after %s", subsystem->width,
+	          subsystem->height, transition);
+	return commandSucceeded ? 1 : -1;
 }
 
 static int mac_shadow_screen_grab(macShadowSubsystem* subsystem)
@@ -758,6 +1029,26 @@ static int mac_shadow_subsystem_init(rdpShadowSubsystem* rdpsubsystem)
 {
 	macShadowSubsystem* subsystem = (macShadowSubsystem*)rdpsubsystem;
 	g_Subsystem = subsystem;
+	subsystem->connectDisplayCommand = getenv("FREERDP_MAC_SHADOW_CONNECT_DISPLAY_COMMAND");
+	subsystem->disconnectDisplayCommand = getenv("FREERDP_MAC_SHADOW_DISCONNECT_DISPLAY_COMMAND");
+	if (subsystem->connectDisplayCommand && (subsystem->connectDisplayCommand[0] == '\0'))
+		subsystem->connectDisplayCommand = nullptr;
+	if (subsystem->disconnectDisplayCommand && (subsystem->disconnectDisplayCommand[0] == '\0'))
+		subsystem->disconnectDisplayCommand = nullptr;
+
+	if ((subsystem->connectDisplayCommand == nullptr) !=
+	    (subsystem->disconnectDisplayCommand == nullptr))
+	{
+		WLog_ERR(TAG,
+		         "Both FREERDP_MAC_SHADOW_CONNECT_DISPLAY_COMMAND and "
+		         "FREERDP_MAC_SHADOW_DISCONNECT_DISPLAY_COMMAND must be configured together");
+		return -1;
+	}
+
+	if (subsystem->connectDisplayCommand)
+	{
+		WLog_INFO(TAG, "Automatic display-mode switching is enabled for client connections");
+	}
 
 	if (mac_shadow_detect_monitors(subsystem) < 0)
 		return -1;
@@ -808,6 +1099,11 @@ static void mac_shadow_subsystem_free(rdpShadowSubsystem* subsystem)
 	if (!subsystem)
 		return;
 
+	macShadowSubsystem* mac = (macShadowSubsystem*)subsystem;
+	if (mac->eventSource)
+		CFRelease(mac->eventSource);
+	DeleteCriticalSection(&mac->connectionLock);
+
 	mac_shadow_subsystem_uninit(subsystem);
 	free(subsystem);
 }
@@ -819,7 +1115,22 @@ static rdpShadowSubsystem* mac_shadow_subsystem_new(void)
 	if (!subsystem)
 		return nullptr;
 
+	subsystem->eventSource = CGEventSourceCreate(kCGEventSourceStatePrivate);
+	if (!subsystem->eventSource)
+	{
+		free(subsystem);
+		return nullptr;
+	}
+	if (!InitializeCriticalSectionAndSpinCount(&subsystem->connectionLock, 4000))
+	{
+		CFRelease(subsystem->eventSource);
+		free(subsystem);
+		return nullptr;
+	}
+
 	subsystem->common.SynchronizeEvent = mac_shadow_input_synchronize_event;
+	subsystem->common.ClientConnect = mac_shadow_client_connect;
+	subsystem->common.ClientDisconnect = mac_shadow_client_disconnect;
 	subsystem->common.KeyboardEvent = mac_shadow_input_keyboard_event;
 	subsystem->common.UnicodeKeyboardEvent = mac_shadow_input_unicode_keyboard_event;
 	subsystem->common.MouseEvent = mac_shadow_input_mouse_event;

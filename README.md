@@ -11,33 +11,93 @@ tunnel. Legacy RDP security is required for this client, but must not weaken
 FreeRDP's defaults or expose the listener to a LAN or the Internet.
 
 > [!CAUTION]
-> This project is not ready for installation or operational use. The capture
-> and dirty-region repairs are implemented in source, but they have **not yet
-> been compiled or runtime-tested on Sonoma**. The hardware baseline is the
-> immediate blocker, and no installation or usage claims should be inferred
-> until the validation matrix is complete.
+> This project is an alpha-quality, machine-specific development build. It has
+> been compiled and exercised on the target Intel Sonoma iMac with Microsoft
+> RDP 5.2 on Windows 98 SE, but lifecycle, automatic display-mode switching,
+> permissions, reconnect stress, and broader client compatibility are not yet
+> complete. Keep the listener on loopback and reach it only through SSH.
 
 ## Status
 
-The first two source repairs address `CGDisplayStream` callback correctness,
-dirty-region lifetime, surface locking, and frame publication. Both remain
-unvalidated on the target hardware.
+The shadow CLI now compiles and links on macOS 14.7.1 on Intel. A physical
+Windows 98 SE system running Microsoft RDP Client 5.2 has connected at
+1024×768 and 16-bit color through an SSH tunnel. Desktop capture, classic
+bitmap delivery, typing, modifiers, arrow keys, Caps Lock, mouse movement, and
+clicking have received an initial hardware test.
 
-The work still to be resolved includes:
+Fine-grained pixel comparison prevents coarse Core Graphics damage rectangles
+from building a multi-second queue in the legacy bitmap encoder. The macOS
+input backend maintains private keyboard state, and the RDP client displays a
+local system pointer so pointer movement is not tied to framebuffer latency.
 
-- a reproducible warnings-enabled Sonoma build and hardware baseline;
-- immediate first-frame delivery and reliable reconnect behavior;
-- ordered capture/thread shutdown and repeatable lifecycle handling;
-- correct keyboard, mouse, wheel, and modifier injection;
-- explicit Screen Recording and Accessibility permission diagnostics;
-- an isolated Windows 98 compatibility profile and security verification;
-- latency and bandwidth measurement followed by performance tuning; and
-- packaging, modernization, and optional later features only after correctness
-  has been demonstrated.
+Known alpha limitations include:
+
+- automatic display-mode switching relies on explicitly configured local
+  helper executables and has completed only an initial connect/disconnect test;
+- the local Windows pointer can overlap the captured macOS pointer;
+- macOS pointer-shape changes are not sent to the client;
+- ordered capture/thread shutdown and repeatable lifecycle handling remain
+  incomplete;
+- Screen Recording and Accessibility permission failures lack dedicated
+  preflight diagnostics; and
+- reconnect, sleep/wake, input, latency, and bandwidth validation matrices are
+  not complete.
 
 See the [Sonoma and Windows 98 roadmap](docs/mac-shadow-sonoma-plan.md) for the
 complete patch status, dependencies, defect analysis, exit criteria, and test
 matrix.
+
+## Alpha operation on the validated iMac
+
+Grant Screen Recording and Accessibility permission to the Terminal used to
+launch the server. On the validated machine, start the server at the normal
+1920×1080 desktop with the two local display-mode helpers configured:
+
+```zsh
+cd /Users/zach/gitr/RDP/FreeRDP-mac-shadow--sonoma
+
+FREERDP_MAC_SHADOW_CONNECT_DISPLAY_COMMAND=/usr/local/bin/w981 \
+FREERDP_MAC_SHADOW_DISCONNECT_DISPLAY_COMMAND=/usr/local/bin/mac1080 \
+  ./build-sonoma-shadow-p0-channels/server/shadow/cli/freerdp-shadow-cli \
+  /bind-address:127.0.0.1 \
+  /port:3390 \
+  /sec:rdp \
+  -auth \
+  -gfx \
+  -rfx \
+  -nsc
+```
+
+`w981` and `mac1080` are local wrappers around `displayplacer`, not commands
+installed by this repository. Both environment variables are required, and
+each value must be an executable absolute path without arguments. The first
+RDP client runs `w981`, resizes the shadow surfaces, and recreates capture at
+1024×768. The last disconnect runs `mac1080` and recreates idle capture at
+1920×1080. Do not add `+server-side-cursor` when using the low-latency
+client-side pointer.
+
+In Tera Term on Windows 98, connect SSH to the Mac's LAN address and configure
+a local forwarding rule with these values:
+
+| Setting | Value |
+| --- | --- |
+| Local port | `3390` |
+| Remote host | `127.0.0.1` |
+| Remote port | `3390` |
+
+Keep that SSH session open. Microsoft RDP Client 5.2 then connects to
+`127.0.0.1:3390` on Windows 98. The Mac's LAN address belongs in Tera Term,
+not in the RDP client. Existing VNC forwarding on ports 5900–5902 is unrelated
+and can remain configured but is not used by this RDP session.
+
+When finished, disconnect the RDP client. The physical display returns to
+1920×1080 automatically; the loopback server remains available for another
+connection. Stop it with `Ctrl+C` in its Mac Terminal when it is no longer
+needed.
+
+The listener uses legacy RDP security for client compatibility and has no
+authentication in this alpha command. It must remain bound to `127.0.0.1` and
+must not be exposed directly to a LAN or the Internet.
 
 ## Architecture
 
