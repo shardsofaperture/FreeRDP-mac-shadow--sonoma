@@ -803,8 +803,8 @@ cleanup:
 
 static int mac_shadow_capture_init(macShadowSubsystem* subsystem)
 {
-	void* keys[2];
-	void* values[2];
+	const void* keys[1];
+	const void* values[1];
 	CFDictionaryRef opts;
 	CGDirectDisplayID displayId;
 	displayId = CGMainDisplayID();
@@ -822,11 +822,10 @@ static int mac_shadow_capture_init(macShadowSubsystem* subsystem)
 		return -1;
 	}
 
-	keys[0] = (void*)kCGDisplayStreamShowCursor;
-	values[0] = subsystem->common.server->ShowMouseCursor ? (void*)kCFBooleanTrue
-	                                                     : (void*)kCFBooleanFalse;
-	opts = CFDictionaryCreate(kCFAllocatorDefault, (const void**)keys, (const void**)values, 1,
-	                          nullptr, nullptr);
+	keys[0] = kCGDisplayStreamShowCursor;
+	values[0] = subsystem->common.server->ShowMouseCursor ? kCFBooleanTrue : kCFBooleanFalse;
+	opts = CFDictionaryCreate(kCFAllocatorDefault, keys, values, ARRAYSIZE(keys),
+	                          &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
 	if (!opts)
 	{
 		WLog_ERR(TAG, "Failed to create display stream options");
