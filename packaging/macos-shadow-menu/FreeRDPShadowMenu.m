@@ -19,6 +19,10 @@ typedef NS_ENUM(NSInteger, ShadowServerState)
 @property(nonatomic, assign) ShadowServerState state;
 @property(nonatomic, copy) NSString* failureReason;
 @property(nonatomic, assign) BOOL stopping;
+@property(nonatomic, assign) BOOL wantsServerRunning;
+@property(nonatomic, assign) NSUInteger restartGeneration;
+@property(nonatomic, assign) NSUInteger restartFailures;
+@property(nonatomic, strong) NSDate* serverStartedAt;
 @end
 
 @implementation ShadowAppDelegate
@@ -71,6 +75,8 @@ typedef NS_ENUM(NSInteger, ShadowServerState)
 - (void)applicationWillTerminate:(NSNotification*)notification
 {
 	(void)notification;
+	self.wantsServerRunning = NO;
+	self.restartGeneration++;
 	[self stopServerAndWait];
 }
 
@@ -123,9 +129,9 @@ typedef NS_ENUM(NSInteger, ShadowServerState)
 	[self.menu addItem:listener];
 	[self.menu addItem:[NSMenuItem separatorItem]];
 
-	BOOL running = self.serverTask.running;
-	NSString* toggleTitle = running ? @"Stop RDP Server" : @"Start RDP Server";
-	SEL toggleAction = running ? @selector(stopServer:) : @selector(startServer:);
+	BOOL shouldStop = self.serverTask.running || self.wantsServerRunning;
+	NSString* toggleTitle = shouldStop ? @"Stop RDP Server" : @"Start RDP Server";
+	SEL toggleAction = shouldStop ? @selector(stopServer:) : @selector(startServer:);
 	[self.menu addItemWithTitle:toggleTitle action:toggleAction keyEquivalent:@""];
 	[self.menu addItemWithTitle:@"Open Server Log" action:@selector(openLog:) keyEquivalent:@""];
 	[self.menu addItem:[NSMenuItem separatorItem]];
@@ -158,7 +164,9 @@ typedef NS_ENUM(NSInteger, ShadowServerState)
 		case ShadowServerStopped:
 			return @"RDP server: Off";
 		case ShadowServerStarting:
-			return @"RDP server: Starting…";
+			return self.failureReason
+			           ? [NSString stringWithFormat:@"RDP server: Restarting — %@", self.failureReason]
+			           : @"RDP server: Starting…";
 		case ShadowServerRunning:
 			return @"RDP server: On";
 		case ShadowServerFailed:
@@ -170,17 +178,55 @@ typedef NS_ENUM(NSInteger, ShadowServerState)
 - (void)updateMenuBar
 {
 	BOOL running = self.serverTask.running;
-	self.statusItem.button.title = running ? @"RDP ●" : @"RDP ○";
+	self.statusItem.button.title = running ? @"RDP ●" : (self.wantsServerRunning ? @"RDP ↻" : @"RDP ○");
 	self.statusItem.button.toolTip = [self statusDescription];
 }
 
-- (void)startServer:(id)sender
+- (void)appendSupervisorLog:(NSString*)message
 {
-	(void)sender;
-	if (self.serverTask.running)
+	NSFileHandle* log = [NSFileHandle fileHandleForWritingAtPath:[self logURL].path];
+	if (!log)
+		return;
+	[log seekToEndOfFile];
+	NSString* line = [NSString stringWithFormat:@"[FreeRDP Shadow menu] %@\n", message];
+	[log writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
+	[log closeFile];
+}
+
+- (void)scheduleServerRestart:(NSString*)reason
+{
+	if (!self.wantsServerRunning)
+		return;
+
+	self.restartFailures++;
+	NSUInteger shift = self.restartFailures > 6 ? 5 : self.restartFailures - 1;
+	NSTimeInterval delay = (NSTimeInterval)(1UL << shift);
+	if (delay > 30.0)
+		delay = 30.0;
+	NSUInteger generation = ++self.restartGeneration;
+	self.state = ShadowServerStarting;
+	self.failureReason =
+	    [NSString stringWithFormat:@"%@; retrying in %.0f second%@", reason, delay,
+	                               delay == 1.0 ? @"" : @"s"];
+	[self appendSupervisorLog:self.failureReason];
+	[self updateMenuBar];
+
+	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)),
+	               dispatch_get_main_queue(), ^{
+	                 if ((generation != self.restartGeneration) || !self.wantsServerRunning ||
+	                     self.serverTask.running)
+		                 return;
+	                 [self launchServer];
+	               });
+}
+
+- (void)launchServer
+{
+	if (self.serverTask.running || !self.wantsServerRunning)
 		return;
 	if (!CGPreflightScreenCaptureAccess())
 	{
+		self.wantsServerRunning = NO;
 		self.state = ShadowServerFailed;
 		self.failureReason = @"Screen Recording permission required";
 		[self updateMenuBar];
@@ -188,6 +234,7 @@ typedef NS_ENUM(NSInteger, ShadowServerState)
 	}
 	if (!AXIsProcessTrusted())
 	{
+		self.wantsServerRunning = NO;
 		self.state = ShadowServerFailed;
 		self.failureReason = @"Accessibility permission required";
 		[self updateMenuBar];
@@ -200,6 +247,7 @@ typedef NS_ENUM(NSInteger, ShadowServerState)
 	NSString* disconnectCommand = config[@"DisconnectDisplayCommand"];
 	if (!executable || !connectCommand || !disconnectCommand)
 	{
+		self.wantsServerRunning = NO;
 		self.state = ShadowServerFailed;
 		self.failureReason = @"ShadowConfig.plist is incomplete";
 		[self updateMenuBar];
@@ -211,6 +259,7 @@ typedef NS_ENUM(NSInteger, ShadowServerState)
 	    ![manager isExecutableFileAtPath:connectCommand] ||
 	    ![manager isExecutableFileAtPath:disconnectCommand])
 	{
+		self.wantsServerRunning = NO;
 		self.state = ShadowServerFailed;
 		self.failureReason = @"server or display helper is not executable";
 		[self updateMenuBar];
@@ -224,6 +273,7 @@ typedef NS_ENUM(NSInteger, ShadowServerState)
 	                        attributes:nil
 	                             error:&error])
 	{
+		self.wantsServerRunning = NO;
 		self.state = ShadowServerFailed;
 		self.failureReason = error.localizedDescription;
 		[self updateMenuBar];
@@ -255,21 +305,29 @@ typedef NS_ENUM(NSInteger, ShadowServerState)
 	    ShadowAppDelegate* strongSelf = weakSelf;
 	    if (!strongSelf)
 		    return;
-	    [strongSelf.serverLog closeFile];
-	    strongSelf.serverLog = nil;
-	    strongSelf.serverTask = nil;
-	    if (strongSelf.stopping || finished.terminationStatus == 0)
+	    [log closeFile];
+	    if (strongSelf.serverLog == log)
+		    strongSelf.serverLog = nil;
+	    if (strongSelf.serverTask == finished)
+		    strongSelf.serverTask = nil;
+	    if (strongSelf.stopping || !strongSelf.wantsServerRunning)
 	    {
 		    strongSelf.state = ShadowServerStopped;
 		    strongSelf.failureReason = nil;
+		    strongSelf.restartFailures = 0;
 	    }
 	    else
 	    {
-		    strongSelf.state = ShadowServerFailed;
-		    strongSelf.failureReason =
-		        [NSString stringWithFormat:@"exit %d; see log", finished.terminationStatus];
+		    NSTimeInterval uptime = [strongSelf.serverStartedAt timeIntervalSinceNow] * -1.0;
+		    if (uptime >= 60.0)
+			    strongSelf.restartFailures = 0;
+		    NSString* reason = finished.terminationReason == NSTaskTerminationReasonUncaughtSignal
+		                           ? [NSString stringWithFormat:@"signal %d", finished.terminationStatus]
+		                           : [NSString stringWithFormat:@"exit %d", finished.terminationStatus];
+		    [strongSelf scheduleServerRestart:reason];
 	    }
 	    strongSelf.stopping = NO;
+	    strongSelf.serverStartedAt = nil;
 	    [strongSelf updateMenuBar];
 	  });
 	};
@@ -280,6 +338,7 @@ typedef NS_ENUM(NSInteger, ShadowServerState)
 	self.serverTask = task;
 	if ([task launchAndReturnError:&error])
 	{
+		self.serverStartedAt = [NSDate date];
 		self.state = ShadowServerRunning;
 		self.failureReason = nil;
 	}
@@ -288,18 +347,34 @@ typedef NS_ENUM(NSInteger, ShadowServerState)
 		[log closeFile];
 		self.serverLog = nil;
 		self.serverTask = nil;
-		self.state = ShadowServerFailed;
-		self.failureReason = error.localizedDescription;
+		[self scheduleServerRestart:error.localizedDescription];
 	}
 	[self updateMenuBar];
+}
+
+- (void)startServer:(id)sender
+{
+	(void)sender;
+	if (self.serverTask.running)
+		return;
+	self.wantsServerRunning = YES;
+	self.stopping = NO;
+	self.restartFailures = 0;
+	self.restartGeneration++;
+	self.failureReason = nil;
+	[self launchServer];
 }
 
 - (void)stopServer:(id)sender
 {
 	(void)sender;
+	self.wantsServerRunning = NO;
+	self.restartGeneration++;
+	self.restartFailures = 0;
 	if (!self.serverTask.running)
 	{
 		self.state = ShadowServerStopped;
+		self.failureReason = nil;
 		[self updateMenuBar];
 		return;
 	}
@@ -309,6 +384,8 @@ typedef NS_ENUM(NSInteger, ShadowServerState)
 
 - (void)stopServerAndWait
 {
+	self.wantsServerRunning = NO;
+	self.restartGeneration++;
 	NSTask* task = self.serverTask;
 	if (!task.running)
 		return;

@@ -131,6 +131,12 @@ loopback listener running. Display capture starts for the first connected
 client and stops after the last client disconnects, so macOS should show its
 Screen Recording indicator only during an active RDP session.
 
+If the server process exits unexpectedly, the menu controller restarts it
+automatically with a bounded delay that increases from 1 to 30 seconds for
+repeated failures. The menu displays `RDP ↻` while recovery is pending. An
+intentional **Stop RDP Server** or **Quit FreeRDP Shadow** cancels automatic
+recovery.
+
 On first installation, approve **FreeRDP Shadow** under both **System Settings
 > Privacy & Security > Screen & System Audio Recording** and **Accessibility**.
 Use **Request Capture and Input Permissions** or the two Privacy shortcuts in
