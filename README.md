@@ -126,6 +126,11 @@ capture a user's desktop before that user has logged into the graphical
 session, so “start after restart” means immediately after login, not at the
 pre-login/FileVault screen.
 
+While the server is on but no RDP client is connected, it keeps only the
+loopback listener running. Display capture starts for the first connected
+client and stops after the last client disconnects, so macOS should show its
+Screen Recording indicator only during an active RDP session.
+
 On first installation, approve **FreeRDP Shadow** under both **System Settings
 > Privacy & Security > Screen & System Audio Recording** and **Accessibility**.
 Use **Request Capture and Input Permissions** or the two Privacy shortcuts in
