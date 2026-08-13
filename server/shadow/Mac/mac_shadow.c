@@ -42,6 +42,9 @@ extern char** environ;
 
 static int mac_shadow_switch_display_mode(macShadowSubsystem* subsystem, const char* command,
 	                                      const char* transition);
+static int mac_shadow_capture_init(macShadowSubsystem* subsystem);
+static int mac_shadow_capture_start(macShadowSubsystem* subsystem);
+static int mac_shadow_capture_release_stream(macShadowSubsystem* subsystem);
 
 static void mac_shadow_message_free(UINT32 id, SHADOW_MSG_OUT* msg)
 {
@@ -58,14 +61,24 @@ static BOOL mac_shadow_client_connect(rdpShadowSubsystem* subsystem, rdpShadowCl
 		return FALSE;
 
 	EnterCriticalSection(&mac->connectionLock);
-	if ((mac->connectedClients == 0) && mac->connectDisplayCommand)
+	if (mac->connectedClients == 0)
 	{
-		if (mac_shadow_switch_display_mode(mac, mac->connectDisplayCommand, "first client connect") <
-		    0)
+		if (mac->connectDisplayCommand &&
+		    (mac_shadow_switch_display_mode(mac, mac->connectDisplayCommand,
+		                                    "first client connect") < 0))
 		{
 			LeaveCriticalSection(&mac->connectionLock);
 			return FALSE;
 		}
+
+		if ((mac_shadow_capture_init(mac) < 0) || (mac_shadow_capture_start(mac) < 0))
+		{
+			(void)mac_shadow_capture_release_stream(mac);
+			LeaveCriticalSection(&mac->connectionLock);
+			return FALSE;
+		}
+
+		WLog_INFO(TAG, "Display capture started for the first connected client");
 	}
 	mac->connectedClients++;
 	LeaveCriticalSection(&mac->connectionLock);
@@ -110,11 +123,20 @@ static void mac_shadow_client_disconnect(rdpShadowSubsystem* subsystem, rdpShado
 	else
 	{
 		mac->connectedClients--;
-		if ((mac->connectedClients == 0) && mac->disconnectDisplayCommand)
+		if (mac->connectedClients == 0)
 		{
-			if (mac_shadow_switch_display_mode(mac, mac->disconnectDisplayCommand,
-			                                   "last client disconnect") < 0)
-				WLog_ERR(TAG, "Failed to restore the display mode after the last client disconnected");
+			if (mac_shadow_capture_release_stream(mac) < 0)
+				WLog_ERR(TAG, "Failed to stop display capture after the last client disconnected");
+			else
+				WLog_INFO(TAG, "Display capture stopped after the last client disconnected");
+
+			if (mac->disconnectDisplayCommand &&
+			    (mac_shadow_switch_display_mode(mac, mac->disconnectDisplayCommand,
+			                                    "last client disconnect") < 0))
+			{
+				WLog_ERR(TAG,
+				         "Failed to restore the display mode after the last client disconnected");
+			}
 		}
 	}
 	LeaveCriticalSection(&mac->connectionLock);
@@ -826,8 +848,10 @@ static int mac_shadow_capture_init(macShadowSubsystem* subsystem)
 
 static int mac_shadow_capture_release_stream(macShadowSubsystem* subsystem)
 {
-	if (!subsystem || !subsystem->stream)
+	if (!subsystem)
 		return -1;
+	if (!subsystem->stream)
+		return 1;
 
 	if (mac_shadow_capture_stop(subsystem) < 0)
 		return -1;
@@ -910,12 +934,7 @@ static int mac_shadow_switch_display_mode(macShadowSubsystem* subsystem, const c
 		return -1;
 	}
 
-	if (mac_shadow_capture_init(subsystem) < 0)
-		return -1;
-	if (mac_shadow_capture_start(subsystem) < 0)
-		return -1;
-
-	WLog_INFO(TAG, "Display capture reconfigured to %dx%d after %s", subsystem->width,
+	WLog_INFO(TAG, "Shadow surface reconfigured to %dx%d after %s", subsystem->width,
 	          subsystem->height, transition);
 	return commandSucceeded ? 1 : -1;
 }
@@ -1053,7 +1072,7 @@ static int mac_shadow_subsystem_init(rdpShadowSubsystem* rdpsubsystem)
 	if (mac_shadow_detect_monitors(subsystem) < 0)
 		return -1;
 
-	return mac_shadow_capture_init(subsystem);
+	return 1;
 }
 
 static int mac_shadow_subsystem_uninit(rdpShadowSubsystem* rdpsubsystem)
@@ -1062,7 +1081,7 @@ static int mac_shadow_subsystem_uninit(rdpShadowSubsystem* rdpsubsystem)
 	if (!subsystem)
 		return -1;
 
-	return 1;
+	return mac_shadow_capture_release_stream(subsystem);
 }
 
 static int mac_shadow_subsystem_start(rdpShadowSubsystem* rdpsubsystem)
@@ -1073,9 +1092,6 @@ static int mac_shadow_subsystem_start(rdpShadowSubsystem* rdpsubsystem)
 	if (!subsystem)
 		return -1;
 
-	if (mac_shadow_capture_start(subsystem) < 0)
-		return -1;
-
 	if (!(thread =
 	          CreateThread(nullptr, 0, mac_shadow_subsystem_thread, (void*)subsystem, 0, nullptr)))
 	{
@@ -1083,15 +1099,23 @@ static int mac_shadow_subsystem_start(rdpShadowSubsystem* rdpsubsystem)
 		return -1;
 	}
 
+	WLog_INFO(TAG, "Display capture is idle and will start when the first client connects");
+
 	return 1;
 }
 
-static int mac_shadow_subsystem_stop(rdpShadowSubsystem* subsystem)
+static int mac_shadow_subsystem_stop(rdpShadowSubsystem* rdpsubsystem)
 {
+	macShadowSubsystem* subsystem = (macShadowSubsystem*)rdpsubsystem;
+	int status;
+
 	if (!subsystem)
 		return -1;
 
-	return 1;
+	EnterCriticalSection(&subsystem->connectionLock);
+	status = mac_shadow_capture_release_stream(subsystem);
+	LeaveCriticalSection(&subsystem->connectionLock);
+	return status;
 }
 
 static void mac_shadow_subsystem_free(rdpShadowSubsystem* subsystem)

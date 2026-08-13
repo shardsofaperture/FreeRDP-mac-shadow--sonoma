@@ -99,6 +99,63 @@ The listener uses legacy RDP security for client compatibility and has no
 authentication in this alpha command. It must remain bound to `127.0.0.1` and
 must not be exposed directly to a LAN or the Internet.
 
+## Menu-bar service on the validated iMac
+
+The repository includes a small native menu-bar controller for macOS 13 and
+later. It installs `FreeRDP Shadow.app` in the current user's Applications
+folder, registers the app with macOS Service Management, and starts the
+validated loopback server command after graphical login:
+
+```zsh
+cd /Users/zach/gitr/RDP/FreeRDP-mac-shadow--sonoma
+./scripts/install-macos-shadow-menu.sh
+```
+
+The menu-bar item reads `RDP ●` while the server is running and `RDP ○` while
+it is stopped. Its menu provides:
+
+- **Start RDP Server** and **Stop RDP Server**;
+- the current server status and fixed `127.0.0.1:3390` listener;
+- access to the server log and required macOS Privacy settings; and
+- a **Launch at Login** control.
+
+The server starts by default whenever the menu app starts. Stopping it from
+the menu leaves the controller available but keeps the server off for the
+remainder of that login session. The next login starts it again. macOS cannot
+capture a user's desktop before that user has logged into the graphical
+session, so “start after restart” means immediately after login, not at the
+pre-login/FileVault screen.
+
+While the server is on but no RDP client is connected, it keeps only the
+loopback listener running. Display capture starts for the first connected
+client and stops after the last client disconnects, so macOS should show its
+Screen Recording indicator only during an active RDP session.
+
+On first installation, approve **FreeRDP Shadow** under both **System Settings
+> Privacy & Security > Screen & System Audio Recording** and **Accessibility**.
+Use **Request Capture and Input Permissions** or the two Privacy shortcuts in
+the menu if the prompts were dismissed. macOS may require the app to be quit
+and reopened after Screen Recording is enabled; then select **Start RDP
+Server**.
+
+The service continues to use `/usr/local/bin/w981` for first-client 1024×768
+and `/usr/local/bin/mac1080` for last-disconnect 1920×1080 restoration. Its
+append-only log is stored at:
+
+```text
+~/Library/Logs/FreeRDPShadow/server.log
+```
+
+The installed app references the executable in this repository's validated
+build directory. Quit the menu app before rebuilding or reinstalling it, and
+keep the repository at its current path. To disable automatic startup without
+removing the app, turn off **Launch at Login** in its menu. To unregister the
+login item and move the app to the Trash while preserving its log, run:
+
+```zsh
+./scripts/install-macos-shadow-menu.sh --uninstall
+```
+
 ## Architecture
 
 This fork retains FreeRDP's existing shadow-server architecture:
