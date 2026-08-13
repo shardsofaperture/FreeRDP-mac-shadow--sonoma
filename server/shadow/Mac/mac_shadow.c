@@ -271,6 +271,12 @@ static BOOL mac_shadow_client_connect(rdpShadowSubsystem* subsystem, rdpShadowCl
 		if ((mac_shadow_capture_init(mac) < 0) || (mac_shadow_capture_start(mac) < 0))
 		{
 			(void)mac_shadow_capture_release_stream(mac);
+			if (mac->disconnectDisplayCommand &&
+			    (mac_shadow_switch_display_mode(mac, mac->disconnectDisplayCommand,
+			                                    "failed first client connect") < 0))
+			{
+				WLog_ERR(TAG, "Failed to restore the display mode after capture setup failed");
+			}
 			LeaveCriticalSection(&mac->connectionLock);
 			return FALSE;
 		}
