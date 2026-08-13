@@ -47,6 +47,13 @@ struct mac_shadow_subsystem
 	BOOL mouseDownLeft;
 	BOOL mouseDownRight;
 	BOOL mouseDownOther;
+	CGEventSourceRef eventSource;
+	CGEventFlags keyboardFlags;
+	CRITICAL_SECTION connectionLock;
+	size_t connectedClients;
+	const char* connectDisplayCommand;
+	const char* disconnectDisplayCommand;
+	BOOL captureRunning;
 	CGDisplayStreamRef stream;
 	dispatch_queue_t captureQueue;
 };
