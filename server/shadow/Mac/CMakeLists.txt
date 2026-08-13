@@ -4,9 +4,11 @@ warn_unmaintained("mac shadow server subsystem" "-DWITH_SHADOW_SUBSYSTEM=OFF")
 find_library(IOKIT IOKit REQUIRED)
 find_library(IOSURFACE IOSurface REQUIRED)
 find_library(CARBON Carbon REQUIRED)
+find_library(COREAUDIO CoreAudio REQUIRED)
+find_library(FOUNDATION Foundation REQUIRED)
 find_package(PAM)
 
-set(LIBS ${IOKIT} ${IOSURFACE} ${CARBON})
+set(LIBS ${IOKIT} ${IOSURFACE} ${CARBON} ${COREAUDIO} ${FOUNDATION})
 
 if(PAM_FOUND)
   add_compile_definitions(WITH_PAM)
@@ -17,5 +19,8 @@ else()
 endif()
 
 add_compile_definitions(WITH_SHADOW_MAC)
-add_library(freerdp-shadow-subsystem-impl STATIC mac_shadow.h mac_shadow.c)
+set_source_files_properties(mac_shadow_audio.m PROPERTIES LANGUAGE C COMPILE_OPTIONS "-fobjc-arc")
+add_library(
+  freerdp-shadow-subsystem-impl STATIC mac_shadow.h mac_shadow.c mac_shadow_audio.h mac_shadow_audio.m
+)
 target_link_libraries(freerdp-shadow-subsystem-impl PRIVATE ${LIBS})

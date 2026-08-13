@@ -26,5 +26,7 @@
 	<true/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>FreeRDP Shadow captures Mac system audio while a remote desktop client is connected.</string>
 </dict>
 </plist>

@@ -36,6 +36,23 @@
 
 #define TAG SERVER_TAG("shadow.mac")
 
+#define MAC_SHADOW_TEST_TONE_FRAMES 882
+
+typedef struct
+{
+	SHADOW_MSG_OUT_AUDIO_OUT_SAMPLES message;
+	INT16 samples[MAC_SHADOW_TEST_TONE_FRAMES * 2];
+} MAC_SHADOW_TEST_TONE_MESSAGE;
+
+typedef struct
+{
+	SHADOW_MSG_OUT_AUDIO_OUT_SAMPLES message;
+	INT16 samples[];
+} MAC_SHADOW_AUDIO_MESSAGE;
+
+static AUDIO_FORMAT g_MacShadowAudioFormat = { WAVE_FORMAT_PCM, 2, 44100, 176400, 4, 16, 0,
+	                                           nullptr };
+
 static macShadowSubsystem* g_Subsystem = nullptr;
 
 extern char** environ;
@@ -45,11 +62,191 @@ static int mac_shadow_switch_display_mode(macShadowSubsystem* subsystem, const c
 static int mac_shadow_capture_init(macShadowSubsystem* subsystem);
 static int mac_shadow_capture_start(macShadowSubsystem* subsystem);
 static int mac_shadow_capture_release_stream(macShadowSubsystem* subsystem);
+static int mac_shadow_test_tone_start(macShadowSubsystem* subsystem);
+static void mac_shadow_test_tone_stop(macShadowSubsystem* subsystem);
+static int mac_shadow_system_audio_start(macShadowSubsystem* subsystem);
+static void mac_shadow_system_audio_stop(macShadowSubsystem* subsystem);
 
 static void mac_shadow_message_free(UINT32 id, SHADOW_MSG_OUT* msg)
 {
 	WINPR_UNUSED(id);
 	free(msg);
+}
+
+static void mac_shadow_audio_message_free(UINT32 id, SHADOW_MSG_OUT* msg)
+{
+	WINPR_UNUSED(id);
+	free(msg);
+}
+
+static BOOL mac_shadow_audio_client_ready(macShadowSubsystem* subsystem)
+{
+	BOOL ready = FALSE;
+	rdpShadowServer* server = subsystem->common.server;
+
+	if (!server || !server->clients)
+		return FALSE;
+
+	ArrayList_Lock(server->clients);
+	if (ArrayList_Count(server->clients) == 1)
+	{
+		rdpShadowClient* client = (rdpShadowClient*)ArrayList_GetItem(server->clients, 0);
+		RdpsndServerContext* rdpsnd = client ? client->rdpsnd : nullptr;
+		if (rdpsnd && (rdpsnd->num_client_formats > 0))
+		{
+			if (!subsystem->audioNegotiated && !subsystem->audioUnavailable)
+			{
+				for (UINT16 index = 0; index < rdpsnd->num_client_formats; index++)
+				{
+					if (!audio_format_compatible(&g_MacShadowAudioFormat,
+					                             &rdpsnd->client_formats[index]))
+						continue;
+
+					rdpsnd->src_format = &g_MacShadowAudioFormat;
+					if (rdpsnd->SelectFormat(rdpsnd, index) == CHANNEL_RC_OK)
+					{
+						subsystem->audioNegotiated = TRUE;
+						WLog_INFO(TAG, "RDP audio negotiated 44100 Hz stereo PCM");
+					}
+					break;
+				}
+
+				if (!subsystem->audioNegotiated)
+				{
+					subsystem->audioUnavailable = TRUE;
+					WLog_WARN(TAG, "RDP client does not offer 44100 Hz stereo PCM");
+				}
+			}
+			ready = subsystem->audioNegotiated;
+		}
+	}
+	ArrayList_Unlock(server->clients);
+	return ready;
+}
+
+static void mac_shadow_system_audio_samples(void* context, const INT16* samples, size_t frames)
+{
+	macShadowSubsystem* subsystem = (macShadowSubsystem*)context;
+	MAC_SHADOW_AUDIO_MESSAGE* message = nullptr;
+	if (!subsystem || !samples || (frames == 0) ||
+	    !mac_shadow_audio_client_ready(subsystem) ||
+	    (frames > ((SIZE_MAX - sizeof(MAC_SHADOW_AUDIO_MESSAGE)) / (2 * sizeof(INT16)))))
+	{
+		return;
+	}
+
+	message = (MAC_SHADOW_AUDIO_MESSAGE*)malloc(sizeof(MAC_SHADOW_AUDIO_MESSAGE) +
+	                                           (frames * 2 * sizeof(INT16)));
+	if (!message)
+		return;
+	memset(&message->message, 0, sizeof(message->message));
+	memcpy(message->samples, samples, frames * 2 * sizeof(INT16));
+	message->message.common.Free = mac_shadow_audio_message_free;
+	message->message.audio_format = &g_MacShadowAudioFormat;
+	message->message.buf = message->samples;
+	message->message.nFrames = frames;
+	message->message.wTimestamp = (UINT16)(GetTickCount64() & UINT16_MAX);
+	(void)shadow_client_boardcast_msg(subsystem->common.server, nullptr,
+	                                  SHADOW_MSG_OUT_AUDIO_OUT_SAMPLES_ID,
+	                                  (SHADOW_MSG_OUT*)message, nullptr);
+}
+
+static int mac_shadow_system_audio_start(macShadowSubsystem* subsystem)
+{
+	if (!subsystem)
+		return -1;
+	if (!subsystem->audioCapture)
+	{
+		subsystem->audioCapture =
+		    mac_shadow_audio_new(mac_shadow_system_audio_samples, subsystem);
+	}
+	if (!subsystem->audioCapture || (mac_shadow_audio_start(subsystem->audioCapture) < 0))
+		return -1;
+	WLog_INFO(TAG, "macOS system-audio capture started");
+	return 1;
+}
+
+static void mac_shadow_system_audio_stop(macShadowSubsystem* subsystem)
+{
+	if (!subsystem || !subsystem->audioCapture)
+		return;
+	mac_shadow_audio_stop(subsystem->audioCapture);
+	WLog_INFO(TAG, "macOS system-audio capture stopped");
+}
+
+static void mac_shadow_test_tone_publish(macShadowSubsystem* subsystem)
+{
+	MAC_SHADOW_TEST_TONE_MESSAGE* tone = nullptr;
+	const double phaseStep = (2.0 * M_PI * 440.0) / g_MacShadowAudioFormat.nSamplesPerSec;
+
+	if (!mac_shadow_audio_client_ready(subsystem))
+		return;
+
+	tone = (MAC_SHADOW_TEST_TONE_MESSAGE*)calloc(1, sizeof(MAC_SHADOW_TEST_TONE_MESSAGE));
+	if (!tone)
+		return;
+
+	for (size_t frame = 0; frame < MAC_SHADOW_TEST_TONE_FRAMES; frame++)
+	{
+		const INT16 sample = (INT16)(sin(subsystem->testTonePhase) * 8192.0);
+		tone->samples[frame * 2] = sample;
+		tone->samples[(frame * 2) + 1] = sample;
+		subsystem->testTonePhase += phaseStep;
+		if (subsystem->testTonePhase >= (2.0 * M_PI))
+			subsystem->testTonePhase -= 2.0 * M_PI;
+	}
+
+	tone->message.common.Free = mac_shadow_audio_message_free;
+	tone->message.audio_format = &g_MacShadowAudioFormat;
+	tone->message.buf = tone->samples;
+	tone->message.nFrames = MAC_SHADOW_TEST_TONE_FRAMES;
+	tone->message.wTimestamp = (UINT16)(GetTickCount64() & UINT16_MAX);
+	(void)shadow_client_boardcast_msg(subsystem->common.server, nullptr,
+	                                  SHADOW_MSG_OUT_AUDIO_OUT_SAMPLES_ID,
+	                                  (SHADOW_MSG_OUT*)tone, nullptr);
+}
+
+static int mac_shadow_test_tone_start(macShadowSubsystem* subsystem)
+{
+	if (!subsystem || !subsystem->testToneEnabled)
+		return 1;
+	if (subsystem->audioTimer)
+		return 1;
+
+	if (!subsystem->audioQueue)
+		subsystem->audioQueue = dispatch_queue_create("mac.shadow.audio.test", nullptr);
+	if (!subsystem->audioQueue)
+		return -1;
+
+	subsystem->audioTimer =
+	    dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, subsystem->audioQueue);
+	if (!subsystem->audioTimer)
+		return -1;
+
+	dispatch_source_set_timer(subsystem->audioTimer, dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC),
+	                          20 * NSEC_PER_MSEC, 2 * NSEC_PER_MSEC);
+	dispatch_source_set_event_handler(subsystem->audioTimer, ^{
+	  mac_shadow_test_tone_publish(subsystem);
+	});
+	dispatch_resume(subsystem->audioTimer);
+	WLog_INFO(TAG, "Enabled the opt-in 440 Hz RDP audio test tone");
+	return 1;
+}
+
+static void mac_shadow_test_tone_stop(macShadowSubsystem* subsystem)
+{
+	dispatch_source_t timer = nullptr;
+	if (!subsystem || !subsystem->audioTimer)
+		return;
+
+	timer = subsystem->audioTimer;
+	subsystem->audioTimer = nullptr;
+	dispatch_source_cancel(timer);
+	dispatch_sync(subsystem->audioQueue, ^{
+	});
+#if !OS_OBJECT_USE_OBJC
+	dispatch_release(timer);
+#endif
 }
 
 static BOOL mac_shadow_client_connect(rdpShadowSubsystem* subsystem, rdpShadowClient* client)
@@ -77,6 +274,10 @@ static BOOL mac_shadow_client_connect(rdpShadowSubsystem* subsystem, rdpShadowCl
 			LeaveCriticalSection(&mac->connectionLock);
 			return FALSE;
 		}
+		if (mac_shadow_test_tone_start(mac) < 0)
+			WLog_WARN(TAG, "Failed to start the opt-in RDP audio test tone");
+		if (!mac->testToneEnabled && (mac_shadow_system_audio_start(mac) < 0))
+			WLog_WARN(TAG, "Failed to start macOS system-audio capture");
 
 		WLog_INFO(TAG, "Display capture started for the first connected client");
 	}
@@ -125,6 +326,10 @@ static void mac_shadow_client_disconnect(rdpShadowSubsystem* subsystem, rdpShado
 		mac->connectedClients--;
 		if (mac->connectedClients == 0)
 		{
+			mac_shadow_test_tone_stop(mac);
+			mac_shadow_system_audio_stop(mac);
+			mac->audioNegotiated = FALSE;
+			mac->audioUnavailable = FALSE;
 			if (mac_shadow_capture_release_stream(mac) < 0)
 				WLog_ERR(TAG, "Failed to stop display capture after the last client disconnected");
 			else
@@ -1046,7 +1251,9 @@ static UINT32 mac_shadow_enum_monitors(MONITOR_DEF* monitors, UINT32 maxMonitors
 static int mac_shadow_subsystem_init(rdpShadowSubsystem* rdpsubsystem)
 {
 	macShadowSubsystem* subsystem = (macShadowSubsystem*)rdpsubsystem;
+	const char* testTone = getenv("FREERDP_MAC_SHADOW_TEST_TONE");
 	g_Subsystem = subsystem;
+	subsystem->testToneEnabled = testTone && (strcmp(testTone, "0") != 0);
 	subsystem->connectDisplayCommand = getenv("FREERDP_MAC_SHADOW_CONNECT_DISPLAY_COMMAND");
 	subsystem->disconnectDisplayCommand = getenv("FREERDP_MAC_SHADOW_DISCONNECT_DISPLAY_COMMAND");
 	if (subsystem->connectDisplayCommand && (subsystem->connectDisplayCommand[0] == '\0'))
@@ -1112,6 +1319,8 @@ static int mac_shadow_subsystem_stop(rdpShadowSubsystem* rdpsubsystem)
 		return -1;
 
 	EnterCriticalSection(&subsystem->connectionLock);
+	mac_shadow_test_tone_stop(subsystem);
+	mac_shadow_system_audio_stop(subsystem);
 	status = mac_shadow_capture_release_stream(subsystem);
 	LeaveCriticalSection(&subsystem->connectionLock);
 	return status;
@@ -1123,6 +1332,9 @@ static void mac_shadow_subsystem_free(rdpShadowSubsystem* subsystem)
 		return;
 
 	macShadowSubsystem* mac = (macShadowSubsystem*)subsystem;
+	mac_shadow_test_tone_stop(mac);
+	mac_shadow_audio_free(mac->audioCapture);
+	mac->audioCapture = nullptr;
 	if (mac->eventSource)
 		CFRelease(mac->eventSource);
 	DeleteCriticalSection(&mac->connectionLock);
