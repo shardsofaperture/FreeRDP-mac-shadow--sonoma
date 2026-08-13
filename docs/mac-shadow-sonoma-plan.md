@@ -40,20 +40,22 @@ path.
 
 ## Roadmap at a glance
 
-Patch 0 is the immediate, hardware-dependent blocker. No source repair can be
-called validated until that Sonoma baseline exists.
+Patch 0 established the first hardware baseline on the Intel Sonoma target.
+The project is now at an alpha checkpoint: the legacy client can display and
+control the desktop responsively, while the remaining matrix and lifecycle
+work below still gate a stable release.
 
 | Patch/phase | Milestone | Status | Depends on | Exit criterion |
 | --- | --- | --- | --- | --- |
-| 0. Sonoma baseline | Baseline/correctness | **Immediate blocker; hardware work required** | Sonoma host | Reproducible baseline matrix and saved logs, including failures |
-| 1. Capture callback | Baseline/correctness | **Implemented in source; compilation and runtime validation pending** | Patch 0 environment | No first-frame null access; dirty state contains only pending work |
-| 2. Locking/publication | Baseline/correctness | **Implemented in source; compilation and runtime validation pending** | Patches 0–1 | Stress/runtime checks find no obvious race or unbalanced lock |
-| 3. First frame/refresh | Baseline/correctness | Planned | Patches 1–2 | Every initial connection and reconnect immediately gets a complete desktop |
-| 4. Lifecycle | Baseline/correctness | Planned | Patches 1–3 | Repeated start/stop and failure cycles leave no capture or worker resources |
-| 5. Input | Usability | Planned | Patch 0; coordinate with Patch 4 ownership | Written Win98 keyboard/mouse matrix passes |
+| 0. Sonoma baseline | Baseline/correctness | **Complete on target Intel iMac** | Sonoma host | Reproducible baseline matrix and saved logs, including failures |
+| 1. Capture callback | Baseline/correctness | **Initial Sonoma and Win98 validation complete** | Patch 0 environment | No first-frame null access; dirty state contains only pending work |
+| 2. Locking/publication | Baseline/correctness | **Initial runtime validation complete; stress pending** | Patches 0–1 | Stress/runtime checks find no obvious race or unbalanced lock |
+| 3. First frame/refresh | Baseline/correctness | **Initial connect/reconnect validation complete** | Patches 1–2 | Every initial connection and reconnect immediately gets a complete desktop |
+| 4. Lifecycle | Baseline/correctness | **Display-mode stream restart validated once; broader lifecycle pending** | Patches 1–3 | Repeated start/stop and failure cycles leave no capture or worker resources |
+| 5. Input | Usability | **Keyboard and primary mouse paths validated; matrix incomplete** | Patch 0; coordinate with Patch 4 ownership | Written Win98 keyboard/mouse matrix passes |
 | 6. Permissions | Usability | Planned | Patch 0; precedes packaging | Missing grants produce distinct, actionable diagnostics |
-| 7. Legacy profile | Win98 compatibility | Planned | Patches 3–6 | VAIO connects through SSH without changing normal security defaults |
-| 8. Measurement/tuning | Performance | Planned | Correctness and Patch 7 | Lowest-latency stable settings selected from recorded measurements |
+| 7. Legacy profile | Win98 compatibility | **Manual loopback/SSH configuration validated** | Patches 3–6 | VAIO connects through SSH without changing normal security defaults |
+| 8. Measurement/tuning | Performance | **Dirty-pixel comparison validated; measurements incomplete** | Correctness and Patch 7 | Lowest-latency stable settings selected from recorded measurements |
 | 9. Stable wrapper | Packaging | Planned | Patches 4, 6–8 | Repeatable install and start/stop procedure on the iMac |
 | 10. ScreenCaptureKit | Modernization | Later | Validated `CGDisplayStream` publication contract | Current-SDK build retains the legacy RDP client path |
 | 11. Clipboard/files | Later client/channel | Later | Stable capture, input, lifecycle, and legacy security | Predictable opt-in transfer without broader default exposure |
@@ -335,7 +337,8 @@ video.
 - Do not combine capture, input, security, packaging, or ScreenCaptureKit work.
 - Attach baseline and post-fix logs to their commits or pull requests.
 - Maintain the deployment fork while preparing smaller upstreamable repairs.
-- Begin with Patch 0 on the Sonoma iMac; it is the only immediate next action.
+- Complete lifecycle and reconnect stress, then finish the input, permission,
+  legacy-profile, and performance matrices before packaging the alpha.
 
 ## Attribution and license
 
