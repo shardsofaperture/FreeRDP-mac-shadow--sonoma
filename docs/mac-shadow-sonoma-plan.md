@@ -12,11 +12,12 @@ The initial work repairs the existing `CGDisplayStream` backend, which Sonoma
 still provides. ScreenCaptureKit is a later, separately reviewable capture
 backend, not a prerequisite for the Sonoma experiment.
 
-The first validated deliverable does not include video codecs, audio, drive
-redirection, clipboard, multi-monitor support, or Retina optimization. It must
-not expose a listener directly to the Internet or weaken FreeRDP's security
-defaults globally. The intended deployment is `127.0.0.1:3390` through an SSH
-tunnel.
+The first validated deliverable excluded video codecs, audio, drive
+redirection, clipboard, multi-monitor support, and Retina optimization. Audio
+has since been added as a separately validated beta feature; the other items
+remain outside that deliverable. The server must not expose a listener directly
+to the Internet or weaken FreeRDP's security defaults globally. The intended
+deployment is `127.0.0.1:3390` through an SSH tunnel.
 
 ## Baseline and retained architecture
 
@@ -41,9 +42,9 @@ path.
 ## Roadmap at a glance
 
 Patch 0 established the first hardware baseline on the Intel Sonoma target.
-The project is now at an alpha checkpoint: the legacy client can display and
-control the desktop responsively, while the remaining matrix and lifecycle
-work below still gate a stable release.
+The project is now at a beta checkpoint: the legacy client can display and
+control the desktop responsively and receive system audio, while the remaining
+matrix and lifecycle work below still gate a stable release.
 
 | Patch/phase | Milestone | Status | Depends on | Exit criterion |
 | --- | --- | --- | --- | --- |
@@ -57,6 +58,7 @@ work below still gate a stable release.
 | 7. Legacy profile | Win98 compatibility | **Manual loopback/SSH configuration validated** | Patches 3–6 | VAIO connects through SSH without changing normal security defaults |
 | 8. Measurement/tuning | Performance | **Dirty-pixel comparison validated; measurements incomplete** | Correctness and Patch 7 | Lowest-latency stable settings selected from recorded measurements |
 | 9. Stable wrapper | Packaging | **Menu app and crash recovery implemented; login-cycle validation pending** | Patches 4, 6–8 | Repeatable install and start/stop procedure on the iMac |
+| 9a. System audio | Optional channel | **Core Audio tap and Win98 `rdpsnd` playback validated on target iMac** | Stable wrapper and static channels | Repeated playback and reconnect checks pass without affecting local playback |
 | 10. ScreenCaptureKit | Modernization | Later | Validated `CGDisplayStream` publication contract | Current-SDK build retains the legacy RDP client path |
 | 11. Clipboard/files | Later client/channel | Later | Stable capture, input, lifecycle, and legacy security | Predictable opt-in transfer without broader default exposure |
 | 12. Win98 companion | Later client/channel | Later | Validated Patch 7 settings | Optional launcher/add-on makes the connection repeatable |
@@ -209,6 +211,22 @@ performance settings. Its exit artifact is a repeatable install plus one
 start/stop procedure on the target iMac.
 
 ## Milestone F: Modernization
+
+### Patch 9a — Beta system audio
+
+1. Capture the default Mac system output only while an RDP client is connected.
+2. Preserve local playback and keep audio permission attached to the stable app
+   identity.
+3. Negotiate a client-advertised PCM format before publishing samples through
+   the existing static `rdpsnd` channel.
+4. Keep audio failure nonfatal to display and input, with a deterministic test
+   tone available for diagnosis.
+5. Validate real application playback and repeated reconnects with Microsoft
+   Remote Desktop 5.2 on Windows 98.
+
+The initial beta is intentionally limited to a 44.1 kHz stereo float Core Audio
+tap converted to 16-bit PCM. Broader device formats and long-duration soak
+testing remain follow-up work.
 
 ### Patch 10 — ScreenCaptureKit follow-on
 
