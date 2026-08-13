@@ -56,7 +56,7 @@ work below still gate a stable release.
 | 6. Permissions | Usability | Planned | Patch 0; precedes packaging | Missing grants produce distinct, actionable diagnostics |
 | 7. Legacy profile | Win98 compatibility | **Manual loopback/SSH configuration validated** | Patches 3–6 | VAIO connects through SSH without changing normal security defaults |
 | 8. Measurement/tuning | Performance | **Dirty-pixel comparison validated; measurements incomplete** | Correctness and Patch 7 | Lowest-latency stable settings selected from recorded measurements |
-| 9. Stable wrapper | Packaging | Planned | Patches 4, 6–8 | Repeatable install and start/stop procedure on the iMac |
+| 9. Stable wrapper | Packaging | **Menu app implemented; permission and login-cycle validation pending** | Patches 4, 6–8 | Repeatable install and start/stop procedure on the iMac |
 | 10. ScreenCaptureKit | Modernization | Later | Validated `CGDisplayStream` publication contract | Current-SDK build retains the legacy RDP client path |
 | 11. Clipboard/files | Later client/channel | Later | Stable capture, input, lifecycle, and legacy security | Predictable opt-in transfer without broader default exposure |
 | 12. Win98 companion | Later client/channel | Later | Validated Patch 7 settings | Optional launcher/add-on makes the connection repeatable |
