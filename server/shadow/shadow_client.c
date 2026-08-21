@@ -38,6 +38,10 @@
 
 #define TAG CLIENT_TAG("shadow")
 
+#define SHADOW_BITMAP_UPDATE_HEADER_SIZE 4U
+#define SHADOW_BITMAP_DATA_HEADER_SIZE 18U
+#define SHADOW_BITMAP_COMPRESSION_HEADER_SIZE 8U
+
 typedef struct
 {
 	BOOL gfxOpened;
@@ -2008,7 +2012,7 @@ static BOOL shadow_client_send_bitmap_update(rdpShadowClient* client, BYTE* pSrc
 	BITMAP_DATA* bitmap = nullptr;
 	rdpContext* context = (rdpContext*)client;
 	UINT32 totalBitmapSize = 0;
-	UINT32 updateSizeEstimate = 0;
+	UINT64 updateSizeEstimate = 0;
 	BITMAP_DATA* bitmapData = nullptr;
 	BITMAP_UPDATE bitmapUpdate = WINPR_C_ARRAY_INIT;
 
@@ -2141,14 +2145,20 @@ static BOOL shadow_client_send_bitmap_update(rdpShadowClient* client, BYTE* pSrc
 	}
 
 	bitmapUpdate.number = k;
-	updateSizeEstimate = totalBitmapSize + (k * bitmapUpdate.number) + 16;
+	const UINT32 bitmapHeaderSize =
+	    SHADOW_BITMAP_DATA_HEADER_SIZE +
+	    (freerdp_settings_get_bool(settings, FreeRDP_NoBitmapCompressionHeader)
+	         ? 0U
+	         : SHADOW_BITMAP_COMPRESSION_HEADER_SIZE);
+	/* Use the actual wire headers. The old rectangle-count-squared heuristic undercounted an
+	 * RDC 2.1.1 update by 44 bytes and let it exceed the client's limit by four bytes. */
+	updateSizeEstimate = SHADOW_BITMAP_UPDATE_HEADER_SIZE + totalBitmapSize +
+	                     ((UINT64)k * bitmapHeaderSize);
 
 	if (updateSizeEstimate > maxUpdateSize)
 	{
 		UINT32 i = 0;
 		UINT32 j = 0;
-		UINT32 updateSize = 0;
-		UINT32 newUpdateSize = 0;
 		BITMAP_DATA* fragBitmapData = nullptr;
 
 		if (k > 0)
@@ -2162,32 +2172,41 @@ static BOOL shadow_client_send_bitmap_update(rdpShadowClient* client, BYTE* pSrc
 		}
 
 		bitmapUpdate.rectangles = fragBitmapData;
-		i = j = 0;
-		updateSize = 1024;
+		WLog_DBG(TAG,
+		          "Splitting BitmapUpdate[count %" PRIu32 ", estimated size %" PRIu64
+		          "] for client maximum %" PRIu32,
+		          k, updateSizeEstimate, maxUpdateSize);
 
 		while (i < k)
 		{
-			newUpdateSize = updateSize + (bitmapData[i].bitmapLength + 16);
-
-			if (newUpdateSize < maxUpdateSize)
+			UINT64 updateSize = SHADOW_BITMAP_UPDATE_HEADER_SIZE;
+			j = 0;
+			while (i < k)
 			{
-				CopyMemory(&fragBitmapData[j++], &bitmapData[i++], sizeof(BITMAP_DATA));
-				updateSize = newUpdateSize;
-			}
-
-			if ((newUpdateSize >= maxUpdateSize) || (i + 1) >= k)
-			{
-				bitmapUpdate.number = j;
-				ret = BitmapUpdateProxy(client, &bitmapUpdate);
-
-				if (!ret)
+				const UINT64 rectangleSize = bitmapData[i].bitmapLength + bitmapHeaderSize;
+				if ((SHADOW_BITMAP_UPDATE_HEADER_SIZE + rectangleSize) > maxUpdateSize)
+				{
+					WLog_ERR(TAG,
+					         "A single bitmap rectangle requires %" PRIu64
+					         " bytes, exceeding the client maximum %" PRIu32,
+					         SHADOW_BITMAP_UPDATE_HEADER_SIZE + rectangleSize, maxUpdateSize);
+					ret = FALSE;
+					goto fragmented_out;
+				}
+				if ((j > 0) && ((updateSize + rectangleSize) > maxUpdateSize))
 					break;
 
-				updateSize = 1024;
-				j = 0;
+				CopyMemory(&fragBitmapData[j++], &bitmapData[i++], sizeof(BITMAP_DATA));
+				updateSize += rectangleSize;
 			}
+
+			bitmapUpdate.number = j;
+			ret = BitmapUpdateProxy(client, &bitmapUpdate);
+			if (!ret)
+				break;
 		}
 
+fragmented_out:
 		free(fragBitmapData);
 	}
 	else
