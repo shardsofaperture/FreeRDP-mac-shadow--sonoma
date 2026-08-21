@@ -46,6 +46,11 @@ struct mac_shadow_subsystem
 	BOOL retina;
 	int pixelWidth;
 	int pixelHeight;
+	int desktopWidth;
+	int desktopHeight;
+	BOOL scaledClientSurface;
+	int scaledClientWidth;
+	int scaledClientHeight;
 	BOOL mouseDownLeft;
 	BOOL mouseDownRight;
 	BOOL mouseDownOther;
@@ -53,9 +58,16 @@ struct mac_shadow_subsystem
 	CGEventFlags keyboardFlags;
 	CRITICAL_SECTION connectionLock;
 	size_t connectedClients;
+	BOOL autoClientProfile;
+	BOOL configuredShowMouseCursor;
+	BOOL connectionDisplayModeActive;
+	CGDisplayModeRef preConnectionDisplayMode;
+	BOOL privateDisplayModeActive;
+	int preConnectionPrivateDisplayMode;
 	const char* connectDisplayCommand;
 	const char* disconnectDisplayCommand;
 	BOOL captureRunning;
+	BOOL captureNeedsFullFrame;
 	CGDisplayStreamRef stream;
 	dispatch_queue_t captureQueue;
 	BOOL testToneEnabled;
