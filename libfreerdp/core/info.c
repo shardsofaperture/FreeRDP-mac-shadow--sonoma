@@ -41,6 +41,8 @@
 #define logonInfoV2Size (2u + 4u + 4u + 4u + 4u)
 #define logonInfoV2ReservedSize 558u
 #define logonInfoV2TotalSize (logonInfoV2Size + logonInfoV2ReservedSize)
+#define CLIENT_ADDRESS_MAX_SIZE_RDP_5_0_TO_6_0 64u
+#define CLIENT_ADDRESS_MAX_SIZE_OTHER 80u
 
 const char* freerdp_session_logon_type_str(uint32_t type)
 {
@@ -353,8 +355,34 @@ static size_t rdp_get_client_address_max_size(const rdpRdp* rdp)
 
 	version = freerdp_settings_get_uint32(settings, FreeRDP_RdpVersion);
 	if (version < RDP_VERSION_10_0)
-		return 64;
-	return 80;
+		return CLIENT_ADDRESS_MAX_SIZE_RDP_5_0_TO_6_0;
+	return CLIENT_ADDRESS_MAX_SIZE_OTHER;
+}
+
+static BOOL rdp_is_80_byte_client_address_compat(const rdpRdp* rdp, const wStream* s,
+                                                 size_t cbClientAddress)
+{
+	WINPR_ASSERT(rdp);
+	WINPR_ASSERT(rdp->settings);
+	WINPR_ASSERT(s);
+
+	if ((cbClientAddress != CLIENT_ADDRESS_MAX_SIZE_OTHER) ||
+	    (freerdp_settings_get_uint32(rdp->settings, FreeRDP_RdpVersion) !=
+	     RDP_VERSION_5_PLUS) ||
+	    (Stream_GetRemainingLength(s) < cbClientAddress))
+		return FALSE;
+
+	const BYTE* address = Stream_ConstPointer(s);
+	BOOL terminated = FALSE;
+	for (size_t x = 0; x < cbClientAddress; x += sizeof(WCHAR))
+	{
+		if ((address[x] == 0) && (address[x + 1] == 0))
+			terminated = TRUE;
+		else if (terminated)
+			return FALSE;
+	}
+
+	return terminated;
 }
 
 /**
@@ -364,6 +392,7 @@ static size_t rdp_get_client_address_max_size(const rdpRdp* rdp)
 
 static BOOL rdp_read_extended_info_packet(rdpRdp* rdp, wStream* s)
 {
+	size_t cbClientAddressMax = 0;
 	UINT16 clientAddressFamily = 0;
 	UINT16 cbClientAddress = 0;
 	UINT16 cbClientDir = 0;
@@ -373,6 +402,8 @@ static BOOL rdp_read_extended_info_packet(rdpRdp* rdp, wStream* s)
 
 	rdpSettings* settings = rdp->settings;
 	WINPR_ASSERT(settings);
+	const UINT32 rdpVersion = freerdp_settings_get_uint32(settings, FreeRDP_RdpVersion);
+	const char* clientHostname = freerdp_settings_get_string(settings, FreeRDP_ClientHostname);
 
 	if (!Stream_CheckAndLogRequiredLength(TAG, s, 4))
 		return FALSE;
@@ -381,15 +412,46 @@ static BOOL rdp_read_extended_info_packet(rdpRdp* rdp, wStream* s)
 	Stream_Read_UINT16(s, cbClientAddress);     /* cbClientAddress (2 bytes) */
 
 	settings->IPv6Enabled = ((clientAddressFamily == ADDRESS_FAMILY_INET6));
+	cbClientAddressMax = rdp_get_client_address_max_size(rdp);
+
+	WLog_DBG(TAG,
+	         "Client Address: family=0x%04" PRIx16 ", cbClientAddress=%" PRIu16
+	         ", RdpVersion=0x%08" PRIx32 ", ClientBuild=%" PRIu32
+	         ", ClientHostname=%s, remaining=%" PRIuz,
+	         clientAddressFamily, cbClientAddress, rdpVersion,
+	         freerdp_settings_get_uint32(settings, FreeRDP_ClientBuild),
+	         clientHostname ? clientHostname : "<unknown>", Stream_GetRemainingLength(s));
+
+	/* Microsoft RDC 2.x can use the RDP 6.1/7.0 80-byte form, but RDP 5.0 through
+	 * 8.1 all advertise RDP_VERSION_5_PLUS. Accept only that exact, terminated,
+	 * zero-padded form. */
+	if ((cbClientAddress > cbClientAddressMax) &&
+	    rdp_is_80_byte_client_address_compat(rdp, s, cbClientAddress))
+	{
+		WLog_DBG(TAG, "Accepting ambiguous RDP 6.1/7.0 80-byte client address form");
+		cbClientAddressMax = CLIENT_ADDRESS_MAX_SIZE_OTHER;
+	}
+	else if ((cbClientAddress == CLIENT_ADDRESS_MAX_SIZE_OTHER) &&
+	         (rdpVersion == RDP_VERSION_5_PLUS) && (cbClientAddress > cbClientAddressMax))
+	{
+		WLog_DBG(TAG,
+		         "80-byte client address compatibility check failed: field is truncated or has no "
+		         "aligned UTF-16 null terminator");
+	}
 
 	if (!rdp_read_info_null_string(settings, FreeRDP_ClientAddress, "cbClientAddress", INFO_UNICODE,
-	                               s, cbClientAddress, rdp_get_client_address_max_size(rdp)))
+	                               s, cbClientAddress, cbClientAddressMax))
 		return FALSE;
 
 	if (!Stream_CheckAndLogRequiredLength(TAG, s, 2))
 		return FALSE;
 
 	Stream_Read_UINT16(s, cbClientDir); /* cbClientDir (2 bytes) */
+	const char* parsedClientAddress =
+	    freerdp_settings_get_string(settings, FreeRDP_ClientAddress);
+	WLog_DBG(TAG, "Parsed ClientAddress=%s, cbClientDir=%" PRIu16 ", remaining=%" PRIuz,
+	         parsedClientAddress ? parsedClientAddress : "<empty>", cbClientDir,
+	         Stream_GetRemainingLength(s));
 
 	/* cbClientDir is the size in bytes of the character data in the clientDir field.
 	 * This size includes the length of the mandatory null terminator.
@@ -737,6 +799,9 @@ static BOOL rdp_read_info_packet(rdpRdp* rdp, wStream* s, UINT16 tpktlength)
 
 	Stream_Read_UINT32(s, settings->KeyboardCodePage); /* CodePage (4 bytes ) */
 	Stream_Read_UINT32(s, flags);                      /* flags (4 bytes) */
+	WLog_DBG(TAG, "Client Info Packet: CodePage=%" PRIu32 ", flags=0x%08" PRIx32
+	              ", Unicode=%s",
+	         settings->KeyboardCodePage, flags, (flags & INFO_UNICODE) ? "TRUE" : "FALSE");
 	settings->AudioCapture = ((flags & INFO_AUDIOCAPTURE) != 0);
 	settings->AudioPlayback = (!(flags & INFO_NOAUDIOPLAYBACK));
 	settings->AutoLogonEnabled = ((flags & INFO_AUTOLOGON) != 0);
