@@ -50,31 +50,50 @@ matrix.
 ## Alpha operation on the validated iMac
 
 Grant Screen Recording and Accessibility permission to the Terminal used to
-launch the server. On the validated machine, start the server at the normal
-1920×1080 desktop with the two local display-mode helpers configured:
+launch the server. The automatic client profile uses the resolution advertised
+by the first RDP client, switches the main Mac display when that exact mode is
+available, and restores the previous mode after disconnect:
 
 ```zsh
 cd /Users/zach/gitr/RDP/FreeRDP-mac-shadow--sonoma
 
-FREERDP_MAC_SHADOW_CONNECT_DISPLAY_COMMAND=/usr/local/bin/w981 \
-FREERDP_MAC_SHADOW_DISCONNECT_DISPLAY_COMMAND=/usr/local/bin/mac1080 \
+FREERDP_MAC_SHADOW_AUTO_CLIENT_PROFILE=1 \
   ./build-sonoma-shadow-p0-channels/server/shadow/cli/freerdp-shadow-cli \
   /bind-address:127.0.0.1 \
   /port:3390 \
   /sec:rdp \
+  /max-connections:1 \
   -auth \
   -gfx \
   -rfx \
   -nsc
 ```
 
-`w981` and `mac1080` are local wrappers around `displayplacer`, not commands
-installed by this repository. Both environment variables are required, and
-each value must be an executable absolute path without arguments. The first
-RDP client runs `w981`, resizes the shadow surfaces, and recreates capture at
-1024×768. The last disconnect runs `mac1080` and recreates idle capture at
-1920×1080. Do not add `+server-side-cursor` when using the low-latency
-client-side pointer.
+The automatic profile preserves the validated client-local cursor for the
+Windows RDP 5 client at 1024×768 and 16-bit color. Other clients, including
+Microsoft RDC 2.x for Mac, receive the Mac cursor composited into the captured
+desktop. The server log records the client hostname, product identifier, build,
+platform, requested size, color depth, selected profile, and cursor policy.
+
+The client must request a mode supported by the Mac's main display. For the
+Snow Leopard MacBook, select 1280×800 in RDC 2.1.1; other MacBooks can select
+their native size. If the exact physical mode is unavailable, the server keeps
+the requested RDP surface and selects the closest activatable physical source mode that is at least
+as large and favors the same aspect ratio, then creates a client-sized scaled
+RDP surface. On the validated display, 1280×800 uses the supported 1440×900
+16:10 source, avoiding distortion and letterboxing. Sonoma hides some scaled
+display modes from its public CoreGraphics list, so the Mac backend dynamically
+uses the complete mode list only when no public exact match exists; no external
+display utility is required. Mouse coordinates are mapped back to the physical
+desktop, and source frames are never upscaled. The older
+`FREERDP_MAC_SHADOW_CONNECT_DISPLAY_COMMAND`/`DISCONNECT_DISPLAY_COMMAND`
+pair remains available as an explicit deployment override, but the app below
+does not require `displayplacer`, `w981`, or `mac1080`.
+
+Legacy bitmap updates are batched against the exact wire size advertised by the
+client. This prevents RDC 2.1.1 from being disconnected when a multi-rectangle
+update is only a few bytes larger than its fast-path request limit, without
+forcing single-rectangle updates for Win98 or modern mstsc.
 
 In Tera Term on Windows 98, connect SSH to the Mac's LAN address and configure
 a local forwarding rule with these values:
@@ -115,7 +134,8 @@ The menu-bar item reads `RDP ●` while the server is running and `RDP ○` whil
 it is stopped. Its menu provides:
 
 - **Start RDP Server** and **Stop RDP Server**;
-- the current server status and fixed `127.0.0.1:3390` listener;
+- the current server status, fixed `127.0.0.1:3390` listener, and automatic
+  profile status;
 - access to the server log and required macOS Privacy settings; and
 - a **Launch at Login** control.
 
@@ -159,9 +179,11 @@ the menu if the prompts were dismissed. macOS may require the app to be quit
 and reopened after Screen Recording is enabled; then select **Start RDP
 Server**.
 
-The service continues to use `/usr/local/bin/w981` for first-client 1024×768
-and `/usr/local/bin/mac1080` for last-disconnect 1920×1080 restoration. Its
-append-only log is stored at:
+The service accepts one client at a time so the physical display, capture
+surface, and cursor policy always match that client. It switches to the exact
+resolution advertised by the connecting client when macOS exposes that mode,
+then restores the pre-connection resolution on disconnect, server stop, or app
+quit. Its append-only log is stored at:
 
 ```text
 ~/Library/Logs/FreeRDPShadow/server.log

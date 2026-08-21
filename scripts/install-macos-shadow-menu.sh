@@ -41,13 +41,6 @@ if [[ ! -x "${server}" ]]; then
 	exit 1
 fi
 
-for helper in /usr/local/bin/w981 /usr/local/bin/mac1080; do
-	if [[ ! -x "${helper}" ]]; then
-		print -u2 "Missing executable display helper: ${helper}"
-		exit 1
-	fi
-done
-
 mkdir -p "${macos_dir}" "${resources_dir}"
 
 xcrun clang \
@@ -63,8 +56,6 @@ xcrun clang \
 cp "${source_dir}/Info.plist" "${contents_dir}/Info.plist"
 cp "${source_dir}/ShadowConfig.plist" "${config}"
 /usr/libexec/PlistBuddy -c "Add :ServerExecutable string ${server}" "${config}"
-/usr/libexec/PlistBuddy -c "Add :ConnectDisplayCommand string /usr/local/bin/w981" "${config}"
-/usr/libexec/PlistBuddy -c "Add :DisconnectDisplayCommand string /usr/local/bin/mac1080" "${config}"
 /usr/libexec/PlistBuddy -c "Add :LogFile string ${HOME}/Library/Logs/FreeRDPShadow/server.log" \
 	"${config}"
 
@@ -74,5 +65,6 @@ codesign --verify --deep --strict "${app_dir}"
 "${macos_dir}/FreeRDPShadowMenu" --register-login-item
 
 print "Installed ${app_dir}"
-print "Opening the menu-bar app; approve its Login Item if macOS requests it."
+print "Opening the menu-bar app with automatic client resolution and cursor profiles."
+print "Approve its Login Item if macOS requests it."
 open "${app_dir}"

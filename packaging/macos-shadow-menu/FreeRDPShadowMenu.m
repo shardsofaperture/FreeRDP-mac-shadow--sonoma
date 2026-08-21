@@ -127,6 +127,12 @@ typedef NS_ENUM(NSInteger, ShadowServerState)
 	                                         keyEquivalent:@""];
 	listener.enabled = NO;
 	[self.menu addItem:listener];
+	NSMenuItem* profile =
+	    [[NSMenuItem alloc] initWithTitle:@"Profile: Automatic resolution and cursor"
+	                             action:nil
+	                      keyEquivalent:@""];
+	profile.enabled = NO;
+	[self.menu addItem:profile];
 	[self.menu addItem:[NSMenuItem separatorItem]];
 
 	BOOL shouldStop = self.serverTask.running || self.wantsServerRunning;
@@ -243,9 +249,7 @@ typedef NS_ENUM(NSInteger, ShadowServerState)
 
 	NSDictionary* config = [self config];
 	NSString* executable = config[@"ServerExecutable"];
-	NSString* connectCommand = config[@"ConnectDisplayCommand"];
-	NSString* disconnectCommand = config[@"DisconnectDisplayCommand"];
-	if (!executable || !connectCommand || !disconnectCommand)
+	if (!executable)
 	{
 		self.wantsServerRunning = NO;
 		self.state = ShadowServerFailed;
@@ -255,13 +259,11 @@ typedef NS_ENUM(NSInteger, ShadowServerState)
 	}
 
 	NSFileManager* manager = [NSFileManager defaultManager];
-	if (![manager isExecutableFileAtPath:executable] ||
-	    ![manager isExecutableFileAtPath:connectCommand] ||
-	    ![manager isExecutableFileAtPath:disconnectCommand])
+	if (![manager isExecutableFileAtPath:executable])
 	{
 		self.wantsServerRunning = NO;
 		self.state = ShadowServerFailed;
-		self.failureReason = @"server or display helper is not executable";
+		self.failureReason = @"shadow server is not executable";
 		[self updateMenuBar];
 		return;
 	}
@@ -289,12 +291,11 @@ typedef NS_ENUM(NSInteger, ShadowServerState)
 	task.executableURL = [NSURL fileURLWithPath:executable];
 	task.currentDirectoryURL = [NSURL fileURLWithPath:[executable stringByDeletingLastPathComponent]];
 	task.arguments = @[
-		@"/bind-address:127.0.0.1", @"/port:3390", @"/sec:rdp", @"-auth", @"-gfx",
-		@"-rfx", @"-nsc", @"/log-level:INFO"
+		@"/bind-address:127.0.0.1", @"/port:3390", @"/sec:rdp", @"/max-connections:1",
+		@"-auth", @"-gfx", @"-rfx", @"-nsc", @"/log-level:INFO"
 	];
 	NSMutableDictionary* environment = [[[NSProcessInfo processInfo] environment] mutableCopy];
-	environment[@"FREERDP_MAC_SHADOW_CONNECT_DISPLAY_COMMAND"] = connectCommand;
-	environment[@"FREERDP_MAC_SHADOW_DISCONNECT_DISPLAY_COMMAND"] = disconnectCommand;
+	environment[@"FREERDP_MAC_SHADOW_AUTO_CLIENT_PROFILE"] = @"1";
 	task.environment = environment;
 	task.standardOutput = log;
 	task.standardError = log;
