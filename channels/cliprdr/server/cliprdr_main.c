@@ -76,29 +76,67 @@
  *
  * @return 0 on success, otherwise a Win32 error code
  */
-static UINT cliprdr_server_packet_send(CliprdrServerPrivate* cliprdr, wStream* s)
+static UINT cliprdr_server_prepare_packet(CliprdrServerContext* context, wStream* s,
+                                          UINT32* logicalDataLen, UINT32* channelPduBytes,
+                                          BOOL* trailerAppended)
 {
-	UINT rc = 0;
-	BOOL status = 0;
-	ULONG written = 0;
-
-	WINPR_ASSERT(cliprdr);
+	WINPR_ASSERT(context);
+	WINPR_ASSERT(s);
+	WINPR_ASSERT(logicalDataLen);
+	WINPR_ASSERT(channelPduBytes);
+	WINPR_ASSERT(trailerAppended);
 
 	const size_t pos = Stream_GetPosition(s);
-	if ((pos < 8) || (pos > UINT32_MAX))
+	if ((pos < CLIPRDR_HEADER_LENGTH) || (pos > UINT32_MAX))
+		return ERROR_NO_DATA;
+
+	const size_t logical = pos - CLIPRDR_HEADER_LENGTH;
+	if (logical > UINT32_MAX)
+		return ERROR_NO_DATA;
+
+	*logicalDataLen = (UINT32)logical;
+	*trailerAppended = FALSE;
+
+	if (context->useLegacyPduTrailer)
 	{
-		rc = ERROR_NO_DATA;
-		goto fail;
+		if (!Stream_EnsureRemainingCapacity(s, sizeof(UINT32)))
+			return ERROR_NOT_ENOUGH_MEMORY;
+		Stream_Write_UINT32(s, 0);
+		*trailerAppended = TRUE;
 	}
 
-	const UINT32 dataLen = (UINT32)(pos - 8);
-	if (!Stream_SetPosition(s, 4))
-		goto fail;
-	Stream_Write_UINT32(s, dataLen);
+	const size_t actual = Stream_GetPosition(s);
+	if (actual > UINT32_MAX)
+		return ERROR_NO_DATA;
+	*channelPduBytes = (UINT32)actual;
 
-	WINPR_ASSERT(pos <= UINT32_MAX);
-	status = WTSVirtualChannelWrite(cliprdr->ChannelHandle, Stream_BufferAs(s, char), (UINT32)pos,
-	                                &written);
+	if (!Stream_SetPosition(s, 4))
+		return ERROR_INTERNAL_ERROR;
+	Stream_Write_UINT32(s, *logicalDataLen);
+	if (!Stream_SetPosition(s, actual))
+		return ERROR_INTERNAL_ERROR;
+
+	return CHANNEL_RC_OK;
+}
+
+static UINT cliprdr_server_packet_send(CliprdrServerContext* context, wStream* s)
+{
+	UINT32 logicalDataLen = 0;
+	UINT32 channelPduBytes = 0;
+	ULONG written = 0;
+
+	WINPR_ASSERT(context);
+	CliprdrServerPrivate* cliprdr = (CliprdrServerPrivate*)context->handle;
+	WINPR_ASSERT(cliprdr);
+
+	BOOL trailerAppended = FALSE;
+	UINT rc = cliprdr_server_prepare_packet(context, s, &logicalDataLen, &channelPduBytes,
+	                                        &trailerAppended);
+	if (rc != CHANNEL_RC_OK)
+		goto fail;
+
+	const BOOL status = WTSVirtualChannelWrite(cliprdr->ChannelHandle, Stream_BufferAs(s, char),
+	                                           channelPduBytes, &written);
 	rc = status ? CHANNEL_RC_OK : ERROR_INTERNAL_ERROR;
 fail:
 	Stream_Free(s, TRUE);
@@ -176,7 +214,7 @@ static UINT cliprdr_server_capabilities(CliprdrServerContext* context,
 		}
 	}
 	WLog_Print(cliprdr->log, WLOG_DEBUG, "ServerCapabilities");
-	return cliprdr_server_packet_send(cliprdr, s);
+	return cliprdr_server_packet_send(context, s);
 }
 
 /**
@@ -206,7 +244,7 @@ static UINT cliprdr_server_monitor_ready(CliprdrServerContext* context,
 	}
 
 	WLog_Print(cliprdr->log, WLOG_DEBUG, "ServerMonitorReady");
-	return cliprdr_server_packet_send(cliprdr, s);
+	return cliprdr_server_packet_send(context, s);
 }
 
 /**
@@ -231,7 +269,7 @@ static UINT cliprdr_server_format_list(CliprdrServerContext* context,
 
 	WLog_Print(cliprdr->log, WLOG_DEBUG, "ServerFormatList: numFormats: %" PRIu32 "",
 	           formatList->numFormats);
-	return cliprdr_server_packet_send(cliprdr, s);
+	return cliprdr_server_packet_send(context, s);
 }
 
 /**
@@ -261,7 +299,7 @@ cliprdr_server_format_list_response(CliprdrServerContext* context,
 	}
 
 	WLog_Print(cliprdr->log, WLOG_DEBUG, "ServerFormatListResponse");
-	return cliprdr_server_packet_send(cliprdr, s);
+	return cliprdr_server_packet_send(context, s);
 }
 
 /**
@@ -289,7 +327,7 @@ static UINT cliprdr_server_lock_clipboard_data(CliprdrServerContext* context,
 
 	WLog_Print(cliprdr->log, WLOG_DEBUG, "ServerLockClipboardData: clipDataId: 0x%08" PRIX32 "",
 	           lockClipboardData->clipDataId);
-	return cliprdr_server_packet_send(cliprdr, s);
+	return cliprdr_server_packet_send(context, s);
 }
 
 /**
@@ -319,7 +357,7 @@ cliprdr_server_unlock_clipboard_data(CliprdrServerContext* context,
 
 	WLog_Print(cliprdr->log, WLOG_DEBUG, "ServerUnlockClipboardData: clipDataId: 0x%08" PRIX32 "",
 	           unlockClipboardData->clipDataId);
-	return cliprdr_server_packet_send(cliprdr, s);
+	return cliprdr_server_packet_send(context, s);
 }
 
 /**
@@ -349,7 +387,7 @@ static UINT cliprdr_server_format_data_request(CliprdrServerContext* context,
 
 	Stream_Write_UINT32(s, formatDataRequest->requestedFormatId); /* requestedFormatId (4 bytes) */
 	WLog_Print(cliprdr->log, WLOG_DEBUG, "ClientFormatDataRequest");
-	return cliprdr_server_packet_send(cliprdr, s);
+	return cliprdr_server_packet_send(context, s);
 }
 
 /**
@@ -381,7 +419,7 @@ cliprdr_server_format_data_response(CliprdrServerContext* context,
 
 	Stream_Write(s, formatDataResponse->requestedFormatData, formatDataResponse->common.dataLen);
 	WLog_Print(cliprdr->log, WLOG_DEBUG, "ServerFormatDataResponse");
-	return cliprdr_server_packet_send(cliprdr, s);
+	return cliprdr_server_packet_send(context, s);
 }
 
 /**
@@ -411,7 +449,7 @@ cliprdr_server_file_contents_request(CliprdrServerContext* context,
 
 	WLog_Print(cliprdr->log, WLOG_DEBUG, "ServerFileContentsRequest: streamId: 0x%08" PRIX32 "",
 	           fileContentsRequest->streamId);
-	return cliprdr_server_packet_send(cliprdr, s);
+	return cliprdr_server_packet_send(context, s);
 }
 
 /**
@@ -442,7 +480,7 @@ cliprdr_server_file_contents_response(CliprdrServerContext* context,
 
 	WLog_Print(cliprdr->log, WLOG_DEBUG, "ServerFileContentsResponse: streamId: 0x%08" PRIX32 "",
 	           fileContentsResponse->streamId);
-	return cliprdr_server_packet_send(cliprdr, s);
+	return cliprdr_server_packet_send(context, s);
 }
 
 /**
@@ -1124,6 +1162,31 @@ static UINT cliprdr_server_init(CliprdrServerContext* context)
 	return error;
 }
 
+static BOOL cliprdr_server_has_legacy_trailer(const wStream* s, UINT32 logicalDataLen,
+                                              size_t channelPduBytes)
+{
+	const size_t expected = CLIPRDR_HEADER_LENGTH + (size_t)logicalDataLen;
+	if (channelPduBytes != (expected + sizeof(UINT32)))
+		return FALSE;
+
+	const BYTE* trailer = Stream_ConstBuffer(s) + expected;
+	return (trailer[0] == 0) && (trailer[1] == 0) && (trailer[2] == 0) && (trailer[3] == 0);
+}
+
+/* The RDP 5.x compatibility trailer is outside CLIPRDR_HEADER.dataLen.  Retain it
+ * on the wire, but exclude this exact, connection-selected zero DWORD from the
+ * generic body parser so it does not report a benign "bytes not parsed" warning. */
+static BOOL cliprdr_server_strip_legacy_trailer(CliprdrServerContext* context, wStream* s,
+                                                UINT32 logicalDataLen,
+                                                size_t channelPduBytes)
+{
+	if (!context->useLegacyPduTrailer ||
+	    !cliprdr_server_has_legacy_trailer(s, logicalDataLen, channelPduBytes))
+		return FALSE;
+
+	return Stream_SetLength(s, CLIPRDR_HEADER_LENGTH + (size_t)logicalDataLen);
+}
+
 /**
  * Function description
  *
@@ -1145,6 +1208,7 @@ static UINT cliprdr_server_read(CliprdrServerContext* context)
 	if (!s)
 		return CHANNEL_RC_OK;
 
+	const size_t channelPduBytes = Stream_Length(s);
 	UINT ret = ERROR_INVALID_DATA;
 	if (!Stream_CheckAndLogRequiredLengthWLog(cliprdr->log, s, 8))
 		goto out;
@@ -1154,6 +1218,8 @@ static UINT cliprdr_server_read(CliprdrServerContext* context)
 		.msgFlags = Stream_Get_UINT16(s), /* msgFlags (2 bytes) */
 		.dataLen = Stream_Get_UINT32(s)   /* dataLen (4 bytes) */
 	};
+
+	(void)cliprdr_server_strip_legacy_trailer(context, s, header.dataLen, channelPduBytes);
 
 	if (!Stream_CheckAndLogRequiredLengthWLog(cliprdr->log, s, header.dataLen))
 		goto out;

@@ -38,6 +38,7 @@
 #include "mac_shadow_clipboard.h"
 
 #define TAG SERVER_TAG("shadow.mac")
+#define WLog_DEBUG(_tag, ...) WLog_Print_tag((_tag), WLOG_DEBUG, __VA_ARGS__)
 
 #define MAC_SHADOW_CGS_MODE_DESCRIPTION_LENGTH 0xD4
 #define MAC_SHADOW_CGS_MODE_STORAGE_LENGTH 0xDC
@@ -380,6 +381,32 @@ static BOOL mac_shadow_is_win98_compat_profile(const rdpSettings* settings)
 	       (freerdp_settings_get_uint32(settings, FreeRDP_ColorDepth) == 16);
 }
 
+/* Clipboard is more restrictive than the display cursor profile: build 3790
+ * distinguishes the validated Windows 98 RDP 5.2 client from other RDP 5
+ * clients that can request the same 1024x768x16 desktop.  The negotiated
+ * settings are complete before static channels are started. */
+static BOOL mac_shadow_is_win98_clipboard_profile(const rdpSettings* settings)
+{
+	return settings && mac_shadow_is_win98_compat_profile(settings) &&
+	       (freerdp_settings_get_uint32(settings, FreeRDP_ClientBuild) == 3790);
+}
+
+/* Hardware-validated legacy Mac RDC fingerprint. It reports Windows/NT, build 0,
+ * and copies its hostname into ClientProductId. Do not infer this from "Mac" in
+ * a name, or from the shared Windows/NT fields alone. */
+static BOOL mac_shadow_is_legacy_mac_rdc(const rdpSettings* settings)
+{
+	if (!settings)
+		return FALSE;
+	const char* hostname = freerdp_settings_get_string(settings, FreeRDP_ClientHostname);
+	const char* product = freerdp_settings_get_string(settings, FreeRDP_ClientProductId);
+	return hostname && hostname[0] && product && (strcmp(hostname, product) == 0) &&
+	       (freerdp_settings_get_uint32(settings, FreeRDP_ClientBuild) == 0) &&
+	       (freerdp_settings_get_uint32(settings, FreeRDP_RdpVersion) == RDP_VERSION_5_PLUS) &&
+	       (freerdp_settings_get_uint32(settings, FreeRDP_OsMajorType) == OSMAJORTYPE_WINDOWS) &&
+	       (freerdp_settings_get_uint32(settings, FreeRDP_OsMinorType) == OSMINORTYPE_WINDOWS_NT);
+}
+
 static void mac_shadow_apply_client_profile(macShadowSubsystem* subsystem,
                                             const rdpSettings* settings)
 {
@@ -397,6 +424,10 @@ static void mac_shadow_apply_client_profile(macShadowSubsystem* subsystem,
 	const UINT32 osMajorType = freerdp_settings_get_uint32(settings, FreeRDP_OsMajorType);
 	const UINT32 osMinorType = freerdp_settings_get_uint32(settings, FreeRDP_OsMinorType);
 	const BOOL win98Profile = mac_shadow_is_win98_compat_profile(settings);
+	if (mac_shadow_is_legacy_mac_rdc(settings))
+		WLog_INFO(TAG, "Keyboard profile=legacy-mac-rdc: RDP Left Control maps to Command; "
+		              "Right Control remains Control. Physical left Command is consumed by RDC; "
+		              "physical left Control and right Command share the same wire encoding.");
 
 	if (subsystem->autoClientProfile)
 	{
@@ -426,12 +457,24 @@ static BOOL mac_shadow_client_connect(rdpShadowSubsystem* subsystem, rdpShadowCl
 {
 	SHADOW_MSG_OUT_POINTER_ALPHA_UPDATE* msg = nullptr;
 	macShadowSubsystem* mac = (macShadowSubsystem*)subsystem;
-	if (WTSVirtualChannelManagerIsChannelJoined(client->vcm, CLIPRDR_SVC_CHANNEL_NAME) &&
-	    (mac_shadow_clipboard_init(client) < 0))
-		return FALSE;
 
 	if (!subsystem || !subsystem->server || !client)
 		return FALSE;
+
+	const rdpSettings* settings = client->context.settings;
+	const BOOL legacyWin98Clipboard = mac_shadow_is_win98_clipboard_profile(settings);
+	if (WTSVirtualChannelManagerIsChannelJoined(client->vcm, CLIPRDR_SVC_CHANNEL_NAME))
+	{
+		/* Persist the classification before cliprdr Start can send capabilities. */
+		if (mac_shadow_clipboard_init(client, legacyWin98Clipboard) < 0)
+		{
+			WLog_WARN(TAG, "Client joined cliprdr, but clipboard startup failed; continuing session");
+		}
+	}
+	else
+	{
+		WLog_INFO(TAG, "Client did not join cliprdr; clipboard redirection is unavailable");
+	}
 
 	EnterCriticalSection(&mac->connectionLock);
 	if (WaitForSingleObject(mac->stopEvent, 0) == WAIT_OBJECT_0)
@@ -560,18 +603,22 @@ static void mac_shadow_client_disconnect(rdpShadowSubsystem* subsystem, rdpShado
 	LeaveCriticalSection(&mac->connectionLock);
 }
 
-/* RDC for Mac 2.x reports the physical left Command key as left Control. Its client
- * product identifier contains "Mac"; keep this narrowly scoped so Windows, Win98,
- * and Android retain normal Control semantics. Right Control remains Control for
- * Mac clients, providing a genuine Control modifier when needed. */
-static BOOL mac_shadow_is_microsoft_mac_rdc(const rdpShadowClient* client)
+static DWORD mac_shadow_keyboard_compat_vk(const rdpSettings* settings, DWORD vkcode)
 {
-	const char* product = client ? freerdp_settings_get_string(client->context.settings,
-	                                                          FreeRDP_ClientProductId) : nullptr;
-	return product && strcasestr(product, "mac") && strcasestr(product, "microsoft");
+	/* The Win98 profile has no usable Windows/Meta event. Its Ctrl shortcut
+	 * chord is therefore translated to Command on both sides, on down and up. */
+	const DWORD baseVk = vkcode & ~KBDEXT;
+	if (mac_shadow_is_win98_compat_profile(settings) &&
+	    ((baseVk == VK_LCONTROL) || (baseVk == VK_RCONTROL)))
+		return VK_LWIN | KBDEXT;
+	/* Legacy Mac RDC exposes only its left Control as Command; its extended
+	 * right Control remains genuine Control. */
+	if ((vkcode == VK_LCONTROL) && mac_shadow_is_legacy_mac_rdc(settings))
+		return VK_LWIN | KBDEXT;
+	return vkcode;
 }
 
-static CGEventFlags mac_shadow_keyboard_modifier_flag(const rdpShadowClient* client, DWORD vkcode)
+static CGEventFlags mac_shadow_keyboard_modifier_flag(DWORD vkcode)
 {
 	switch (vkcode & ~KBDEXT)
 	{
@@ -580,10 +627,6 @@ static CGEventFlags mac_shadow_keyboard_modifier_flag(const rdpShadowClient* cli
 			return kCGEventFlagMaskShift;
 
 		case VK_LCONTROL:
-			if (mac_shadow_is_microsoft_mac_rdc(client))
-				return kCGEventFlagMaskCommand;
-			return kCGEventFlagMaskControl;
-
 		case VK_RCONTROL:
 			return kCGEventFlagMaskControl;
 
@@ -636,10 +679,20 @@ static BOOL mac_shadow_input_keyboard_event(rdpShadowSubsystem* subsystem, rdpSh
 	if (extended)
 		vkcode |= KBDEXT;
 
-	if (vkcode == (VK_RCONTROL | KBDEXT))
+	const DWORD mappedVk = mac_shadow_keyboard_compat_vk(client->context.settings, vkcode);
+
+	if (mappedVk == (VK_RCONTROL | KBDEXT))
 		keycode = APPLE_VK_RightControl;
 	else
-		keycode = GetKeycodeFromVirtualKeyCode(vkcode, WINPR_KEYCODE_TYPE_APPLE);
+		keycode = GetKeycodeFromVirtualKeyCode(mappedVk, WINPR_KEYCODE_TYPE_APPLE);
+	if ((keycode == 0) && ((vkcode & ~KBDEXT) != VK_KEY_A))
+	{
+		WLog_WARN(TAG,
+		          "Mac keyboard diagnostic: no Apple mapping for rdpFlags=0x%04" PRIx16
+		          ", scanCode=0x%02" PRIx8 ", extended=%s, winprVk=0x%08" PRIx32,
+		          flags, code, extended ? "yes" : "no", vkcode);
+		return FALSE;
+	}
 
 	if ((vkcode & ~KBDEXT) == VK_CAPITAL)
 	{
@@ -648,15 +701,20 @@ static BOOL mac_shadow_input_keyboard_event(rdpShadowSubsystem* subsystem, rdpSh
 	}
 	else
 	{
-		modifierFlag = mac_shadow_keyboard_modifier_flag(client, vkcode);
+		modifierFlag = mac_shadow_keyboard_modifier_flag(mappedVk);
 		if ((flags & KBD_FLAGS_RELEASE) != 0)
 			mac->keyboardFlags &= ~modifierFlag;
 		else
 			mac->keyboardFlags |= modifierFlag;
 	}
 
-	if (((vkcode & ~KBDEXT) == VK_LCONTROL) && mac_shadow_is_microsoft_mac_rdc(client))
-		keycode = APPLE_VK_Command;
+	WLog_DEBUG(TAG,
+	          "Mac keyboard diagnostic: rdpFlags=0x%04" PRIx16
+	          ", scanCode=0x%02" PRIx8 ", extended=%s, winprVk=0x%08" PRIx32
+	          ", mappedVk=0x%08" PRIx32 ", appleKeyCode=0x%08" PRIx32 ", macFlags=0x%016" PRIx64 ", action=%s",
+	          flags, code, extended ? "yes" : "no", vkcode, mappedVk, keycode,
+	          (UINT64)mac->keyboardFlags,
+	          (flags & KBD_FLAGS_RELEASE) ? "up" : "down");
 
 	kbdEvent = CGEventCreateKeyboardEvent(mac->eventSource, (CGKeyCode)keycode,
 	                                      (flags & KBD_FLAGS_RELEASE) == 0);

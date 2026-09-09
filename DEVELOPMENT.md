@@ -32,9 +32,9 @@ For targeted regression tests, use the separate test build:
 cmake -S . -B build-macos-shadow-release-checks -G Ninja \
   -C packaging/macos-shadow-menu/production-cache.cmake -DBUILD_TESTING=ON
 cmake --build build-macos-shadow-release-checks --target \
-  TestSynch TestWinPRUtils TestFreeRDPCodec TestShadowBitmap TestMacShadowPublication -j 6
+  TestSynch TestWinPRUtils TestFreeRDPCodec TestShadowBitmap TestMacShadowPublication TestMacShadowClipboard -j 6
 ctest --test-dir build-macos-shadow-release-checks --output-on-failure \
-  -R '^TestShadowBitmap$|^TestMacShadowPublication$|^TestFreeRDPRegion$|^TestFreeRDPCodec(Color|Copy|Interleaved|Planar)$|^Test(SynchEvent|SynchCritical|SynchThread|MessageQueue|MessagePipe)$'
+  -R '^TestShadowBitmap$|^TestMacShadow(Publication|Clipboard)$|^TestFreeRDPRegion$|^TestFreeRDPCodec(Color|Copy|Interleaved|Planar)$|^Test(SynchEvent|SynchCritical|SynchThread|MessageQueue|MessagePipe)$'
 ```
 
 ## Custom code map
@@ -47,7 +47,7 @@ ctest --test-dir build-macos-shadow-release-checks --output-on-failure \
 | channel handling | `server/shadow/shadow_channels.c` |
 | legacy transport behavior | `libfreerdp/core/transport.c`, `libfreerdp/core/info.c`, `libfreerdp/core/server.c` |
 | menu app, packaging, signing | `packaging/macos-shadow-menu/`, `scripts/build-macos-shadow-app.py` |
-| deterministic custom regressions | `server/shadow/test/TestShadowBitmap.c`, `TestMacShadowPublication.c` |
+| deterministic custom regressions | `server/shadow/test/TestShadowBitmap.c`, `TestMacShadowPublication.c`, `TestMacShadowClipboard.m` |
 
 The Mac backend gives input priority and favors newest desktop state over animation
 smoothness. Brief self-correcting visual roughness is acceptable; persistent
@@ -58,9 +58,22 @@ audio, and normal FreeRDP channels/transport.
 
 Build 0.1.8 adds plain-text-only `cliprdr`: Unicode text is preferred, with
 legacy ANSI/OEM text accepted from clients. Unsupported clipboard clients remain
-normal sessions. Legacy Microsoft RDC for Mac is identified from negotiated client
-metadata and maps its left-Control Command encoding to macOS Command; all other
-client modifier mappings are unchanged.
+normal sessions. Per-key and clipboard-PDU tracing is DEBUG-level only. The
+hardware-validated legacy Mac RDC keyboard profile requires all of: build 0,
+RDP version `0x00080004`, OS fields Windows/NT (`0x0001/0x0003`), and nonempty,
+identical hostname and product ID. It does not depend on "Mac" in either name or
+on resolution/color depth. Clients not matching this fingerprint keep their
+existing mappings.
+
+For this profile only, incoming RDP Left Control maps generally to macOS Command
+on both key-down and key-up. Hardware testing established that physical right
+Command and physical left Control send identical Left Control events: **both
+therefore become Command**. Physical left Command is consumed locally by RDC and
+cannot be restored server-side. Extended RDP Right Control remains genuine macOS
+Control if the client can transmit it; the tested MacBook has no physical right
+Control, so no distinct physical Control route has been established there.
+Option, Shift, Caps Lock, and other keys retain their existing behavior. This is
+an observed compatibility fingerprint, not a unique authenticated client ID.
 
 ## Hardware smoke test
 
@@ -71,3 +84,6 @@ regression, run a high-motion screensaver locally, connect at target depth/resol
 (Win98: 1024x768, 16-bit), and separately note idle, typing, window movement,
 scrolling, and full-screen-motion responsiveness. See `docs/mac-shadow-latency.md`
 for detailed behavior and test notes.
+
+Build 0.1.8 hardware acceptance, protocol repairs, and regression evidence are
+recorded in [the regression report](docs/mac-shadow-0.1.8-regression.md).
