@@ -42,7 +42,9 @@ UINT shadow_client_channels_post_connect(rdpShadowClient* client)
 			return ERROR_NOT_READY;
 	}
 
-	if (!shadow_client_audin_init(client))
+	/* AUDIN is microphone input from the client. Do not create its dynamic-channel thread when
+	 * the shadow subsystem has no consumer; macOS system-audio output uses RDPSND above. */
+	if (client->subsystem->AudinServerReceiveSamples && !shadow_client_audin_init(client))
 		return ERROR_NOT_READY;
 
 	if (shadow_client_rdpgfx_init(client) < 0)

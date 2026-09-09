@@ -29,6 +29,8 @@ typedef struct mac_shadow_subsystem macShadowSubsystem;
 #include <winpr/stream.h>
 #include <winpr/collections.h>
 
+#include <stdatomic.h>
+
 #include <dispatch/dispatch.h>
 #include <IOKit/IOKitLib.h>
 #include <IOSurface/IOSurface.h>
@@ -70,12 +72,17 @@ struct mac_shadow_subsystem
 	BOOL captureNeedsFullFrame;
 	CGDisplayStreamRef stream;
 	dispatch_queue_t captureQueue;
-	BOOL testToneEnabled;
-	double testTonePhase;
-	dispatch_queue_t audioQueue;
-	dispatch_source_t audioTimer;
+	/* Capture owns a mutable latest surface; the worker publishes into server->surface. */
+	rdpShadowSurface* captureSurface;
+	CRITICAL_SECTION publicationLock;
+	HANDLE worker;
+	HANDLE stopEvent;
+	HANDLE frameEvent;
+	BOOL publishedFrame;
 	BOOL audioNegotiated;
 	BOOL audioUnavailable;
+	_Atomic UINT32 audioGeneration;
+	dispatch_queue_t audioStartupQueue;
 	MacShadowAudioCapture* audioCapture;
 };
 

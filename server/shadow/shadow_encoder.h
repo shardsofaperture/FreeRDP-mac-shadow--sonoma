@@ -26,6 +26,7 @@
 #include <freerdp/codecs.h>
 
 #include <freerdp/server/shadow.h>
+#include "shadow_bitmap.h"
 
 struct rdp_shadow_encoder
 {
@@ -60,6 +61,8 @@ struct rdp_shadow_encoder
 	UINT32 frameId;
 	UINT32 lastAckframeId;
 	UINT32 queueDepth;
+	BOOL bitmapFallback;
+	shadowBitmapState* bitmapState;
 };
 
 #ifdef __cplusplus

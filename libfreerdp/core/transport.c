@@ -865,6 +865,23 @@ static SSIZE_T transport_read_layer(rdpTransport* transport, BYTE* data, size_t 
 
 		if (status <= 0)
 		{
+			/* A nonblocking socket may report EAGAIN without propagating OpenSSL's retry flag.
+			 * Treat it as no data, not a failed connection. */
+			if ((status < 0) && !transport->blocking &&
+			    ((errno == EAGAIN) || (errno == EWOULDBLOCK)))
+			{
+				return read;
+			}
+
+			/* BIO_read returning zero is an orderly peer close. errno can still contain EAGAIN
+			 * from an earlier operation, which previously produced a false transport-failure log. */
+			if ((status == 0) && (!transport->frontBio || !BIO_should_retry(transport->frontBio)))
+			{
+				WLog_Print(transport->log, WLOG_INFO, "Peer closed the transport connection");
+				transport->layer = TRANSPORT_LAYER_CLOSED;
+				return -1;
+			}
+
 			if (!transport->frontBio || !BIO_should_retry(transport->frontBio))
 			{
 				/* something unexpected happened, let's close */

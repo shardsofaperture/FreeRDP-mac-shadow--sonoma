@@ -456,6 +456,18 @@ static BOOL shadow_client_capabilities(freerdp_peer* peer)
 	subsystem = client->server->subsystem;
 	WINPR_ASSERT(subsystem);
 
+#if defined(__APPLE__)
+	/* The classic compressor has no indexed-color encoder. Tell the client our
+	 * true-color fallback before capability exchange, including reconnect/resize. */
+	rdpSettings* settings = client->context.settings;
+	const UINT32 depth = freerdp_settings_get_uint32(settings, FreeRDP_ColorDepth);
+	if (depth != shadow_bitmap_color_depth(depth))
+	{
+		if (!freerdp_settings_set_uint32(settings, FreeRDP_ColorDepth, 16))
+			return FALSE;
+	}
+#endif
+
 	IFCALLRET(subsystem->ClientCapabilities, ret, subsystem, client);
 
 	if (!ret)
@@ -547,9 +559,10 @@ static BOOL shadow_client_post_connect(freerdp_peer* peer)
 	subsystem = server->subsystem;
 	WINPR_ASSERT(subsystem);
 
-	if (freerdp_settings_get_uint32(settings, FreeRDP_ColorDepth) == 24)
+	if ((freerdp_settings_get_uint32(settings, FreeRDP_ColorDepth) == 24) ||
+	    (freerdp_settings_get_uint32(settings, FreeRDP_ColorDepth) == 8))
 	{
-		if (!freerdp_settings_set_uint32(settings, FreeRDP_ColorDepth, 16)) /* disable 24bpp */
+		if (!freerdp_settings_set_uint32(settings, FreeRDP_ColorDepth, 16)) /* supported true-color fallback */
 			return FALSE;
 	}
 
@@ -725,6 +738,15 @@ static BOOL shadow_client_activate(freerdp_peer* peer)
 
 	rdpShadowClient* client = (rdpShadowClient*)peer->context;
 	WINPR_ASSERT(client);
+
+#if defined(__APPLE__)
+	/* Confirm Active can repeat the client's preferred depth after a resize. Apply
+	 * the advertised fallback on every activation, not only the initial connection. */
+	rdpSettings* settings = client->context.settings;
+	const UINT32 depth = freerdp_settings_get_uint32(settings, FreeRDP_ColorDepth);
+	if (!freerdp_settings_set_uint32(settings, FreeRDP_ColorDepth, shadow_bitmap_color_depth(depth)))
+		return FALSE;
+#endif
 
 	/* Resize client if necessary */
 	if (shadow_client_recalc_desktop_size(client))
@@ -2047,18 +2069,6 @@ static BOOL shadow_client_send_bitmap_update(rdpShadowClient* client, BYTE* pSrc
 
 	SrcFormat = PIXEL_FORMAT_BGRX32;
 
-	if ((nXSrc % 4) != 0)
-	{
-		nWidth += (nXSrc % 4);
-		nXSrc -= (nXSrc % 4);
-	}
-
-	if ((nYSrc % 4) != 0)
-	{
-		nHeight += (nYSrc % 4);
-		nYSrc -= (nYSrc % 4);
-	}
-
 	rows = (nHeight / 64) + ((nHeight % 64) ? 1 : 0);
 	cols = (nWidth / 64) + ((nWidth % 64) ? 1 : 0);
 	k = 0;
@@ -2069,16 +2079,6 @@ static BOOL shadow_client_send_bitmap_update(rdpShadowClient* client, BYTE* pSrc
 		return FALSE;
 
 	bitmapUpdate.rectangles = bitmapData;
-
-	if ((nWidth % 4) != 0)
-	{
-		nWidth += (4 - (nWidth % 4));
-	}
-
-	if ((nHeight % 4) != 0)
-	{
-		nHeight += (4 - (nHeight % 4));
-	}
 
 	for (yIdx = 0; yIdx < rows; yIdx++)
 	{
@@ -2100,8 +2100,14 @@ static BOOL shadow_client_send_bitmap_update(rdpShadowClient* client, BYTE* pSrc
 			bitmap->destBottom = bitmap->destTop + bitmap->height - 1;
 			bitmap->compressed = TRUE;
 
-			if ((bitmap->width < 4) || (bitmap->height < 4))
-				continue;
+			BYTE packed[64 * 64 * 4];
+			if (!shadow_bitmap_pack(packed, pSrcData, nSrcStep, bitmap->destLeft, bitmap->destTop,
+			                        bitmap->width, bitmap->height))
+			{
+				ret = FALSE;
+				goto out;
+			}
+			bitmap->width = (bitmap->width + 3U) & ~3U;
 
 			if (freerdp_settings_get_uint32(settings, FreeRDP_ColorDepth) < 32)
 			{
@@ -2111,8 +2117,8 @@ static BOOL shadow_client_send_bitmap_update(rdpShadowClient* client, BYTE* pSrc
 				buffer = encoder->grid[k];
 
 				ret = interleaved_compress(
-				    encoder->interleaved, buffer, &DstSize, bitmap->width, bitmap->height, pSrcData,
-				    SrcFormat, nSrcStep, bitmap->destLeft, bitmap->destTop, nullptr, bitsPerPixel);
+				    encoder->interleaved, buffer, &DstSize, bitmap->width, bitmap->height, packed,
+				    SrcFormat, 256, 0, 0, nullptr, bitsPerPixel);
 				if (!ret)
 					goto out;
 				bitmap->bitmapDataStream = buffer;
@@ -2125,11 +2131,16 @@ static BOOL shadow_client_send_bitmap_update(rdpShadowClient* client, BYTE* pSrc
 			{
 				UINT32 dstSize = 0;
 				buffer = encoder->grid[k];
-				data = &pSrcData[(bitmap->destTop * nSrcStep) + (bitmap->destLeft * 4)];
+				data = packed;
 
 				buffer =
 				    freerdp_bitmap_compress_planar(encoder->planar, data, SrcFormat, bitmap->width,
-				                                   bitmap->height, nSrcStep, buffer, &dstSize);
+				                                   bitmap->height, 256, buffer, &dstSize);
+				if (!buffer)
+				{
+					ret = FALSE;
+					goto out;
+				}
 				bitmap->bitmapDataStream = buffer;
 				bitmap->bitmapLength = dstSize;
 				bitmap->bitsPerPixel = 32;
@@ -2225,9 +2236,190 @@ out:
  * @return TRUE on success (or nothing need to be updated)
  */
 WINPR_ATTR_NODISCARD
+static BOOL shadow_client_bitmap_scheduler(const rdpShadowClient* client)
+{
+	const rdpSettings* settings = client->context.settings;
+#if defined(__APPLE__)
+	return !client->encoder->bitmapFallback && !client->inLobby && !client->server->shareSubRect &&
+	       shadow_bitmap_supported(settings, is_surface_command_supported(settings));
+#else
+	WINPR_UNUSED(settings);
+	return FALSE;
+#endif
+}
+
+/* Submit bounded work between input checks. The cache is advanced only after a successful
+ * ordered write. Socket/SSH/client buffers cannot be retracted; never discard serialized PDUs. */
+static BOOL shadow_client_flush_bitmap(rdpShadowClient* client)
+{
+	rdpShadowEncoder* encoder = client->encoder;
+	freerdp_peer* peer = client->context.peer;
+	rdpUpdate* update = client->context.update;
+	const rdpSettings* settings = client->context.settings;
+	const BYTE* orders = freerdp_settings_get_pointer(settings, FreeRDP_OrderSupport);
+	const BOOL allowCopy = freerdp_settings_get_bool(settings, FreeRDP_FastPathOutput) &&
+	                       orders && orders[NEG_SCRBLT_INDEX] &&
+	                       update->primary && update->primary->ScrBlt && update->BeginPaint &&
+	                       update->EndPaint && update->SetBounds;
+	const UINT64 deadline = GetTickCount64() + 8;
+	UINT32 bytes = 0;
+	const UINT32 colorDepth = freerdp_settings_get_uint32(settings, FreeRDP_ColorDepth);
+	/* CheckFileDescriptor reads input; it does not flush FreeRDP's buffered BIO. Drain
+	 * explicitly, including the last submitted tile on an otherwise static desktop. */
+	if (peer->IsWriteBlocked && peer->IsWriteBlocked(peer))
+	{
+		if (!peer->DrainOutputBuffer || (peer->DrainOutputBuffer(peer) < 0))
+			return FALSE;
+		if (peer->IsWriteBlocked(peer))
+			return TRUE;
+	}
+	if (!client->activated || client->suppressOutput || !shadow_client_bitmap_scheduler(client))
+		return TRUE;
+
+	for (UINT32 count = 0; (count < 8) && (bytes < 16384) && (GetTickCount64() < deadline); count++)
+	{
+		shadowBitmapTile tile = { 0 };
+		/* Do not serialize another tile while FreeRDP still has buffered output. */
+		if (peer->IsWriteBlocked && peer->IsWriteBlocked(peer))
+			break;
+		if (!shadow_bitmap_next(encoder->bitmapState, allowCopy, &tile))
+			break;
+		if (tile.copy)
+		{
+			if (bytes + 64U > 16384U)
+				break;
+			SCRBLT_ORDER order = { 0 };
+			order.nLeftRect = (INT32)tile.x;
+			order.nTopRect = (INT32)tile.y;
+			order.nWidth = (INT32)tile.width;
+			order.nHeight = (INT32)tile.height;
+			order.nXSrc = (INT32)tile.sourceX;
+			order.nYSrc = (INT32)tile.sourceY;
+			order.bRop = 0xCC; /* SRCCOPY */
+			if (!update->BeginPaint(&client->context))
+				return FALSE;
+			const BOOL copied = update->SetBounds(&client->context, nullptr) &&
+			                    update->primary->ScrBlt(&client->context, &order);
+			const BOOL ended = update->EndPaint(&client->context);
+			if (!copied || !ended)
+				return FALSE;
+			bytes += 64; /* Conservative scheduling cost for a single drawing order. */
+		}
+		else if (colorDepth == 16)
+		{
+			BYTE buffer[64 * 64 * 4];
+			UINT32 length = sizeof(buffer);
+			UINT32 stride = 0;
+			const BYTE* pixels = shadow_bitmap_pixels(encoder->bitmapState, &stride);
+			const UINT32 width = (tile.width + 3U) & ~3U;
+			BYTE packed[64 * 64 * 2] = { 0 };
+			for (UINT32 row = 0; row < tile.height; row++)
+				memcpy(packed + row * 128U,
+				       pixels + (size_t)(tile.y + row) * stride + tile.x * 2U, tile.width * 2U);
+			BITMAP_DATA bitmap = { 0 };
+			BITMAP_UPDATE message = { 0 };
+			if ((shadow_encoder_prepare(encoder, FREERDP_CODEC_INTERLEAVED) < 0) ||
+			    !interleaved_compress(encoder->interleaved, buffer, &length, width, tile.height,
+			                          packed, PIXEL_FORMAT_RGB16, 128, 0, 0, nullptr, 16))
+				return FALSE;
+			const UINT32 wireSize =
+			    SHADOW_BITMAP_UPDATE_HEADER_SIZE + SHADOW_BITMAP_DATA_HEADER_SIZE +
+			    (freerdp_settings_get_bool(settings, FreeRDP_NoBitmapCompressionHeader)
+			         ? 0U
+			         : SHADOW_BITMAP_COMPRESSION_HEADER_SIZE) +
+			    length;
+			if (wireSize > freerdp_settings_get_uint32(settings, FreeRDP_MultifragMaxRequestSize))
+			{
+				WLog_ERR(TAG, "Low-latency bitmap tile exceeds the negotiated update size");
+				return FALSE;
+			}
+			if ((bytes > 0) && (bytes + wireSize > 16384U))
+				break;
+			bitmap.destLeft = tile.x;
+			bitmap.destTop = tile.y;
+			bitmap.destRight = tile.x + tile.width - 1;
+			bitmap.destBottom = tile.y + tile.height - 1;
+			bitmap.width = width;
+			bitmap.height = tile.height;
+			bitmap.bitsPerPixel = 16;
+			bitmap.compressed = TRUE;
+			bitmap.bitmapLength = length;
+			bitmap.bitmapDataStream = buffer;
+			bitmap.cbCompMainBodySize = length;
+			bitmap.cbScanWidth = width * 2U;
+			bitmap.cbUncompressedSize = width * tile.height * 2U;
+			message.number = 1;
+			message.rectangles = &bitmap;
+			if (!BitmapUpdateProxy(client, &message))
+				return FALSE;
+			bytes += wireSize;
+		}
+		else
+		{
+			BYTE packed[64 * 64 * 4] = { 0 };
+			BYTE buffer[64 * 64 * 4];
+			UINT32 length = 0;
+			UINT32 stride = 0;
+			const BYTE* pixels = shadow_bitmap_pixels(encoder->bitmapState, &stride);
+			const UINT32 width = (tile.width + 3U) & ~3U;
+			for (UINT32 row = 0; row < tile.height; row++)
+				memcpy(packed + row * 256U,
+				       pixels + (size_t)(tile.y + row) * stride + tile.x * 4U,
+				       tile.width * 4U);
+			if (shadow_encoder_prepare(encoder, FREERDP_CODEC_PLANAR) < 0)
+				return FALSE;
+			BYTE* compressed = freerdp_bitmap_compress_planar(
+			    encoder->planar, packed, PIXEL_FORMAT_BGRX32, width, tile.height, 256, buffer,
+			    &length);
+			if (!compressed)
+				return FALSE;
+			const UINT32 wireSize = SHADOW_BITMAP_UPDATE_HEADER_SIZE +
+			                        SHADOW_BITMAP_DATA_HEADER_SIZE +
+			                        (freerdp_settings_get_bool(
+			                             settings, FreeRDP_NoBitmapCompressionHeader)
+			                             ? 0U
+			                             : SHADOW_BITMAP_COMPRESSION_HEADER_SIZE) +
+			                        length;
+			if (wireSize >
+			    freerdp_settings_get_uint32(settings, FreeRDP_MultifragMaxRequestSize))
+			{
+				WLog_ERR(TAG, "Low-latency 32-bit bitmap tile exceeds negotiated update size");
+				return FALSE;
+			}
+			if ((bytes > 0) && (bytes + wireSize > 16384U))
+				break;
+			BITMAP_DATA bitmap = { 0 };
+			BITMAP_UPDATE message = { 0 };
+			bitmap.destLeft = tile.x;
+			bitmap.destTop = tile.y;
+			bitmap.destRight = tile.x + tile.width - 1;
+			bitmap.destBottom = tile.y + tile.height - 1;
+			bitmap.width = width;
+			bitmap.height = tile.height;
+			bitmap.bitsPerPixel = 32;
+			bitmap.compressed = TRUE;
+			bitmap.bitmapLength = length;
+			bitmap.bitmapDataStream = compressed;
+			bitmap.cbCompMainBodySize = length;
+			bitmap.cbScanWidth = width * 4U;
+			bitmap.cbUncompressedSize = width * tile.height * 4U;
+			message.number = 1;
+			message.rectangles = &bitmap;
+			if (!BitmapUpdateProxy(client, &message))
+				return FALSE;
+			bytes += wireSize;
+		}
+		shadow_bitmap_commit(encoder->bitmapState, &tile);
+	}
+	return TRUE;
+}
+
+WINPR_ATTR_NODISCARD
 static BOOL shadow_client_send_surface_update(rdpShadowClient* client, SHADOW_GFX_STATUS* pStatus)
 {
 	BOOL ret = TRUE;
+	BOOL surfaceLocked = FALSE;
+	BOOL cacheFailed = FALSE;
 	INT64 nXSrc = 0;
 	INT64 nYSrc = 0;
 	INT64 nWidth = 0;
@@ -2267,10 +2459,54 @@ static BOOL shadow_client_send_surface_update(rdpShadowClient* client, SHADOW_GF
 		region16_clear(&(client->invalidRegion));
 		LeaveCriticalSection(&(client->lock));
 		if (!res)
+		{
+			ret = FALSE;
 			goto out;
+		}
 	}
 
 	EnterCriticalSection(&surface->lock);
+	surfaceLocked = TRUE;
+	if (shadow_client_bitmap_scheduler(client))
+	{
+		rdpShadowEncoder* encoder = client->encoder;
+		const UINT32 colorDepth =
+		    freerdp_settings_get_uint32(settings, FreeRDP_ColorDepth);
+		const UINT32 maxRequestSize =
+		    freerdp_settings_get_uint32(settings, FreeRDP_MultifragMaxRequestSize);
+		if (!shadow_bitmap_size_matches(encoder->bitmapState, surface->width, surface->height,
+		                                colorDepth, maxRequestSize))
+		{
+			shadow_bitmap_free(encoder->bitmapState);
+			encoder->bitmapState =
+			    shadow_bitmap_new(surface->width, surface->height, colorDepth, maxRequestSize);
+			if (encoder->bitmapState)
+			{
+				WLog_INFO(TAG,
+				          "Bounded newest-state bitmap scheduler active at %" PRIu32
+				          "x%" PRIu32 "@%" PRIu32,
+				          surface->width, surface->height, colorDepth);
+			}
+		}
+		if (shadow_bitmap_stage(encoder->bitmapState, surface->data, surface->format,
+		                        surface->scanline, &invalidRegion))
+			goto out;
+		encoder->bitmapFallback = TRUE;
+		cacheFailed = TRUE;
+		WLog_WARN(TAG, "Bitmap cache unavailable; using the standard encoder");
+
+	}
+	if (client->encoder->bitmapState || cacheFailed)
+	{
+		const RECTANGLE_16 full = { 0, 0, (UINT16)surface->width, (UINT16)surface->height };
+		if (!region16_union_rect(&invalidRegion, &invalidRegion, &full))
+		{
+			ret = FALSE;
+			goto out;
+		}
+	}
+	shadow_bitmap_free(client->encoder->bitmapState);
+	client->encoder->bitmapState = nullptr;
 	rects = region16_rects(&(surface->invalidRegion), &numRects);
 
 	for (UINT32 index = 0; index < numRects; index++)
@@ -2390,7 +2626,8 @@ static BOOL shadow_client_send_surface_update(rdpShadowClient* client, SHADOW_GF
 	}
 
 out:
-	LeaveCriticalSection(&surface->lock);
+	if (surfaceLocked)
+		LeaveCriticalSection(&surface->lock);
 	region16_uninit(&invalidRegion);
 	return ret;
 }
@@ -2631,6 +2868,7 @@ static DWORD WINAPI shadow_client_thread(LPVOID arg)
 	wMessage message = WINPR_C_ARRAY_INIT;
 	wMessage pointerPositionMsg = WINPR_C_ARRAY_INIT;
 	wMessage pointerAlphaMsg = WINPR_C_ARRAY_INIT;
+	wMessage audioSamplesMsg = WINPR_C_ARRAY_INIT;
 	wMessage audioVolumeMsg = WINPR_C_ARRAY_INIT;
 	HANDLE ChannelEvent = nullptr;
 	void* UpdateSubscriber = nullptr;
@@ -2726,10 +2964,35 @@ static DWORD WINAPI shadow_client_thread(LPVOID arg)
 			events[nCount++] = gfxevent;
 #endif
 
-		status = WaitForMultipleObjects(nCount, events, FALSE, INFINITE);
+		const BOOL pendingBitmap = client->activated && !client->suppressOutput &&
+		                           shadow_client_bitmap_scheduler(client) &&
+		                           shadow_bitmap_pending(client->encoder->bitmapState);
+		const BOOL bufferedBitmap = peer->IsWriteBlocked &&
+		                            peer->IsWriteBlocked(peer);
+		const DWORD timeout = bufferedBitmap ? 8U : (pendingBitmap ? 1U : INFINITE);
+		status = WaitForMultipleObjects(nCount, events, FALSE, timeout);
 
 		if (status == WAIT_FAILED)
 			goto fail;
+
+		/* Service already-arrived input before any potentially expensive graphics work. */
+		WINPR_ASSERT(peer->CheckFileDescriptor);
+		for (UINT32 inputBatch = 0; inputBatch < 32; inputBatch++)
+		{
+			if (!peer->CheckFileDescriptor(peer))
+			{
+				const UINT32 error = freerdp_get_last_error(&client->context);
+				if (!client->activated)
+					WLog_DBG(TAG, "Connection attempt ended before activation");
+				else if (error == FREERDP_ERROR_SUCCESS)
+					WLog_INFO(TAG, "Client disconnected");
+				else
+					WLog_ERR(TAG, "Failed to check FreeRDP file descriptor");
+				goto fail;
+			}
+			if (!peer->HasMoreToRead || !peer->HasMoreToRead(peer))
+				break;
+		}
 
 		if (WaitForSingleObject(UpdateEvent, 0) == WAIT_OBJECT_0)
 		{
@@ -2781,12 +3044,8 @@ static DWORD WINAPI shadow_client_thread(LPVOID arg)
 			(void)shadow_multiclient_consume(UpdateSubscriber);
 		}
 
-		WINPR_ASSERT(peer->CheckFileDescriptor);
-		if (!peer->CheckFileDescriptor(peer))
-		{
-			WLog_ERR(TAG, "Failed to check FreeRDP file descriptor");
+		if (!shadow_client_flush_bitmap(client))
 			goto fail;
-		}
 
 		if (client->activated &&
 		    WTSVirtualChannelManagerIsChannelJoined(client->vcm, DRDYNVC_SVC_CHANNEL_NAME))
@@ -2875,8 +3134,14 @@ static DWORD WINAPI shadow_client_thread(LPVOID arg)
 			pointerAlphaMsg.Free = nullptr;
 			audioVolumeMsg.id = 0;
 			audioVolumeMsg.Free = nullptr;
+			audioSamplesMsg.id = 0;
+			audioSamplesMsg.Free = nullptr;
 
-			while (MessageQueue_Peek(MsgQueue, &message, TRUE))
+			/* Bound auxiliary-channel work per pass so newly arrived input is checked again even
+			 * if audio is produced continuously. Stale audio is not useful after congestion. */
+			for (UINT32 messageBatch = 0;
+			     (messageBatch < 256) && MessageQueue_Peek(MsgQueue, &message, TRUE);
+			     messageBatch++)
 			{
 				if (message.id == WMQ_QUIT)
 				{
@@ -2903,6 +3168,12 @@ static DWORD WINAPI shadow_client_thread(LPVOID arg)
 						audioVolumeMsg = message;
 						break;
 
+					case SHADOW_MSG_OUT_AUDIO_OUT_SAMPLES_ID:
+						/* Keep only the newest queued audio block after output congestion. */
+						shadow_client_free_queued_message(&audioSamplesMsg);
+						audioSamplesMsg = message;
+						break;
+
 					default:
 						if (!shadow_client_subsystem_process_message(client, &message))
 							goto fail;
@@ -2915,6 +3186,7 @@ static DWORD WINAPI shadow_client_thread(LPVOID arg)
 				/* Release stored message */
 				shadow_client_free_queued_message(&pointerPositionMsg);
 				shadow_client_free_queued_message(&pointerAlphaMsg);
+				shadow_client_free_queued_message(&audioSamplesMsg);
 				shadow_client_free_queued_message(&audioVolumeMsg);
 				goto fail;
 			}
@@ -2936,6 +3208,12 @@ static DWORD WINAPI shadow_client_thread(LPVOID arg)
 				if (audioVolumeMsg.id)
 				{
 					if (!shadow_client_subsystem_process_message(client, &audioVolumeMsg))
+						goto fail;
+				}
+
+				if (audioSamplesMsg.id)
+				{
+					if (!shadow_client_subsystem_process_message(client, &audioSamplesMsg))
 						goto fail;
 				}
 			}

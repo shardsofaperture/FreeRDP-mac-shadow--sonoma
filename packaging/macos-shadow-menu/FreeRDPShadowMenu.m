@@ -116,6 +116,12 @@ typedef NS_ENUM(NSInteger, ShadowServerState)
 - (void)rebuildMenu
 {
 	[self.menu removeAllItems];
+	NSString* version = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
+	NSString* title = [NSString stringWithFormat:@"Mac Shadow RDP — Build %@", version];
+	NSMenuItem* identity = [[NSMenuItem alloc] initWithTitle:title action:nil keyEquivalent:@""];
+	identity.enabled = NO;
+	[self.menu addItem:identity];
+	[self.menu addItem:[NSMenuItem separatorItem]];
 	NSMenuItem* status = [[NSMenuItem alloc] initWithTitle:[self statusDescription]
 	                                              action:nil
 	                                       keyEquivalent:@""];
@@ -251,6 +257,11 @@ typedef NS_ENUM(NSInteger, ShadowServerState)
 	NSString* executable = config[@"ServerExecutable"];
 	if (!executable)
 	{
+		NSString* directory = [[[NSBundle mainBundle] executablePath] stringByDeletingLastPathComponent];
+		executable = [directory stringByAppendingPathComponent:@"freerdp-shadow-cli"];
+	}
+	if (!executable)
+	{
 		self.wantsServerRunning = NO;
 		self.state = ShadowServerFailed;
 		self.failureReason = @"ShadowConfig.plist is incomplete";
@@ -296,6 +307,8 @@ typedef NS_ENUM(NSInteger, ShadowServerState)
 	];
 	NSMutableDictionary* environment = [[[NSProcessInfo processInfo] environment] mutableCopy];
 	environment[@"FREERDP_MAC_SHADOW_AUTO_CLIENT_PROFILE"] = @"1";
+	[environment removeObjectForKey:@"FREERDP_MAC_SHADOW_CONNECT_DISPLAY_COMMAND"];
+	[environment removeObjectForKey:@"FREERDP_MAC_SHADOW_DISCONNECT_DISPLAY_COMMAND"];
 	task.environment = environment;
 	task.standardOutput = log;
 	task.standardError = log;

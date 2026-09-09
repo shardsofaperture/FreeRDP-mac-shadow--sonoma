@@ -20,6 +20,8 @@
 set(MODULE_NAME "freerdp-shadow")
 
 set(SRCS
+    shadow_bitmap.c
+    shadow_bitmap.h
     shadow_client.c
     shadow_client.h
     shadow_lobby.c
@@ -95,6 +97,12 @@ installwithrpath(
 )
 
 set_property(TARGET ${MODULE_NAME} PROPERTY FOLDER "Server/shadow")
+
+if(BUILD_TESTING)
+  add_executable(TestShadowBitmap test/TestShadowBitmap.c shadow_bitmap.c)
+  target_link_libraries(TestShadowBitmap PRIVATE freerdp winpr)
+  add_test(NAME TestShadowBitmap COMMAND TestShadowBitmap)
+endif()
 
 # subsystem library
 
