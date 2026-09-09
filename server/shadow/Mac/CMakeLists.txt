@@ -27,6 +27,11 @@ add_library(
 target_link_libraries(freerdp-shadow-subsystem-impl PRIVATE ${LIBS})
 
 if(BUILD_TESTING)
+  set_source_files_properties(../test/TestMacShadowClipboard.m PROPERTIES LANGUAGE C COMPILE_OPTIONS "-fobjc-arc")
+  add_executable(TestMacShadowClipboard ../test/TestMacShadowClipboard.m)
+  target_link_libraries(TestMacShadowClipboard PRIVATE freerdp-shadow freerdp winpr ${LIBS})
+  add_test(NAME TestMacShadowClipboard COMMAND TestMacShadowClipboard)
+  set_tests_properties(TestMacShadowClipboard PROPERTIES TIMEOUT 15)
   add_executable(TestMacShadowPublication ../test/TestMacShadowPublication.c ../shadow_mcevent.c)
   target_link_libraries(TestMacShadowPublication PRIVATE freerdp-shadow-subsystem-impl freerdp-shadow freerdp winpr ${LIBS})
   add_test(NAME TestMacShadowPublication COMMAND TestMacShadowPublication)

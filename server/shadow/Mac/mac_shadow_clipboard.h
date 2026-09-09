@@ -3,7 +3,7 @@
 
 #include <freerdp/server/shadow.h>
 
-int mac_shadow_clipboard_init(rdpShadowClient* client);
+int mac_shadow_clipboard_init(rdpShadowClient* client, BOOL legacyWin98);
 void mac_shadow_clipboard_uninit(rdpShadowClient* client);
 
 #endif

@@ -130,6 +130,10 @@ extern "C"
 
 		rdpContext* rdpcontext;
 		BOOL autoInitializationSequence;
+		/* Compatibility framing for legacy RDP 5.x peers. [MS-RDPECLIP] 2.2.1
+		 * documents Windows implementations which append this four-byte zero
+		 * trailer without including it in CLIPRDR_HEADER.dataLen. Disabled by default. */
+		BOOL useLegacyPduTrailer;
 		UINT32 lastRequestedFormatId;
 		BOOL hasHugeFileSupport;
 	};

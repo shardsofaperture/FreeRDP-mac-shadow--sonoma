@@ -17,6 +17,21 @@ preserving the menu application's existing identifier.
 The installer builds and copies this same app to `~/Applications`, then performs
 its existing login-item registration and launch. Building alone does neither.
 
+## Build 0.1.8 release
+
+Build 0.1.8 is hardware-accepted with Microsoft Remote Desktop for Mac, Android/aRDP,
+and Microsoft RDP 5.2 on Windows 98. It retains the accepted capture scheduler,
+latency behavior, audio, resolution policy, security fallback, and input mappings.
+
+The Win98-only clipboard profile uses the historical RDP 5.2 framing dialect: every
+clipboard PDU has a trailing zero DWORD that is outside its declared `dataLen`.
+This trailer is required for bidirectional Win98 clipboard operation and must remain
+on the wire. The receiver suppresses the associated parser warning only after it
+recognizes exactly that zero DWORD on the selected Win98 connection; it does not
+relax parsing for other clients or unexpected bytes. Modern Mac and Android clients
+keep standard framing. INFO logs record the selected client profile and legacy
+clipboard selection; high-volume per-key and per-PDU diagnostics are DEBUG-only.
+
 ## Build 0.1.7 channel, teardown, and signing revision
 
 The app's short version and bundle version are both `0.1.7`. Its dropdown begins with
@@ -116,9 +131,9 @@ To repeat correctness checks with the production optimization/assertion policy:
 cmake -S . -B build-macos-shadow-release-checks -G Ninja \
   -C packaging/macos-shadow-menu/production-cache.cmake -DBUILD_TESTING=ON
 cmake --build build-macos-shadow-release-checks \
-  --target TestSynch TestWinPRUtils TestFreeRDPCodec TestShadowBitmap TestMacShadowPublication -j 6
+  --target TestSynch TestWinPRUtils TestFreeRDPCodec TestShadowBitmap TestMacShadowPublication TestMacShadowClipboard -j 6
 ctest --test-dir build-macos-shadow-release-checks --output-on-failure \
-  -R '^TestShadowBitmap$|^TestMacShadowPublication$|^TestFreeRDPRegion$|^TestFreeRDPCodec(Color|Copy|Interleaved|Planar)$|^Test(SynchEvent|SynchCritical|SynchThread|MessageQueue|MessagePipe)$'
+  -R '^TestShadowBitmap$|^TestMacShadow(Publication|Clipboard)$|^TestFreeRDPRegion$|^TestFreeRDPCodec(Color|Copy|Interleaved|Planar)$|^Test(SynchEvent|SynchCritical|SynchThread|MessageQueue|MessagePipe)$'
 ```
 
 ## Runtime behavior

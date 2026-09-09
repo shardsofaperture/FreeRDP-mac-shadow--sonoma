@@ -1,7 +1,20 @@
 /** FreeRDP shadow regression tests. Licensed under the Apache License, Version 2.0. */
 /* Exercise the private publication/lifecycle implementation without starting a display stream,
  * opening a listener, changing display modes, capturing audio, or posting input events. */
+#include <ApplicationServices/ApplicationServices.h>
+static void test_keyboard_post(CGEventTapLocation tap, CGEventRef event);
+static CGEventRef test_keyboard_create(CGEventSourceRef source, CGKeyCode key, bool down);
+static void test_keyboard_flags(CGEventRef event, CGEventFlags flags);
+static void test_keyboard_release(CFTypeRef object);
+#define CGEventCreateKeyboardEvent test_keyboard_create
+#define CGEventSetFlags test_keyboard_flags
+#define CFRelease test_keyboard_release
+#define CGEventPost test_keyboard_post
 #include "../Mac/mac_shadow.c"
+#undef CGEventPost
+#undef CGEventCreateKeyboardEvent
+#undef CGEventSetFlags
+#undef CFRelease
 #include "../shadow_mcevent.h"
 
 #define CHECK(condition)                                                    \
@@ -13,6 +26,137 @@
 			exit(1);                                                        \
 		}                                                                   \
 	} while (0)
+
+static CGKeyCode postedKey;
+static CGEventType postedType;
+static CGEventFlags postedFlags;
+static char keyboardEventToken;
+static CGEventRef test_keyboard_create(CGEventSourceRef source, CGKeyCode key, bool down)
+{
+	CHECK(source);
+	postedKey = key;
+	postedType = down ? kCGEventKeyDown : kCGEventKeyUp;
+	return (CGEventRef)&keyboardEventToken;
+}
+static void test_keyboard_flags(CGEventRef event, CGEventFlags flags)
+{
+	CHECK(event == (CGEventRef)&keyboardEventToken);
+	postedFlags = flags;
+}
+static void test_keyboard_post(CGEventTapLocation tap, CGEventRef event)
+{
+	CHECK(tap == kCGHIDEventTap);
+	CHECK(event == (CGEventRef)&keyboardEventToken);
+}
+static void test_keyboard_release(CFTypeRef object)
+{
+	if (object != &keyboardEventToken)
+		CFRelease(object);
+}
+
+static void test_win98_clipboard_profile(void)
+{
+	rdpSettings* settings = freerdp_settings_new(0);
+	CHECK(settings);
+	CHECK(!mac_shadow_is_win98_clipboard_profile(NULL));
+	CHECK(freerdp_settings_set_uint32(settings, FreeRDP_RdpVersion, RDP_VERSION_5_PLUS));
+	CHECK(freerdp_settings_set_uint32(settings, FreeRDP_OsMajorType, OSMAJORTYPE_WINDOWS));
+	CHECK(freerdp_settings_set_uint32(settings, FreeRDP_OsMinorType, OSMINORTYPE_WINDOWS_NT));
+	CHECK(freerdp_settings_set_uint32(settings, FreeRDP_DesktopWidth, 1024));
+	CHECK(freerdp_settings_set_uint32(settings, FreeRDP_DesktopHeight, 768));
+	CHECK(freerdp_settings_set_uint32(settings, FreeRDP_ColorDepth, 16));
+	CHECK(freerdp_settings_set_uint32(settings, FreeRDP_ClientBuild, 3790));
+	CHECK(mac_shadow_is_win98_clipboard_profile(settings));
+	/* The Windows/NT minor code is the value negotiated by the VAIO. */
+	CHECK(freerdp_settings_set_uint32(settings, FreeRDP_ClientBuild, 0));
+	CHECK(!mac_shadow_is_win98_clipboard_profile(settings));
+	CHECK(freerdp_settings_set_uint32(settings, FreeRDP_ClientBuild, 3790));
+	CHECK(freerdp_settings_set_uint32(settings, FreeRDP_DesktopWidth, 1280));
+	CHECK(!mac_shadow_is_win98_clipboard_profile(settings));
+	freerdp_settings_free(settings);
+}
+
+static void test_legacy_mac_keyboard(void)
+{
+	rdpSettings* settings = freerdp_settings_new(0);
+	CHECK(settings);
+	CHECK(!mac_shadow_is_legacy_mac_rdc(NULL));
+	CHECK(!mac_shadow_is_legacy_mac_rdc(settings));
+	CHECK(freerdp_settings_set_string(settings, FreeRDP_ClientHostname, "Test laptop"));
+	CHECK(freerdp_settings_set_string(settings, FreeRDP_ClientProductId, "Test laptop"));
+	CHECK(freerdp_settings_set_uint32(settings, FreeRDP_ClientBuild, 0));
+	CHECK(freerdp_settings_set_uint32(settings, FreeRDP_RdpVersion, RDP_VERSION_5_PLUS));
+	CHECK(freerdp_settings_set_uint32(settings, FreeRDP_OsMajorType, OSMAJORTYPE_WINDOWS));
+	CHECK(freerdp_settings_set_uint32(settings, FreeRDP_OsMinorType, OSMINORTYPE_WINDOWS_NT));
+	CHECK(mac_shadow_is_legacy_mac_rdc(settings));
+	/* Each fingerprint component is required, including names without "Mac". */
+	const struct { size_t id; UINT32 good; UINT32 other; } fields[] = {
+		{ FreeRDP_ClientBuild, 0, 3790 }, /* Win98/Windows RDC */
+		{ FreeRDP_ClientBuild, 0, 18363 }, /* Android */
+		{ FreeRDP_RdpVersion, RDP_VERSION_5_PLUS, 0x0008000c },
+		{ FreeRDP_OsMajorType, OSMAJORTYPE_WINDOWS, OSMAJORTYPE_UNSPECIFIED },
+		{ FreeRDP_OsMajorType, OSMAJORTYPE_WINDOWS, OSMAJORTYPE_ANDROID },
+		{ FreeRDP_OsMinorType, OSMINORTYPE_WINDOWS_NT, OSMINORTYPE_UNSPECIFIED }
+	};
+	for (size_t x = 0; x < ARRAYSIZE(fields); x++)
+	{
+		CHECK(freerdp_settings_set_uint32(settings, fields[x].id, fields[x].other));
+		CHECK(mac_shadow_keyboard_compat_vk(settings, VK_LCONTROL) == VK_LCONTROL);
+		CHECK(freerdp_settings_set_uint32(settings, fields[x].id, fields[x].good));
+	}
+	CHECK(freerdp_settings_set_string(settings, FreeRDP_ClientProductId, "Microsoft Mac"));
+	CHECK(!mac_shadow_is_legacy_mac_rdc(settings));
+	CHECK(freerdp_settings_set_string(settings, FreeRDP_ClientProductId, "Test laptop"));
+	CHECK(freerdp_settings_set_string(settings, FreeRDP_ClientHostname, ""));
+	CHECK(!mac_shadow_is_legacy_mac_rdc(settings));
+	CHECK(freerdp_settings_set_string(settings, FreeRDP_ClientHostname, "Test laptop"));
+
+	macShadowSubsystem mac = { 0 };
+	rdpShadowClient client = { 0 };
+	client.context.settings = settings;
+	mac.eventSource = (CGEventSourceRef)&keyboardEventToken;
+	CHECK(mac_shadow_input_synchronize_event(&mac.common, &client, KBD_SYNC_CAPS_LOCK));
+	CHECK(mac_shadow_input_keyboard_event(&mac.common, &client, 0, 0x38)); /* Option */
+	CHECK(mac_shadow_input_keyboard_event(&mac.common, &client, 0, 0x2a)); /* Shift */
+	const CGEventFlags retained = kCGEventFlagMaskAlphaShift | kCGEventFlagMaskAlternate |
+	                              kCGEventFlagMaskShift;
+	CHECK(mac_shadow_input_keyboard_event(&mac.common, &client, 0, 0x1d));
+	CHECK(postedKey == APPLE_VK_Command && postedType == kCGEventKeyDown);
+	CHECK(postedFlags == (retained | kCGEventFlagMaskCommand));
+	CHECK(mac_shadow_input_keyboard_event(&mac.common, &client, 0, 0x2c)); /* Z, not just C/V */
+	CHECK(postedFlags == (retained | kCGEventFlagMaskCommand));
+	CHECK(mac_shadow_input_keyboard_event(&mac.common, &client, KBD_FLAGS_RELEASE, 0x2c));
+	CHECK(mac_shadow_input_keyboard_event(&mac.common, &client, KBD_FLAGS_RELEASE, 0x1d));
+	CHECK(postedKey == APPLE_VK_Command && postedType == kCGEventKeyUp);
+	CHECK(postedFlags == retained);
+	CHECK(mac_shadow_input_keyboard_event(&mac.common, &client, KBD_FLAGS_EXTENDED, 0x1d));
+	CHECK(postedKey == APPLE_VK_RightControl && postedFlags == (retained | kCGEventFlagMaskControl));
+	CHECK(mac_shadow_input_keyboard_event(&mac.common, &client,
+	                                     KBD_FLAGS_EXTENDED | KBD_FLAGS_RELEASE, 0x1d));
+	CHECK(postedType == kCGEventKeyUp && postedFlags == retained);
+	CHECK(mac_shadow_input_synchronize_event(&mac.common, &client, 0));
+	CHECK(mac.keyboardFlags == 0);
+	/* A nonmatching client keeps Control in the actual event path. */
+	CHECK(freerdp_settings_set_uint32(settings, FreeRDP_ClientBuild, 3790));
+	CHECK(mac_shadow_input_keyboard_event(&mac.common, &client, 0, 0x1d));
+	CHECK(postedKey == APPLE_VK_Control && postedFlags == kCGEventFlagMaskControl);
+	CHECK(mac_shadow_input_keyboard_event(&mac.common, &client, KBD_FLAGS_RELEASE, 0x1d));
+	CHECK(postedFlags == 0);
+	/* The narrower Win98 display profile uses Control as macOS Command because
+	 * its client supplies no usable Windows/Meta key event. */
+	CHECK(freerdp_settings_set_uint32(settings, FreeRDP_DesktopWidth, 1024));
+	CHECK(freerdp_settings_set_uint32(settings, FreeRDP_DesktopHeight, 768));
+	CHECK(freerdp_settings_set_uint32(settings, FreeRDP_ColorDepth, 16));
+	CHECK(mac_shadow_keyboard_compat_vk(settings, VK_LCONTROL) == (VK_LWIN | KBDEXT));
+	CHECK(mac_shadow_keyboard_compat_vk(settings, VK_RCONTROL | KBDEXT) ==
+	      (VK_LWIN | KBDEXT));
+	CHECK(mac_shadow_input_keyboard_event(&mac.common, &client, 0, 0x1d));
+	CHECK(postedKey == APPLE_VK_Command && postedFlags == kCGEventFlagMaskCommand);
+	CHECK(mac_shadow_input_keyboard_event(&mac.common, &client, KBD_FLAGS_RELEASE, 0x1d));
+	CHECK(postedFlags == 0);
+
+	freerdp_settings_free(settings);
+}
 
 static DWORD WINAPI publish_frame(void* arg)
 {
@@ -94,6 +238,8 @@ static void test_mouse_button_transitions(void)
 
 int main(void)
 {
+	test_win98_clipboard_profile();
+	test_legacy_mac_keyboard();
 	test_client_sizes();
 	test_mouse_button_transitions();
 	rdpShadowServer server = { 0 };
