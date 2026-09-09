@@ -55,7 +55,7 @@ by the first RDP client. Generic and mobile clients receive that resolution thro
 a client-sized capture surface without blocking activation on a physical display-mode switch:
 
 ```zsh
-cd /Users/zach/gitr/RDP/FreeRDP-mac-shadow--sonoma
+cd /path/to/FreeRDP-mac-shadow--sonoma
 
 FREERDP_MAC_SHADOW_AUTO_CLIENT_PROFILE=1 \
   ./build-sonoma-shadow-p0-channels/server/shadow/cli/freerdp-shadow-cli \
@@ -136,7 +136,7 @@ folder, registers the app with macOS Service Management, and starts the
 validated loopback server command after graphical login:
 
 ```zsh
-cd /Users/zach/gitr/RDP/FreeRDP-mac-shadow--sonoma
+cd /path/to/FreeRDP-mac-shadow--sonoma
 ./scripts/install-macos-shadow-menu.sh
 ```
 
