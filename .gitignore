@@ -3,3 +3,14 @@
 build
 checker
 abi-checker
+
+# macOS Shadow RDP local build and package products
+/build-macos-shadow-production/
+/build-macos-shadow-release-checks/
+/build-sonoma-*/
+/dist/FreeRDP Shadow.app/
+
+# Local tool and Finder metadata
+.DS_Store
+__pycache__/
+*.py[cod]
