@@ -1,7 +1,7 @@
 # Mac Shadow RDP development
 
 This focused FreeRDP fork shadows a macOS Sonoma desktop for legacy RDP clients.
-**Mac Shadow RDP Build 0.1.7** is the known-good production baseline
+**Mac Shadow RDP Build 0.1.8** is the current development target; Build 0.1.7 is the known-good production baseline
 (`mac-shadow-rdp-0.1.7` at `59386e731`); its tag is an immutable recovery point.
 This repository-maintenance work does not change the application version.
 
@@ -55,6 +55,12 @@ corruption is not. Preserve 16-bit interleaved and 32-bit planar paths, negotiat
 packet sizing, sparse damage/ScrBlt, bounded output backpressure, Android button
 compatibility, automatic resolution (including VAIO behavior), asynchronous system
 audio, and normal FreeRDP channels/transport.
+
+Build 0.1.8 adds plain-text-only `cliprdr`: Unicode text is preferred, with
+legacy ANSI/OEM text accepted from clients. Unsupported clipboard clients remain
+normal sessions. Legacy Microsoft RDC for Mac is identified from negotiated client
+metadata and maps its left-Control Command encoding to macOS Command; all other
+client modifier mappings are unchanged.
 
 ## Hardware smoke test
 
