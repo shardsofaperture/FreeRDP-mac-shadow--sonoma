@@ -10,8 +10,9 @@ Output: `dist/FreeRDP Shadow.app`. The build uses `Release`, warnings enabled,
 the Mac shadow subsystem and existing server audio channels. Testing, profiling,
 sanitizers, and benchmark targets are disabled in the production build. The
 bundle contains the menu controller, server, required non-system libraries, and
-licenses. Libraries use bundle-relative paths. Both executables and the bundle
-are ad-hoc signed, preserving the menu application's existing identifier.
+licenses. Libraries use bundle-relative paths. Both executables, nested libraries, and
+the bundle are certificate-signed with the required Apple Development identity,
+preserving the menu application's existing identifier.
 
 The installer builds and copies this same app to `~/Applications`, then performs
 its existing login-item registration and launch. Building alone does neither.
