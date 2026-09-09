@@ -6,9 +6,10 @@ find_library(IOSURFACE IOSurface REQUIRED)
 find_library(CARBON Carbon REQUIRED)
 find_library(COREAUDIO CoreAudio REQUIRED)
 find_library(FOUNDATION Foundation REQUIRED)
+find_library(APPKIT AppKit REQUIRED)
 find_package(PAM)
 
-set(LIBS ${IOKIT} ${IOSURFACE} ${CARBON} ${COREAUDIO} ${FOUNDATION})
+set(LIBS ${IOKIT} ${IOSURFACE} ${CARBON} ${COREAUDIO} ${FOUNDATION} ${APPKIT} cliprdr-server)
 
 if(PAM_FOUND)
   add_compile_definitions(WITH_PAM)
@@ -19,9 +20,9 @@ else()
 endif()
 
 add_compile_definitions(WITH_SHADOW_MAC)
-set_source_files_properties(mac_shadow_audio.m PROPERTIES LANGUAGE C COMPILE_OPTIONS "-fobjc-arc")
+set_source_files_properties(mac_shadow_audio.m mac_shadow_clipboard.m PROPERTIES LANGUAGE C COMPILE_OPTIONS "-fobjc-arc")
 add_library(
-  freerdp-shadow-subsystem-impl STATIC mac_shadow.h mac_shadow.c mac_shadow_audio.h mac_shadow_audio.m
+  freerdp-shadow-subsystem-impl STATIC mac_shadow.h mac_shadow.c mac_shadow_audio.h mac_shadow_audio.m mac_shadow_clipboard.h mac_shadow_clipboard.m
 )
 target_link_libraries(freerdp-shadow-subsystem-impl PRIVATE ${LIBS})
 

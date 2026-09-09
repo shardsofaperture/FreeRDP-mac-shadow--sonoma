@@ -35,6 +35,7 @@
 #include <freerdp/log.h>
 
 #include "mac_shadow.h"
+#include "mac_shadow_clipboard.h"
 
 #define TAG SERVER_TAG("shadow.mac")
 
@@ -425,6 +426,9 @@ static BOOL mac_shadow_client_connect(rdpShadowSubsystem* subsystem, rdpShadowCl
 {
 	SHADOW_MSG_OUT_POINTER_ALPHA_UPDATE* msg = nullptr;
 	macShadowSubsystem* mac = (macShadowSubsystem*)subsystem;
+	if (WTSVirtualChannelManagerIsChannelJoined(client->vcm, CLIPRDR_SVC_CHANNEL_NAME) &&
+	    (mac_shadow_clipboard_init(client) < 0))
+		return FALSE;
 
 	if (!subsystem || !subsystem->server || !client)
 		return FALSE;
@@ -520,6 +524,7 @@ static BOOL mac_shadow_client_connect(rdpShadowSubsystem* subsystem, rdpShadowCl
 static void mac_shadow_client_disconnect(rdpShadowSubsystem* subsystem, rdpShadowClient* client)
 {
 	macShadowSubsystem* mac = (macShadowSubsystem*)subsystem;
+	mac_shadow_clipboard_uninit(client);
 
 	if (!subsystem || !client)
 		return;
@@ -555,7 +560,18 @@ static void mac_shadow_client_disconnect(rdpShadowSubsystem* subsystem, rdpShado
 	LeaveCriticalSection(&mac->connectionLock);
 }
 
-static CGEventFlags mac_shadow_keyboard_modifier_flag(DWORD vkcode)
+/* RDC for Mac 2.x reports the physical left Command key as left Control. Its client
+ * product identifier contains "Mac"; keep this narrowly scoped so Windows, Win98,
+ * and Android retain normal Control semantics. Right Control remains Control for
+ * Mac clients, providing a genuine Control modifier when needed. */
+static BOOL mac_shadow_is_microsoft_mac_rdc(const rdpShadowClient* client)
+{
+	const char* product = client ? freerdp_settings_get_string(client->context.settings,
+	                                                          FreeRDP_ClientProductId) : nullptr;
+	return product && strcasestr(product, "mac") && strcasestr(product, "microsoft");
+}
+
+static CGEventFlags mac_shadow_keyboard_modifier_flag(const rdpShadowClient* client, DWORD vkcode)
 {
 	switch (vkcode & ~KBDEXT)
 	{
@@ -564,6 +580,10 @@ static CGEventFlags mac_shadow_keyboard_modifier_flag(DWORD vkcode)
 			return kCGEventFlagMaskShift;
 
 		case VK_LCONTROL:
+			if (mac_shadow_is_microsoft_mac_rdc(client))
+				return kCGEventFlagMaskCommand;
+			return kCGEventFlagMaskControl;
+
 		case VK_RCONTROL:
 			return kCGEventFlagMaskControl;
 
@@ -628,12 +648,15 @@ static BOOL mac_shadow_input_keyboard_event(rdpShadowSubsystem* subsystem, rdpSh
 	}
 	else
 	{
-		modifierFlag = mac_shadow_keyboard_modifier_flag(vkcode);
+		modifierFlag = mac_shadow_keyboard_modifier_flag(client, vkcode);
 		if ((flags & KBD_FLAGS_RELEASE) != 0)
 			mac->keyboardFlags &= ~modifierFlag;
 		else
 			mac->keyboardFlags |= modifierFlag;
 	}
+
+	if (((vkcode & ~KBDEXT) == VK_LCONTROL) && mac_shadow_is_microsoft_mac_rdc(client))
+		keycode = APPLE_VK_Command;
 
 	kbdEvent = CGEventCreateKeyboardEvent(mac->eventSource, (CGKeyCode)keycode,
 	                                      (flags & KBD_FLAGS_RELEASE) == 0);

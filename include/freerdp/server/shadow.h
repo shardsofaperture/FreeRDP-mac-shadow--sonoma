@@ -33,6 +33,9 @@
 #include <freerdp/server/encomsp.h>
 #include <freerdp/server/remdesk.h>
 #include <freerdp/server/rdpsnd.h>
+#if defined(CHANNEL_CLIPRDR_SERVER)
+#include <freerdp/server/cliprdr.h>
+#endif
 #if defined(CHANNEL_AUDIN_SERVER)
 #include <freerdp/server/audin.h>
 #endif
@@ -131,6 +134,9 @@ extern "C"
 		EncomspServerContext* encomsp;
 		RemdeskServerContext* remdesk;
 		RdpsndServerContext* rdpsnd;
+#if defined(CHANNEL_CLIPRDR_SERVER)
+		CliprdrServerContext* cliprdr;
+#endif
 #if defined(CHANNEL_AUDIN_SERVER)
 		audin_server_context* audin;
 #endif
