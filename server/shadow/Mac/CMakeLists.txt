@@ -24,3 +24,10 @@ add_library(
   freerdp-shadow-subsystem-impl STATIC mac_shadow.h mac_shadow.c mac_shadow_audio.h mac_shadow_audio.m
 )
 target_link_libraries(freerdp-shadow-subsystem-impl PRIVATE ${LIBS})
+
+if(BUILD_TESTING)
+  add_executable(TestMacShadowPublication ../test/TestMacShadowPublication.c ../shadow_mcevent.c)
+  target_link_libraries(TestMacShadowPublication PRIVATE freerdp-shadow-subsystem-impl freerdp-shadow freerdp winpr ${LIBS})
+  add_test(NAME TestMacShadowPublication COMMAND TestMacShadowPublication)
+  set_tests_properties(TestMacShadowPublication PROPERTIES TIMEOUT 15)
+endif()

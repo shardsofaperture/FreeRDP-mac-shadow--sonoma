@@ -38,16 +38,9 @@
 
 #define TAG SERVER_TAG("shadow.mac")
 
-#define MAC_SHADOW_TEST_TONE_FRAMES 882
 #define MAC_SHADOW_CGS_MODE_DESCRIPTION_LENGTH 0xD4
 #define MAC_SHADOW_CGS_MODE_STORAGE_LENGTH 0xDC
 #define MAC_SHADOW_CGS_MAX_MODES 4096
-
-typedef struct
-{
-	SHADOW_MSG_OUT_AUDIO_OUT_SAMPLES message;
-	INT16 samples[MAC_SHADOW_TEST_TONE_FRAMES * 2];
-} MAC_SHADOW_TEST_TONE_MESSAGE;
 
 typedef struct
 {
@@ -108,28 +101,83 @@ typedef struct
 static AUDIO_FORMAT g_MacShadowAudioFormat = { WAVE_FORMAT_PCM, 2, 44100, 176400, 4, 16, 0,
 	                                           nullptr };
 
-static macShadowSubsystem* g_Subsystem = nullptr;
 static MAC_SHADOW_CGS_API g_CgsApi = WINPR_C_ARRAY_INIT;
 
 extern char** environ;
 
+static int mac_shadow_subsystem_stop(rdpShadowSubsystem* rdpsubsystem);
+
+/* Private framebuffer: generic shadow_surface_new/free are internal to libfreerdp-shadow. */
+static rdpShadowSurface* mac_shadow_latest_surface_new(UINT32 width, UINT32 height)
+{
+	if (!width || !height || (width > UINT16_MAX) || (height > UINT16_MAX))
+		return nullptr;
+	rdpShadowSurface* surface = calloc(1, sizeof(*surface));
+	if (!surface)
+		return nullptr;
+	surface->width = width;
+	surface->height = height;
+	surface->scanline = width * 4U;
+	surface->format = PIXEL_FORMAT_BGRX32;
+	surface->data = calloc(height, surface->scanline);
+	if (!surface->data || !InitializeCriticalSectionAndSpinCount(&surface->lock, 4000))
+	{
+		free(surface->data);
+		free(surface);
+		return nullptr;
+	}
+	region16_init(&surface->invalidRegion);
+	return surface;
+}
+
+static void mac_shadow_latest_surface_free(rdpShadowSurface* surface)
+{
+	if (!surface)
+		return;
+	region16_uninit(&surface->invalidRegion);
+	DeleteCriticalSection(&surface->lock);
+	free(surface->data);
+	free(surface);
+}
+
 static int mac_shadow_switch_display_mode(macShadowSubsystem* subsystem, const char* command,
-	                                      const char* transition);
+                                          const char* transition);
 static int mac_shadow_switch_to_client_display_mode(macShadowSubsystem* subsystem,
                                                     const rdpSettings* settings);
 static int mac_shadow_restore_pre_connection_display_mode(macShadowSubsystem* subsystem,
                                                           const char* transition);
 static int mac_shadow_restore_connection_display_mode(macShadowSubsystem* subsystem,
                                                       const char* transition);
+/* Bound allocations before querying or changing the physical display. */
+static BOOL mac_shadow_valid_client_size(UINT32 width, UINT32 height)
+{
+	return width >= 200 && height >= 200 && width <= 8192 && height <= 8192 &&
+	       (UINT64)width * height <= 16U * 1024U * 1024U;
+}
+
+static void mac_shadow_client_size(const rdpSettings* settings, UINT32* width, UINT32* height)
+{
+	*width = freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth);
+	*height = freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight);
+	/* RDP has no hardware-model identifier. The hostname is only a default hint;
+	 * any complete, explicit request takes precedence. */
+	const char* hostname = freerdp_settings_get_string(settings, FreeRDP_ClientHostname);
+	if ((!*width || !*height) && hostname && strcasestr(hostname, "vaio"))
+	{
+		*width = 1024;
+		*height = 768;
+	}
+}
+
 static int mac_shadow_use_scaled_client_surface(macShadowSubsystem* subsystem, UINT32 width,
                                                 UINT32 height);
 static int mac_shadow_capture_init(macShadowSubsystem* subsystem);
 static int mac_shadow_capture_start(macShadowSubsystem* subsystem);
 static int mac_shadow_capture_release_stream(macShadowSubsystem* subsystem);
-static int mac_shadow_test_tone_start(macShadowSubsystem* subsystem);
-static void mac_shadow_test_tone_stop(macShadowSubsystem* subsystem);
-static int mac_shadow_system_audio_start(macShadowSubsystem* subsystem);
-static void mac_shadow_system_audio_stop(macShadowSubsystem* subsystem);
+static void mac_shadow_release_mouse_buttons(macShadowSubsystem* subsystem);
+static void mac_shadow_system_audio_start_async(macShadowSubsystem* subsystem);
+static void mac_shadow_system_audio_stop_async(macShadowSubsystem* subsystem);
+static void mac_shadow_system_audio_stop_and_wait(macShadowSubsystem* subsystem);
 
 static void mac_shadow_message_free(UINT32 id, SHADOW_MSG_OUT* msg)
 {
@@ -226,7 +274,6 @@ static int mac_shadow_system_audio_start(macShadowSubsystem* subsystem)
 	}
 	if (!subsystem->audioCapture || (mac_shadow_audio_start(subsystem->audioCapture) < 0))
 		return -1;
-	WLog_INFO(TAG, "macOS system-audio capture started");
 	return 1;
 }
 
@@ -238,79 +285,85 @@ static void mac_shadow_system_audio_stop(macShadowSubsystem* subsystem)
 	WLog_INFO(TAG, "macOS system-audio capture stopped");
 }
 
-static void mac_shadow_test_tone_publish(macShadowSubsystem* subsystem)
+static void mac_shadow_system_audio_start_async(macShadowSubsystem* subsystem)
 {
-	MAC_SHADOW_TEST_TONE_MESSAGE* tone = nullptr;
-	const double phaseStep = (2.0 * M_PI * 440.0) / g_MacShadowAudioFormat.nSamplesPerSec;
-
-	if (!mac_shadow_audio_client_ready(subsystem))
-		return;
-
-	tone = (MAC_SHADOW_TEST_TONE_MESSAGE*)calloc(1, sizeof(MAC_SHADOW_TEST_TONE_MESSAGE));
-	if (!tone)
-		return;
-
-	for (size_t frame = 0; frame < MAC_SHADOW_TEST_TONE_FRAMES; frame++)
+	if (!subsystem || !subsystem->audioStartupQueue)
 	{
-		const INT16 sample = (INT16)(sin(subsystem->testTonePhase) * 8192.0);
-		tone->samples[frame * 2] = sample;
-		tone->samples[(frame * 2) + 1] = sample;
-		subsystem->testTonePhase += phaseStep;
-		if (subsystem->testTonePhase >= (2.0 * M_PI))
-			subsystem->testTonePhase -= 2.0 * M_PI;
+		WLog_WARN(TAG, "Cannot queue macOS system-audio startup");
+		return;
 	}
 
-	tone->message.common.Free = mac_shadow_audio_message_free;
-	tone->message.audio_format = &g_MacShadowAudioFormat;
-	tone->message.buf = tone->samples;
-	tone->message.nFrames = MAC_SHADOW_TEST_TONE_FRAMES;
-	tone->message.wTimestamp = (UINT16)(GetTickCount64() & UINT16_MAX);
-	(void)shadow_client_boardcast_msg(subsystem->common.server, nullptr,
-	                                  SHADOW_MSG_OUT_AUDIO_OUT_SAMPLES_ID,
-	                                  (SHADOW_MSG_OUT*)tone, nullptr);
-}
+	const UINT32 generation =
+	    atomic_fetch_add_explicit(&subsystem->audioGeneration, 1, memory_order_acq_rel) + 1;
+	dispatch_async(subsystem->audioStartupQueue, ^{
+		if ((atomic_load_explicit(&subsystem->audioGeneration, memory_order_acquire) != generation) ||
+		    (WaitForSingleObject(subsystem->stopEvent, 0) == WAIT_OBJECT_0))
+		{
+			return;
+		}
 
-static int mac_shadow_test_tone_start(macShadowSubsystem* subsystem)
-{
-	if (!subsystem || !subsystem->testToneEnabled)
-		return 1;
-	if (subsystem->audioTimer)
-		return 1;
+		const UINT64 started = GetTickCount64();
+		const int status = mac_shadow_system_audio_start(subsystem);
+		const UINT64 elapsed = GetTickCount64() - started;
+		if ((atomic_load_explicit(&subsystem->audioGeneration, memory_order_acquire) != generation) ||
+		    (WaitForSingleObject(subsystem->stopEvent, 0) == WAIT_OBJECT_0))
+		{
+			mac_shadow_system_audio_stop(subsystem);
+			return;
+		}
 
-	if (!subsystem->audioQueue)
-		subsystem->audioQueue = dispatch_queue_create("mac.shadow.audio.test", nullptr);
-	if (!subsystem->audioQueue)
-		return -1;
-
-	subsystem->audioTimer =
-	    dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, subsystem->audioQueue);
-	if (!subsystem->audioTimer)
-		return -1;
-
-	dispatch_source_set_timer(subsystem->audioTimer, dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC),
-	                          20 * NSEC_PER_MSEC, 2 * NSEC_PER_MSEC);
-	dispatch_source_set_event_handler(subsystem->audioTimer, ^{
-	  mac_shadow_test_tone_publish(subsystem);
+		if (status < 0)
+			WLog_WARN(TAG, "Failed to start macOS system-audio capture");
+		else
+		{
+			WLog_INFO(TAG, "macOS system-audio capture started asynchronously in %" PRIu64 " ms",
+			          elapsed);
+			if (elapsed >= 2000)
+			{
+				WLog_WARN(TAG,
+				          "macOS Core Audio initialization was slow (%" PRIu64
+				          " ms); video, input, and graphics remained independent",
+				          elapsed);
+			}
+		}
 	});
-	dispatch_resume(subsystem->audioTimer);
-	WLog_INFO(TAG, "Enabled the opt-in 440 Hz RDP audio test tone");
-	return 1;
 }
 
-static void mac_shadow_test_tone_stop(macShadowSubsystem* subsystem)
+static void mac_shadow_system_audio_stop_async(macShadowSubsystem* subsystem)
 {
-	dispatch_source_t timer = nullptr;
-	if (!subsystem || !subsystem->audioTimer)
+	if (!subsystem)
 		return;
-
-	timer = subsystem->audioTimer;
-	subsystem->audioTimer = nullptr;
-	dispatch_source_cancel(timer);
-	dispatch_sync(subsystem->audioQueue, ^{
+	(void)atomic_fetch_add_explicit(&subsystem->audioGeneration, 1, memory_order_acq_rel);
+	if (!subsystem->audioStartupQueue)
+	{
+		mac_shadow_system_audio_stop(subsystem);
+		return;
+	}
+	dispatch_async(subsystem->audioStartupQueue, ^{
+		mac_shadow_system_audio_stop(subsystem);
 	});
-#if !OS_OBJECT_USE_OBJC
-	dispatch_release(timer);
-#endif
+}
+
+static void mac_shadow_system_audio_stop_and_wait(macShadowSubsystem* subsystem)
+{
+	if (!subsystem)
+		return;
+	(void)atomic_fetch_add_explicit(&subsystem->audioGeneration, 1, memory_order_acq_rel);
+	if (!subsystem->audioStartupQueue)
+	{
+		mac_shadow_system_audio_stop(subsystem);
+		return;
+	}
+	dispatch_sync(subsystem->audioStartupQueue, ^{
+		mac_shadow_system_audio_stop(subsystem);
+	});
+}
+
+static BOOL mac_shadow_is_vaio_profile(const rdpSettings* settings)
+{
+	WINPR_ASSERT(settings);
+	const char* hostname = freerdp_settings_get_string(settings, FreeRDP_ClientHostname);
+	return hostname && (strcasestr(hostname, "vaio") != nullptr);
 }
 
 static BOOL mac_shadow_is_win98_compat_profile(const rdpSettings* settings)
@@ -377,11 +430,25 @@ static BOOL mac_shadow_client_connect(rdpShadowSubsystem* subsystem, rdpShadowCl
 		return FALSE;
 
 	EnterCriticalSection(&mac->connectionLock);
+	if (WaitForSingleObject(mac->stopEvent, 0) == WAIT_OBJECT_0)
+	{
+		LeaveCriticalSection(&mac->connectionLock);
+		return FALSE;
+	}
 	if (mac->connectedClients == 0)
 	{
 		rdpSettings* settings = client->context.settings;
 		if (!settings)
 		{
+			LeaveCriticalSection(&mac->connectionLock);
+			return FALSE;
+		}
+
+		/* A failed restoration must not become the next session's saved original mode. */
+		if ((mac->connectionDisplayModeActive || mac->scaledClientSurface) &&
+		    (mac_shadow_restore_connection_display_mode(mac, "retry before next connection") < 0))
+		{
+			WLog_ERR(TAG, "Cannot start a new session until the previous display mode is restored");
 			LeaveCriticalSection(&mac->connectionLock);
 			return FALSE;
 		}
@@ -400,6 +467,8 @@ static BOOL mac_shadow_client_connect(rdpShadowSubsystem* subsystem, rdpShadowCl
 		else if (mac->autoClientProfile &&
 		         (mac_shadow_switch_to_client_display_mode(mac, settings) < 0))
 		{
+			if (mac_shadow_restore_connection_display_mode(mac, "failed client resolution switch") < 0)
+				WLog_ERR(TAG, "Display restoration remains pending after the failed connection");
 			mac->common.server->ShowMouseCursor = mac->configuredShowMouseCursor;
 			LeaveCriticalSection(&mac->connectionLock);
 			return FALSE;
@@ -417,12 +486,8 @@ static BOOL mac_shadow_client_connect(rdpShadowSubsystem* subsystem, rdpShadowCl
 			LeaveCriticalSection(&mac->connectionLock);
 			return FALSE;
 		}
-		if (mac_shadow_test_tone_start(mac) < 0)
-			WLog_WARN(TAG, "Failed to start the opt-in RDP audio test tone");
-		if (!mac->testToneEnabled && (mac_shadow_system_audio_start(mac) < 0))
-			WLog_WARN(TAG, "Failed to start macOS system-audio capture");
-
 		WLog_INFO(TAG, "Display capture started for the first connected client");
+		mac_shadow_system_audio_start_async(mac);
 	}
 	mac->connectedClients++;
 	LeaveCriticalSection(&mac->connectionLock);
@@ -469,8 +534,8 @@ static void mac_shadow_client_disconnect(rdpShadowSubsystem* subsystem, rdpShado
 		mac->connectedClients--;
 		if (mac->connectedClients == 0)
 		{
-			mac_shadow_test_tone_stop(mac);
-			mac_shadow_system_audio_stop(mac);
+			mac_shadow_release_mouse_buttons(mac);
+			mac_shadow_system_audio_stop_async(mac);
 			mac->audioNegotiated = FALSE;
 			mac->audioUnavailable = FALSE;
 			if (mac_shadow_capture_release_stream(mac) < 0)
@@ -592,6 +657,83 @@ static BOOL mac_shadow_input_unicode_keyboard_event(rdpShadowSubsystem* subsyste
 	return TRUE;
 }
 
+static BOOL mac_shadow_mouse_button_transition(macShadowSubsystem* mac, UINT16 flags,
+                                               CGEventType* type, CGMouseButton* button,
+                                               BOOL** pressed, BOOL* down)
+{
+	WINPR_ASSERT(mac);
+	WINPR_ASSERT(type);
+	WINPR_ASSERT(button);
+	WINPR_ASSERT(pressed);
+	WINPR_ASSERT(down);
+	*down = (flags & PTR_FLAGS_DOWN) != 0;
+	if (flags & PTR_FLAGS_BUTTON1)
+	{
+		*button = kCGMouseButtonLeft;
+		*pressed = &mac->mouseDownLeft;
+		*type = *down ? kCGEventLeftMouseDown : kCGEventLeftMouseUp;
+	}
+	else if (flags & PTR_FLAGS_BUTTON2)
+	{
+		*button = kCGMouseButtonRight;
+		*pressed = &mac->mouseDownRight;
+		*type = *down ? kCGEventRightMouseDown : kCGEventRightMouseUp;
+	}
+	else if (flags & PTR_FLAGS_BUTTON3)
+	{
+		*button = kCGMouseButtonCenter;
+		*pressed = &mac->mouseDownOther;
+		*type = *down ? kCGEventOtherMouseDown : kCGEventOtherMouseUp;
+	}
+	else
+	{
+		return FALSE;
+	}
+
+	/* Touch clients may repeat a down or send a cleanup release for a button that was never
+	 * pressed. Posting either duplicate to Quartz can immediately dismiss the menu just opened. */
+	return **pressed != *down;
+}
+
+static void mac_shadow_release_mouse_buttons(macShadowSubsystem* mac)
+{
+	if (!mac || !mac->eventSource)
+		return;
+
+	CGPoint location = CGPointMake(0, 0);
+	CGEventRef current = CGEventCreate(mac->eventSource);
+	if (current)
+	{
+		location = CGEventGetLocation(current);
+		CFRelease(current);
+	}
+
+	struct
+	{
+		BOOL* pressed;
+		CGEventType type;
+		CGMouseButton button;
+	} releases[] = {
+		{ &mac->mouseDownLeft, kCGEventLeftMouseUp, kCGMouseButtonLeft },
+		{ &mac->mouseDownRight, kCGEventRightMouseUp, kCGMouseButtonRight },
+		{ &mac->mouseDownOther, kCGEventOtherMouseUp, kCGMouseButtonCenter }
+	};
+
+	for (size_t index = 0; index < ARRAYSIZE(releases); index++)
+	{
+		if (!*releases[index].pressed)
+			continue;
+		CGEventRef event = CGEventCreateMouseEvent(mac->eventSource, releases[index].type,
+		                                            location, releases[index].button);
+		if (event)
+		{
+			CGEventPost(kCGHIDEventTap, event);
+			CFRelease(event);
+		}
+		*releases[index].pressed = FALSE;
+	}
+}
+
 static BOOL mac_shadow_input_mouse_event(rdpShadowSubsystem* subsystem, rdpShadowClient* client,
                                          UINT16 flags, UINT16 x, UINT16 y)
 {
@@ -600,7 +742,7 @@ static BOOL mac_shadow_input_mouse_event(rdpShadowSubsystem* subsystem, rdpShado
 	UINT32 scrollY = 0;
 	CGWheelCount wheelCount = 2;
 
-	if (!subsystem || !client)
+	if (!subsystem || !client || !mac->eventSource)
 		return FALSE;
 
 	CGPoint location = CGPointMake(x, y);
@@ -634,85 +776,54 @@ static BOOL mac_shadow_input_mouse_event(rdpShadowSubsystem* subsystem, rdpShado
 			scrollY = (flags & WheelRotationMask) / 120;
 		}
 
-		CGEventSourceRef source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
-		CGEventRef scroll = CGEventCreateScrollWheelEvent(source, kCGScrollEventUnitLine,
+		CGEventRef scroll = CGEventCreateScrollWheelEvent(mac->eventSource, kCGScrollEventUnitLine,
 		                                                  wheelCount, scrollY, scrollX);
+		if (!scroll)
+			return FALSE;
 		CGEventPost(kCGHIDEventTap, scroll);
 		CFRelease(scroll);
-		CFRelease(source);
 	}
 	else
 	{
-		CGEventSourceRef source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
-		CGEventType mouseType = kCGEventNull;
-		CGMouseButton mouseButton = kCGMouseButtonLeft;
-
 		if (flags & PTR_FLAGS_MOVE)
 		{
+			CGEventType moveType = kCGEventMouseMoved;
+			CGMouseButton moveButton = kCGMouseButtonLeft;
 			if (mac->mouseDownLeft)
-				mouseType = kCGEventLeftMouseDragged;
+				moveType = kCGEventLeftMouseDragged;
 			else if (mac->mouseDownRight)
-				mouseType = kCGEventRightMouseDragged;
+			{
+				moveType = kCGEventRightMouseDragged;
+				moveButton = kCGMouseButtonRight;
+			}
 			else if (mac->mouseDownOther)
-				mouseType = kCGEventOtherMouseDragged;
-			else
-				mouseType = kCGEventMouseMoved;
+			{
+				moveType = kCGEventOtherMouseDragged;
+				moveButton = kCGMouseButtonCenter;
+			}
 
-			CGEventRef move = CGEventCreateMouseEvent(source, mouseType, location, mouseButton);
+			CGEventRef move =
+			    CGEventCreateMouseEvent(mac->eventSource, moveType, location, moveButton);
+			if (!move)
+				return FALSE;
 			CGEventPost(kCGHIDEventTap, move);
 			CFRelease(move);
 		}
 
-		if (flags & PTR_FLAGS_BUTTON1)
+		CGEventType buttonType = kCGEventNull;
+		CGMouseButton button = kCGMouseButtonLeft;
+		BOOL* pressed = nullptr;
+		BOOL down = FALSE;
+		if (mac_shadow_mouse_button_transition(mac, flags, &buttonType, &button, &pressed, &down))
 		{
-			mouseButton = kCGMouseButtonLeft;
-
-			if (flags & PTR_FLAGS_DOWN)
-			{
-				mouseType = kCGEventLeftMouseDown;
-				mac->mouseDownLeft = TRUE;
-			}
-			else
-			{
-				mouseType = kCGEventLeftMouseUp;
-				mac->mouseDownLeft = FALSE;
-			}
+			CGEventRef event =
+			    CGEventCreateMouseEvent(mac->eventSource, buttonType, location, button);
+			if (!event)
+				return FALSE;
+			CGEventPost(kCGHIDEventTap, event);
+			CFRelease(event);
+			*pressed = down;
 		}
-		else if (flags & PTR_FLAGS_BUTTON2)
-		{
-			mouseButton = kCGMouseButtonRight;
-
-			if (flags & PTR_FLAGS_DOWN)
-			{
-				mouseType = kCGEventRightMouseDown;
-				mac->mouseDownRight = TRUE;
-			}
-			else
-			{
-				mouseType = kCGEventRightMouseUp;
-				mac->mouseDownRight = FALSE;
-			}
-		}
-		else if (flags & PTR_FLAGS_BUTTON3)
-		{
-			mouseButton = kCGMouseButtonCenter;
-
-			if (flags & PTR_FLAGS_DOWN)
-			{
-				mouseType = kCGEventOtherMouseDown;
-				mac->mouseDownOther = TRUE;
-			}
-			else
-			{
-				mouseType = kCGEventOtherMouseUp;
-				mac->mouseDownOther = FALSE;
-			}
-		}
-
-		CGEventRef mouseEvent = CGEventCreateMouseEvent(source, mouseType, location, mouseButton);
-		CGEventPost(kCGHIDEventTap, mouseEvent);
-		CFRelease(mouseEvent);
-		CFRelease(source);
 	}
 
 	return TRUE;
@@ -842,10 +953,10 @@ static int mac_shadow_capture_get_dirty_region(macShadowSubsystem* subsystem,
 	const CGRect* rects = nullptr;
 	rdpShadowSurface* surface = nullptr;
 
-	if (!subsystem || !subsystem->common.server || !subsystem->common.server->surface || !updateRef)
+	if (!subsystem || !subsystem->common.server || !subsystem->captureSurface || !updateRef)
 		return -1;
 
-	surface = subsystem->common.server->surface;
+	surface = subsystem->captureSurface;
 	if ((surface->width <= 0) || (surface->height <= 0) || (surface->width > UINT16_MAX) ||
 	    (surface->height > UINT16_MAX))
 		return -1;
@@ -958,62 +1069,59 @@ static int freerdp_image_copy_from_retina(BYTE* pDstData, DWORD DstFormat, int n
 	return 1;
 }
 
-static void (^mac_capture_stream_handler)(
-    CGDisplayStreamFrameStatus, uint64_t, IOSurfaceRef,
-    CGDisplayStreamUpdateRef) = ^(CGDisplayStreamFrameStatus status, uint64_t displayTime,
-                                  IOSurfaceRef frameSurface, CGDisplayStreamUpdateRef updateRef) {
-  int x, y;
-  int count;
-  int width;
-  int height;
-  size_t srcStep;
-  size_t srcWidth;
-  size_t srcHeight;
-  BOOL empty;
-  BOOL forceFullFrame = FALSE;
-  BOOL surfaceLocked = FALSE;
-  BOOL surfaceRegionLocked = FALSE;
-  BOOL publish = FALSE;
-  kern_return_t rc;
-  BYTE* pSrcData = nullptr;
-  RECTANGLE_16 surfaceRect;
-  const RECTANGLE_16* extents;
-  macShadowSubsystem* subsystem = g_Subsystem;
-  rdpShadowServer* server = nullptr;
-  rdpShadowSurface* surface = nullptr;
+static void mac_shadow_capture_frame(macShadowSubsystem* subsystem,
+                                     CGDisplayStreamFrameStatus status, uint64_t displayTime,
+                                     IOSurfaceRef frameSurface, CGDisplayStreamUpdateRef updateRef)
+{
+	WINPR_UNUSED(displayTime);
+	int x, y;
+	int width;
+	int height;
+	size_t srcStep;
+	size_t srcWidth;
+	size_t srcHeight;
+	BOOL empty;
+	BOOL forceFullFrame = FALSE;
+	BOOL surfaceLocked = FALSE;
+	BOOL surfaceRegionLocked = FALSE;
+	kern_return_t rc;
+	BYTE* pSrcData = nullptr;
+	RECTANGLE_16 surfaceRect;
+	const RECTANGLE_16* extents;
+	rdpShadowSurface* surface = nullptr;
 
-  if (!subsystem || !subsystem->common.server || !subsystem->common.server->surface)
-	  return;
+	if (!subsystem || !subsystem->common.server || !subsystem->captureSurface)
+		return;
 
-  server = subsystem->common.server;
-  surface = server->surface;
+	surface = subsystem->captureSurface;
 
-  if (status != kCGDisplayStreamFrameStatusFrameComplete)
-  {
-	  switch (status)
-	  {
-		  case kCGDisplayStreamFrameStatusFrameIdle:
-		  case kCGDisplayStreamFrameStatusStopped:
-		  case kCGDisplayStreamFrameStatusFrameBlank:
-		  default:
-			  return;
-	  }
-  }
+	if (status != kCGDisplayStreamFrameStatusFrameComplete)
+	{
+		switch (status)
+		{
+			case kCGDisplayStreamFrameStatusFrameIdle:
+			case kCGDisplayStreamFrameStatusStopped:
+			case kCGDisplayStreamFrameStatusFrameBlank:
+			default:
+				return;
+		}
+	}
 
-  if (!frameSurface || !updateRef)
-	  return;
+	if (!frameSurface || !updateRef)
+		return;
 
-  EnterCriticalSection(&(surface->lock));
-  surfaceRegionLocked = TRUE;
-  if ((surface->width > UINT16_MAX) || (surface->height > UINT16_MAX))
-  {
-	  WLog_ERR(TAG, "Shadow surface dimensions exceed the region coordinate range");
-	  goto cleanup;
-  }
+	EnterCriticalSection(&(surface->lock));
+	surfaceRegionLocked = TRUE;
+	if ((surface->width > UINT16_MAX) || (surface->height > UINT16_MAX))
+	{
+		WLog_ERR(TAG, "Shadow surface dimensions exceed the region coordinate range");
+		subsystem->captureNeedsFullFrame = TRUE;
+		goto cleanup;
+	}
 
-  surfaceRect.left = surfaceRect.top = 0;
-  surfaceRect.right = (UINT16)surface->width;
-  surfaceRect.bottom = (UINT16)surface->height;
+	surfaceRect.left = surfaceRect.top = 0;
+	surfaceRect.right = (UINT16)surface->width;
+	surfaceRect.bottom = (UINT16)surface->height;
 	forceFullFrame = subsystem->captureNeedsFullFrame;
 	if (forceFullFrame)
 	{
@@ -1022,177 +1130,122 @@ static void (^mac_capture_stream_handler)(
 		                         &surfaceRect))
 		{
 			WLog_ERR(TAG, "Failed to request the complete first frame after a resize");
+			subsystem->captureNeedsFullFrame = TRUE;
 			goto cleanup;
 		}
 	}
 	else if (mac_shadow_capture_get_dirty_region(subsystem, updateRef) < 0)
 	{
+		subsystem->captureNeedsFullFrame = TRUE;
 		goto cleanup;
 	}
 
-  if (!region16_intersect_rect(&(surface->invalidRegion), &(surface->invalidRegion), &surfaceRect))
-  {
-	  WLog_ERR(TAG, "Failed to clamp invalid region to the shadow surface");
-	  goto cleanup;
-  }
-  empty = region16_is_empty(&(surface->invalidRegion));
+	if (!region16_intersect_rect(&(surface->invalidRegion), &(surface->invalidRegion),
+	                             &surfaceRect))
+	{
+		WLog_ERR(TAG, "Failed to clamp invalid region to the shadow surface");
+		subsystem->captureNeedsFullFrame = TRUE;
+		goto cleanup;
+	}
+	empty = region16_is_empty(&(surface->invalidRegion));
 
-  if (!empty)
-  {
-	  extents = region16_extents(&(surface->invalidRegion));
-	  x = extents->left;
-	  y = extents->top;
-	  width = extents->right - extents->left;
-	  height = extents->bottom - extents->top;
-	  rc = IOSurfaceLock(frameSurface, kIOSurfaceLockReadOnly, nullptr);
-	  if (rc != kIOReturnSuccess)
-	  {
-		  WLog_ERR(TAG, "IOSurfaceLock failed with status 0x%08" PRIx32, (UINT32)rc);
-		  goto cleanup;
-	  }
-	  surfaceLocked = TRUE;
+	if (!empty)
+	{
+		extents = region16_extents(&(surface->invalidRegion));
+		x = extents->left;
+		y = extents->top;
+		width = extents->right - extents->left;
+		height = extents->bottom - extents->top;
+		rc = IOSurfaceLock(frameSurface, kIOSurfaceLockReadOnly, nullptr);
+		if (rc != kIOReturnSuccess)
+		{
+			WLog_ERR(TAG, "IOSurfaceLock failed with status 0x%08" PRIx32, (UINT32)rc);
+			subsystem->captureNeedsFullFrame = TRUE;
+			goto cleanup;
+		}
+		surfaceLocked = TRUE;
 
-	  pSrcData = (BYTE*)IOSurfaceGetBaseAddress(frameSurface);
-	  srcStep = IOSurfaceGetBytesPerRow(frameSurface);
-	  srcWidth = IOSurfaceGetWidth(frameSurface);
-	  srcHeight = IOSurfaceGetHeight(frameSurface);
-	  if (!pSrcData || (srcStep == 0) || (srcStep > INT_MAX) || (srcWidth == 0) ||
-		  (srcHeight == 0) || (srcWidth > (SIZE_MAX / 4)) || (srcStep < (srcWidth * 4)))
-	  {
-		  WLog_ERR(TAG, "IOSurface has invalid storage dimensions, base address, or row stride");
-		  goto cleanup;
-	  }
+		pSrcData = (BYTE*)IOSurfaceGetBaseAddress(frameSurface);
+		srcStep = IOSurfaceGetBytesPerRow(frameSurface);
+		srcWidth = IOSurfaceGetWidth(frameSurface);
+		srcHeight = IOSurfaceGetHeight(frameSurface);
+		if (!pSrcData || (srcStep == 0) || (srcStep > INT_MAX) || (srcWidth == 0) ||
+		    (srcHeight == 0) || (srcWidth > (SIZE_MAX / 4)) || (srcStep < (srcWidth * 4)))
+		{
+			WLog_ERR(TAG, "IOSurface has invalid storage dimensions, base address, or row stride");
+			subsystem->captureNeedsFullFrame = TRUE;
+			goto cleanup;
+		}
 
-	  if (subsystem->retina)
-	  {
-		  if (((size_t)extents->right * 2 > srcWidth) || ((size_t)extents->bottom * 2 > srcHeight))
-		  {
-			  WLog_ERR(TAG, "Retina dirty region exceeds the IOSurface bounds");
-			  goto cleanup;
-		  }
-	  }
-	  else if (((size_t)extents->right > srcWidth) || ((size_t)extents->bottom > srcHeight))
-	  {
-		  WLog_ERR(TAG, "Dirty region exceeds the IOSurface bounds");
-		  goto cleanup;
-	  }
+		if (subsystem->retina)
+		{
+			if (((size_t)extents->right * 2 > srcWidth) ||
+			    ((size_t)extents->bottom * 2 > srcHeight))
+			{
+				WLog_ERR(TAG, "Retina dirty region exceeds the IOSurface bounds");
+				subsystem->captureNeedsFullFrame = TRUE;
+				goto cleanup;
+			}
+		}
+		else if (((size_t)extents->right > srcWidth) || ((size_t)extents->bottom > srcHeight))
+		{
+			WLog_ERR(TAG, "Dirty region exceeds the IOSurface bounds");
+			subsystem->captureNeedsFullFrame = TRUE;
+			goto cleanup;
+		}
 
-	  if (!subsystem->retina && !forceFullFrame)
-	  {
-		  /* Core Graphics damage can cover an entire composited window for a tiny pixel change.
-		   * Compare against the previous framebuffer so legacy bitmap clients only receive the
-		   * pixels that actually changed. The X11 shadow backend uses the same comparator. */
-		  RECTANGLE_16 changedRect = WINPR_C_ARRAY_INIT;
-		  const BYTE* pOldData =
-		      &surface->data[((size_t)y * surface->scanline) + ((size_t)x * 4)];
-		  const BYTE* pNewData = &pSrcData[((size_t)y * srcStep) + ((size_t)x * 4)];
-		  const int changed = shadow_capture_compare_with_format(
-		      pOldData, surface->format, surface->scanline, width, height, pNewData,
-		      PIXEL_FORMAT_BGRX32, (UINT32)srcStep, &changedRect);
+		if (subsystem->retina)
+		{
+			if (freerdp_image_copy_from_retina(surface->data, surface->format, surface->scanline, x,
+			                                   y, width, height, pSrcData, (int)srcStep, x * 2,
+			                                   y * 2) < 0)
+			{
+				WLog_ERR(TAG, "Failed to copy Retina IOSurface pixels");
+				subsystem->captureNeedsFullFrame = TRUE;
+				goto cleanup;
+			}
+		}
+		else
+		{
+			if (!freerdp_image_copy_no_overlap(surface->data, surface->format, surface->scanline, x,
+			                                   y, width, height, pSrcData, PIXEL_FORMAT_BGRX32,
+			                                   (UINT32)srcStep, x, y, nullptr, FREERDP_FLIP_NONE))
+			{
+				WLog_ERR(TAG, "Failed to copy IOSurface pixels");
+				subsystem->captureNeedsFullFrame = TRUE;
+				goto cleanup;
+			}
+		}
 
-		  if (changed < 0)
-		  {
-			  WLog_ERR(TAG, "Failed to compare captured pixels with the shadow surface");
-			  goto cleanup;
-		  }
+		rc = IOSurfaceUnlock(frameSurface, kIOSurfaceLockReadOnly, nullptr);
+		surfaceLocked = FALSE;
+		if (rc != kIOReturnSuccess)
+		{
+			WLog_ERR(TAG, "IOSurfaceUnlock failed with status 0x%08" PRIx32, (UINT32)rc);
+			subsystem->captureNeedsFullFrame = TRUE;
+			goto cleanup;
+		}
 
-		  if (changed == 0)
-		  {
-			  region16_clear(&(surface->invalidRegion));
-			  goto cleanup;
-		  }
-
-		  changedRect.left += (UINT16)x;
-		  changedRect.top += (UINT16)y;
-		  changedRect.right += (UINT16)x;
-		  changedRect.bottom += (UINT16)y;
-		  region16_clear(&(surface->invalidRegion));
-		  if (!region16_union_rect(&(surface->invalidRegion), &(surface->invalidRegion),
-		                           &changedRect))
-		  {
-			  WLog_ERR(TAG, "Failed to record changed framebuffer pixels");
-			  goto cleanup;
-		  }
-
-		  extents = region16_extents(&(surface->invalidRegion));
-		  x = extents->left;
-		  y = extents->top;
-		  width = extents->right - extents->left;
-		  height = extents->bottom - extents->top;
-	  }
-
-	  if (subsystem->retina)
-	  {
-		  if (freerdp_image_copy_from_retina(surface->data, surface->format, surface->scanline, x,
-			                                 y, width, height, pSrcData, (int)srcStep, x * 2,
-			                                 y * 2) < 0)
-		  {
-			  WLog_ERR(TAG, "Failed to copy Retina IOSurface pixels");
-			  goto cleanup;
-		  }
-	  }
-	  else
-	  {
-		  if (!freerdp_image_copy_no_overlap(surface->data, surface->format, surface->scanline, x,
-			                                 y, width, height, pSrcData, PIXEL_FORMAT_BGRX32,
-			                                 (UINT32)srcStep, x, y, nullptr, FREERDP_FLIP_NONE))
-		  {
-			  WLog_ERR(TAG, "Failed to copy IOSurface pixels");
-			  goto cleanup;
-		  }
-	  }
-
-	  rc = IOSurfaceUnlock(frameSurface, kIOSurfaceLockReadOnly, nullptr);
-	  surfaceLocked = FALSE;
-	  if (rc != kIOReturnSuccess)
-	  {
-		  WLog_ERR(TAG, "IOSurfaceUnlock failed with status 0x%08" PRIx32, (UINT32)rc);
-		  goto cleanup;
-	  }
-
-	  LeaveCriticalSection(&(surface->lock));
-	  surfaceRegionLocked = FALSE;
-	  publish = TRUE;
-	  subsystem->captureNeedsFullFrame = FALSE;
-
-	  ArrayList_Lock(server->clients);
-	  count = ArrayList_Count(server->clients);
-	  shadow_subsystem_frame_update(&subsystem->common);
-
-	  if (count == 1)
-	  {
-		  rdpShadowClient* client;
-		  client = (rdpShadowClient*)ArrayList_GetItem(server->clients, 0);
-
-		  if (client)
-		  {
-			  subsystem->common.captureFrameRate = shadow_encoder_preferred_fps(client->encoder);
-		  }
-	  }
-
-	  ArrayList_Unlock(server->clients);
-
-	  EnterCriticalSection(&(surface->lock));
-	  surfaceRegionLocked = TRUE;
-	  region16_clear(&(surface->invalidRegion));
-  }
+		subsystem->captureNeedsFullFrame = FALSE;
+		/* One level-triggered notification, regardless of how many frames arrive while the
+		 * publisher is busy. Keep the union of unsent damage in captureSurface. */
+		(void)SetEvent(subsystem->frameEvent);
+	}
 
 cleanup:
-  if (surfaceLocked)
-  {
-	  rc = IOSurfaceUnlock(frameSurface, kIOSurfaceLockReadOnly, nullptr);
-	  if (rc != kIOReturnSuccess)
-		  WLog_ERR(TAG, "IOSurfaceUnlock during cleanup failed with status 0x%08" PRIx32,
-			       (UINT32)rc);
-  }
+	if (surfaceLocked)
+	{
+		rc = IOSurfaceUnlock(frameSurface, kIOSurfaceLockReadOnly, nullptr);
+		if (rc != kIOReturnSuccess)
+			WLog_ERR(TAG, "IOSurfaceUnlock during cleanup failed with status 0x%08" PRIx32,
+			         (UINT32)rc);
+	}
 
-  if (surfaceRegionLocked)
-  {
-	  if (!publish)
-		  region16_clear(&(surface->invalidRegion));
-	  LeaveCriticalSection(&(surface->lock));
-  }
-};
+	if (surfaceRegionLocked)
+	{
+		LeaveCriticalSection(&(surface->lock));
+	}
+}
 
 static int mac_shadow_capture_init(macShadowSubsystem* subsystem)
 {
@@ -1232,9 +1285,25 @@ static int mac_shadow_capture_init(macShadowSubsystem* subsystem)
 		return -1;
 	}
 
+	EnterCriticalSection(&subsystem->publicationLock);
+	subsystem->publishedFrame = FALSE;
+	if (!subsystem->captureSurface)
+		subsystem->captureSurface =
+		    mac_shadow_latest_surface_new((UINT32)subsystem->width, (UINT32)subsystem->height);
+	LeaveCriticalSection(&subsystem->publicationLock);
+	if (!subsystem->captureSurface)
+	{
+		CFRelease(opts);
+		return -1;
+	}
+
 	subsystem->stream = CGDisplayStreamCreateWithDispatchQueue(
 	    displayId, subsystem->pixelWidth, subsystem->pixelHeight, 'BGRA', opts,
-	    subsystem->captureQueue, mac_capture_stream_handler);
+	    subsystem->captureQueue,
+	    ^(CGDisplayStreamFrameStatus status, uint64_t time, IOSurfaceRef frame,
+	      CGDisplayStreamUpdateRef update) {
+		  mac_shadow_capture_frame(subsystem, status, time, frame, update);
+	    });
 	CFRelease(opts);
 	if (!subsystem->stream)
 	{
@@ -1250,18 +1319,22 @@ static int mac_shadow_capture_release_stream(macShadowSubsystem* subsystem)
 {
 	if (!subsystem)
 		return -1;
-	if (!subsystem->stream)
-		return 1;
-
-	if (mac_shadow_capture_stop(subsystem) < 0)
-		return -1;
-
-	/* CGDisplayStream callbacks run on this serial queue. Drain callbacks from the old stream
-	 * before resizing its destination surface or releasing the stream. */
-	dispatch_sync(subsystem->captureQueue, ^{
-	});
-	CFRelease(subsystem->stream);
-	subsystem->stream = nullptr;
+	if (subsystem->stream)
+	{
+		if (mac_shadow_capture_stop(subsystem) < 0)
+			return -1;
+		dispatch_sync(subsystem->captureQueue, ^{
+		              });
+		CFRelease(subsystem->stream);
+		subsystem->stream = nullptr;
+	}
+	/* The callback is drained. Wait for the immutable publication to be consumed before
+	 * freeing pending storage or allowing a display/surface resize. */
+	EnterCriticalSection(&subsystem->publicationLock);
+	mac_shadow_latest_surface_free(subsystem->captureSurface);
+	subsystem->captureSurface = nullptr;
+	(void)ResetEvent(subsystem->frameEvent);
+	LeaveCriticalSection(&subsystem->publicationLock);
 	return 1;
 }
 
@@ -1638,26 +1711,10 @@ static int mac_shadow_use_scaled_client_surface(macShadowSubsystem* subsystem, U
                                                 UINT32 height)
 {
 	WINPR_ASSERT(subsystem);
-	const size_t sourceWidth = CGDisplayPixelsWide(CGMainDisplayID());
-	const size_t sourceHeight = CGDisplayPixelsHigh(CGMainDisplayID());
-
-	if ((width == 0) || (height == 0) || (width > INT_MAX) || (height > INT_MAX) ||
-	    (width > UINT16_MAX) || (height > UINT16_MAX))
-	{
-		WLog_WARN(TAG, "Cannot create scaled RDP surface for invalid size %" PRIu32 "x%" PRIu32,
-		          width, height);
-		return 1;
-	}
-	if ((sourceWidth > 0) && (sourceHeight > 0) &&
-	    ((width > sourceWidth) || (height > sourceHeight)))
-	{
-		WLog_WARN(TAG,
-		          "Client request %" PRIu32 "x%" PRIu32
-		          " is larger than main display %" PRIuz "x%" PRIuz
-		          "; refusing to upscale the capture surface",
-		          width, height, sourceWidth, sourceHeight);
-		return 1;
-	}
+	if (!mac_shadow_valid_client_size(width, height))
+		return -1;
+	if (mac_shadow_capture_release_stream(subsystem) < 0)
+		return -1;
 
 	subsystem->scaledClientSurface = TRUE;
 	subsystem->scaledClientWidth = (int)width;
@@ -1684,15 +1741,13 @@ static int mac_shadow_switch_to_client_display_mode(macShadowSubsystem* subsyste
 	WINPR_ASSERT(subsystem);
 	WINPR_ASSERT(settings);
 
-	const UINT32 requestedWidth =
-	    freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth);
-	const UINT32 requestedHeight =
-	    freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight);
-	if ((requestedWidth == 0) || (requestedHeight == 0))
+	UINT32 requestedWidth = 0, requestedHeight = 0;
+	mac_shadow_client_size(settings, &requestedWidth, &requestedHeight);
+	if (!mac_shadow_valid_client_size(requestedWidth, requestedHeight))
 	{
-		WLog_WARN(TAG, "Client advertised an invalid desktop size %" PRIu32 "x%" PRIu32,
+		WLog_WARN(TAG, "Client desktop size exceeds supported bounds: %" PRIu32 "x%" PRIu32,
 		          requestedWidth, requestedHeight);
-		return 1;
+		return -1;
 	}
 
 	const CGDirectDisplayID displayId = CGMainDisplayID();
@@ -1701,6 +1756,29 @@ static int mac_shadow_switch_to_client_display_mode(macShadowSubsystem* subsyste
 	{
 		WLog_WARN(TAG, "Could not read the current display mode; keeping the existing resolution");
 		return 1;
+	}
+
+	/* Physical mode changes are reserved for the explicitly identified legacy VAIO profile.
+	 * Generic and mobile clients receive their requested RDP dimensions through the scaled
+	 * capture surface. This keeps activation off CoreGraphics mode-setting calls, which may
+	 * synchronously wait for WindowServer for many seconds on Sonoma. */
+	if (!mac_shadow_is_vaio_profile(settings))
+	{
+		const size_t currentWidth = CGDisplayModeGetWidth(current);
+		const size_t currentHeight = CGDisplayModeGetHeight(current);
+		if ((currentWidth == requestedWidth) && (currentHeight == requestedHeight))
+		{
+			WLog_INFO(TAG, "Main display already matches client request %" PRIu32 "x%" PRIu32,
+			          requestedWidth, requestedHeight);
+			CGDisplayModeRelease(current);
+			return 1;
+		}
+		WLog_INFO(TAG,
+		          "Keeping main display at %" PRIuz "x%" PRIuz
+		          " and starting requested mobile/generic RDP surface %" PRIu32 "x%" PRIu32,
+		          currentWidth, currentHeight, requestedWidth, requestedHeight);
+		CGDisplayModeRelease(current);
+		return mac_shadow_use_scaled_client_surface(subsystem, requestedWidth, requestedHeight);
 	}
 
 	CGDisplayModeRef target =
@@ -1790,18 +1868,24 @@ static int mac_shadow_switch_to_client_display_mode(macShadowSubsystem* subsyste
 
 	const size_t originalWidth = CGDisplayPixelsWide(displayId);
 	const size_t originalHeight = CGDisplayPixelsHigh(displayId);
+	/* Save ownership before trying modes: even a failed switch can change the display,
+	 * and a failed rollback must remain recoverable at disconnect or server shutdown. */
+	subsystem->preConnectionPrivateDisplayMode = originalPrivateMode;
+	subsystem->privateDisplayModeActive = TRUE;
+	subsystem->connectionDisplayModeActive = TRUE;
 	const MAC_SHADOW_PRIVATE_MODE_CANDIDATE* selected = nullptr;
-	for (size_t index = 0; index < candidateCount; index++)
+	/* A sequence of synchronous WindowServer mode attempts delayed session activation by about
+	 * ten seconds in testing. The candidates are already sorted, so make at most one private
+	 * switch attempt and fall back to the requested scaled RDP surface if it does not activate. */
+	const MAC_SHADOW_PRIVATE_MODE_CANDIDATE* candidate = &candidates[0];
+	if (candidate->mode == originalPrivateMode)
 	{
-		const MAC_SHADOW_PRIVATE_MODE_CANDIDATE* candidate = &candidates[index];
-		if (candidate->mode == originalPrivateMode)
-		{
-			selected = candidate;
-			break;
-		}
-
+		selected = candidate;
+	}
+	else
+	{
 		WLog_INFO(TAG,
-		          "Trying Sonoma display mode %d (%" PRIu32 "x%" PRIu32 "@%" PRIu16
+		          "Trying best Sonoma display mode %d (%" PRIu32 "x%" PRIu32 "@%" PRIu16
 		          ", depth=%" PRIu32 ") for client %" PRIu32 "x%" PRIu32,
 		          candidate->mode, candidate->width, candidate->height, candidate->frequency,
 		          candidate->depth, requestedWidth, requestedHeight);
@@ -1810,23 +1894,22 @@ static int mac_shadow_switch_to_client_display_mode(macShadowSubsystem* subsyste
 		const size_t actualHeight = CGDisplayPixelsHigh(displayId);
 		if ((error == kCGErrorSuccess) && (actualWidth == candidate->width) &&
 		    (actualHeight == candidate->height))
-		{
 			selected = candidate;
-			break;
+		else
+		{
+			WLog_WARN(TAG,
+			          "Best Sonoma mode %d did not activate (status=%" PRId32
+			          ", actual=%" PRIuz "x%" PRIuz "); using the scaled RDP fallback",
+			          candidate->mode, (INT32)error, actualWidth, actualHeight);
+			if ((actualWidth != originalWidth) || (actualHeight != originalHeight))
+				(void)mac_shadow_set_private_display_mode(displayId, originalPrivateMode);
 		}
-
-		WLog_WARN(TAG,
-		          "Sonoma mode %d did not activate (status=%" PRId32 ", actual=%" PRIuz "x%" PRIuz
-		          "); trying the next compatible mode",
-		          candidate->mode, (INT32)error, actualWidth, actualHeight);
-		if ((actualWidth != originalWidth) || (actualHeight != originalHeight))
-			(void)mac_shadow_set_private_display_mode(displayId, originalPrivateMode);
 	}
 
 	if (!selected)
 	{
 		WLog_WARN(TAG,
-		          "All compatible Sonoma display modes failed for client %" PRIu32 "x%" PRIu32
+		          "The best compatible Sonoma display mode failed for client %" PRIu32 "x%" PRIu32
 		          "; using the current display as the scaled source",
 		          requestedWidth, requestedHeight);
 		free(candidates);
@@ -2006,85 +2089,110 @@ static int mac_shadow_switch_display_mode(macShadowSubsystem* subsystem, const c
 	return commandSucceeded ? 1 : -1;
 }
 
-static int mac_shadow_screen_grab(macShadowSubsystem* subsystem)
+static BOOL mac_shadow_publish_pending(macShadowSubsystem* subsystem, BOOL refresh)
 {
-	return 1;
-}
-
-static int mac_shadow_subsystem_process_message(macShadowSubsystem* subsystem, wMessage* message)
-{
-	switch (message->id)
+	BOOL result = TRUE;
+	BOOL changed = TRUE;
+	EnterCriticalSection(&subsystem->publicationLock);
+	rdpShadowSurface* latest = subsystem->captureSurface;
+	rdpShadowSurface* surface = subsystem->common.server->surface;
+	if (!latest || !surface)
+		goto out;
+	if ((latest->width != surface->width) || (latest->height != surface->height))
 	{
-		case SHADOW_MSG_IN_REFRESH_REQUEST_ID:
-			if (!subsystem->captureQueue)
-				return -1;
-
-			/*
-			 * CGDisplayStream callbacks publish from captureQueue. Serialize refresh
-			 * publication on that queue as well so updateEvent never has two producers.
-			 * Do not hold surface->lock here: clients acquire it while consuming the event.
-			 */
-			dispatch_sync(subsystem->captureQueue, ^{
-			  shadow_subsystem_frame_update((rdpShadowSubsystem*)subsystem);
-			});
-			break;
-
-		default:
-			WLog_ERR(TAG, "Unknown message id: %" PRIu32 "", message->id);
-			break;
+		result = FALSE;
+		goto out;
 	}
-
-	if (message->Free)
-		message->Free(message);
-
-	return 1;
+	EnterCriticalSection(&latest->lock);
+	if (refresh && (subsystem->publishedFrame || !region16_is_empty(&latest->invalidRegion)))
+	{
+		const RECTANGLE_16 full = { 0, 0, (UINT16)latest->width, (UINT16)latest->height };
+		result = region16_union_rect(&latest->invalidRegion, &latest->invalidRegion, &full);
+	}
+	if (!result || region16_is_empty(&latest->invalidRegion))
+	{
+		(void)ResetEvent(subsystem->frameEvent);
+		LeaveCriticalSection(&latest->lock);
+		goto out;
+	}
+	EnterCriticalSection(&surface->lock);
+	result = region16_copy(&surface->invalidRegion, &latest->invalidRegion);
+	if (result && subsystem->publishedFrame && !refresh)
+	{
+		const RECTANGLE_16* rect = region16_extents(&latest->invalidRegion);
+		RECTANGLE_16 damage = { 0 };
+		const int compared = shadow_capture_compare_with_format(
+		    surface->data + (size_t)rect->top * surface->scanline + rect->left * 4U,
+		    surface->format, surface->scanline, rect->right - rect->left, rect->bottom - rect->top,
+		    latest->data + (size_t)rect->top * latest->scanline + rect->left * 4U, latest->format,
+		    latest->scanline, &damage);
+		result = compared >= 0;
+		changed = compared > 0;
+		if (result)
+		{
+			damage.left += rect->left;
+			damage.right += rect->left;
+			damage.top += rect->top;
+			damage.bottom += rect->top;
+			region16_clear(&surface->invalidRegion);
+			if (changed)
+				result =
+				    region16_union_rect(&surface->invalidRegion, &surface->invalidRegion, &damage);
+		}
+	}
+	if (result && changed)
+	{
+		const RECTANGLE_16* rect = region16_extents(&surface->invalidRegion);
+		result = freerdp_image_copy_no_overlap(
+		    surface->data, surface->format, surface->scanline, rect->left, rect->top,
+		    rect->right - rect->left, rect->bottom - rect->top, latest->data, latest->format,
+		    latest->scanline, rect->left, rect->top, nullptr, FREERDP_FLIP_NONE);
+	}
+	if (result)
+		region16_clear(&latest->invalidRegion);
+	(void)ResetEvent(subsystem->frameEvent);
+	LeaveCriticalSection(&surface->lock);
+	LeaveCriticalSection(&latest->lock);
+	if (result && changed)
+	{
+		subsystem->publishedFrame = TRUE;
+		/* Only this worker produces updateEvent. Capture continues into latest while the
+		 * existing generic publication contract keeps server->surface immutable. */
+		shadow_subsystem_frame_update(&subsystem->common);
+		EnterCriticalSection(&surface->lock);
+		region16_clear(&surface->invalidRegion);
+		LeaveCriticalSection(&surface->lock);
+	}
+out:
+	LeaveCriticalSection(&subsystem->publicationLock);
+	return result;
 }
 
 static DWORD WINAPI mac_shadow_subsystem_thread(LPVOID arg)
 {
 	macShadowSubsystem* subsystem = (macShadowSubsystem*)arg;
-	DWORD status;
-	DWORD nCount;
-	UINT64 cTime;
-	DWORD dwTimeout;
-	DWORD dwInterval;
-	UINT64 frameTime;
-	HANDLE events[32];
-	wMessage message;
-	wMessagePipe* MsgPipe;
-	MsgPipe = subsystem->common.MsgPipe;
-	nCount = 0;
-	events[nCount++] = MessageQueue_Event(MsgPipe->In);
-	subsystem->common.captureFrameRate = 16;
-	dwInterval = 1000 / subsystem->common.captureFrameRate;
-	frameTime = GetTickCount64() + dwInterval;
-
-	while (1)
+	wMessagePipe* pipe = subsystem->common.MsgPipe;
+	HANDLE events[] = { subsystem->stopEvent, MessageQueue_Event(pipe->In), subsystem->frameEvent };
+	for (;;)
 	{
-		cTime = GetTickCount64();
-		dwTimeout = (cTime > frameTime) ? 0 : frameTime - cTime;
-		status = WaitForMultipleObjects(nCount, events, FALSE, dwTimeout);
-
-		if (WaitForSingleObject(MessageQueue_Event(MsgPipe->In), 0) == WAIT_OBJECT_0)
+		const DWORD status = WaitForMultipleObjects(ARRAYSIZE(events), events, FALSE, INFINITE);
+		if ((status == WAIT_FAILED) ||
+		    (WaitForSingleObject(subsystem->stopEvent, 0) == WAIT_OBJECT_0))
+			break;
+		BOOL refresh = FALSE;
+		wMessage message = { 0 };
+		while (MessageQueue_Peek(pipe->In, &message, TRUE))
 		{
-			if (MessageQueue_Peek(MsgPipe->In, &message, TRUE))
-			{
-				if (message.id == WMQ_QUIT)
-					break;
-
-				mac_shadow_subsystem_process_message(subsystem, &message);
-			}
+			if (message.id == WMQ_QUIT)
+				return 0;
+			if (message.id == SHADOW_MSG_IN_REFRESH_REQUEST_ID)
+				refresh = TRUE;
+			if (message.Free)
+				message.Free(&message);
 		}
-
-		if ((status == WAIT_TIMEOUT) || (GetTickCount64() > frameTime))
-		{
-			mac_shadow_screen_grab(subsystem);
-			dwInterval = 1000 / subsystem->common.captureFrameRate;
-			frameTime += dwInterval;
-		}
+		if (!mac_shadow_publish_pending(subsystem, refresh))
+			WLog_ERR(TAG, "Failed to publish the latest captured frame");
 	}
-
-	ExitThread(0);
 	return 0;
 }
 
@@ -2114,10 +2222,7 @@ static UINT32 mac_shadow_enum_monitors(MONITOR_DEF* monitors, UINT32 maxMonitors
 static int mac_shadow_subsystem_init(rdpShadowSubsystem* rdpsubsystem)
 {
 	macShadowSubsystem* subsystem = (macShadowSubsystem*)rdpsubsystem;
-	const char* testTone = getenv("FREERDP_MAC_SHADOW_TEST_TONE");
 	const char* autoClientProfile = getenv("FREERDP_MAC_SHADOW_AUTO_CLIENT_PROFILE");
-	g_Subsystem = subsystem;
-	subsystem->testToneEnabled = testTone && (strcmp(testTone, "0") != 0);
 	subsystem->autoClientProfile =
 	    autoClientProfile && (strcmp(autoClientProfile, "0") != 0);
 	subsystem->configuredShowMouseCursor = subsystem->common.server->ShowMouseCursor;
@@ -2158,26 +2263,21 @@ static int mac_shadow_subsystem_init(rdpShadowSubsystem* rdpsubsystem)
 
 static int mac_shadow_subsystem_uninit(rdpShadowSubsystem* rdpsubsystem)
 {
-	macShadowSubsystem* subsystem = (macShadowSubsystem*)rdpsubsystem;
-	if (!subsystem)
-		return -1;
-
-	int status = mac_shadow_capture_release_stream(subsystem);
-	if (mac_shadow_restore_connection_display_mode(subsystem, "server shutdown") < 0)
-		status = -1;
-	subsystem->common.server->ShowMouseCursor = subsystem->configuredShowMouseCursor;
-	return status;
+	/* The generic layer frees MsgPipe immediately after Uninit returns. */
+	return mac_shadow_subsystem_stop(rdpsubsystem);
 }
 
 static int mac_shadow_subsystem_start(rdpShadowSubsystem* rdpsubsystem)
 {
 	macShadowSubsystem* subsystem = (macShadowSubsystem*)rdpsubsystem;
-	HANDLE thread;
 
 	if (!subsystem)
 		return -1;
 
-	if (!(thread =
+	if (subsystem->worker)
+		return 1;
+	(void)ResetEvent(subsystem->stopEvent);
+	if (!(subsystem->worker =
 	          CreateThread(nullptr, 0, mac_shadow_subsystem_thread, (void*)subsystem, 0, nullptr)))
 	{
 		WLog_ERR(TAG, "Failed to create thread");
@@ -2194,17 +2294,27 @@ static int mac_shadow_subsystem_stop(rdpShadowSubsystem* rdpsubsystem)
 	macShadowSubsystem* subsystem = (macShadowSubsystem*)rdpsubsystem;
 	int status;
 
-	if (!subsystem)
+	if (!subsystem || !subsystem->common.server)
 		return -1;
 
+	(void)SetEvent(subsystem->stopEvent);
+	/* Release subscribers before joining a publisher that may be waiting for them. */
+	if (subsystem->worker && subsystem->common.server && subsystem->common.server->clients)
+		(void)shadow_client_boardcast_quit(subsystem->common.server, 0);
 	EnterCriticalSection(&subsystem->connectionLock);
-	mac_shadow_test_tone_stop(subsystem);
-	mac_shadow_system_audio_stop(subsystem);
+	mac_shadow_release_mouse_buttons(subsystem);
+	mac_shadow_system_audio_stop_and_wait(subsystem);
 	status = mac_shadow_capture_release_stream(subsystem);
 	if (mac_shadow_restore_connection_display_mode(subsystem, "server stop") < 0)
 		status = -1;
 	subsystem->common.server->ShowMouseCursor = subsystem->configuredShowMouseCursor;
 	LeaveCriticalSection(&subsystem->connectionLock);
+	if (subsystem->worker)
+	{
+		(void)WaitForSingleObject(subsystem->worker, INFINITE);
+		(void)CloseHandle(subsystem->worker);
+		subsystem->worker = nullptr;
+	}
 	return status;
 }
 
@@ -2214,12 +2324,26 @@ static void mac_shadow_subsystem_free(rdpShadowSubsystem* subsystem)
 		return;
 
 	macShadowSubsystem* mac = (macShadowSubsystem*)subsystem;
-	mac_shadow_test_tone_stop(mac);
-	mac_shadow_subsystem_uninit(subsystem);
+	if ((mac_shadow_subsystem_uninit(subsystem) < 0) && mac->stream)
+	{
+		/* A stream that refused to stop still owns a callback referring to this instance.
+		 * Retain its storage rather than allowing a callback into freed memory. */
+		WLog_ERR(TAG, "Retaining capture resources because CGDisplayStream could not be stopped");
+		return;
+	}
 	mac_shadow_audio_free(mac->audioCapture);
 	mac->audioCapture = nullptr;
 	if (mac->eventSource)
 		CFRelease(mac->eventSource);
+#if !OS_OBJECT_USE_OBJC
+	if (mac->captureQueue)
+		dispatch_release(mac->captureQueue);
+	if (mac->audioStartupQueue)
+		dispatch_release(mac->audioStartupQueue);
+#endif
+	(void)CloseHandle(mac->stopEvent);
+	(void)CloseHandle(mac->frameEvent);
+	DeleteCriticalSection(&mac->publicationLock);
 	DeleteCriticalSection(&mac->connectionLock);
 
 	free(subsystem);
@@ -2232,16 +2356,57 @@ static rdpShadowSubsystem* mac_shadow_subsystem_new(void)
 	if (!subsystem)
 		return nullptr;
 	subsystem->preConnectionPrivateDisplayMode = -1;
+	subsystem->audioStartupQueue =
+	    dispatch_queue_create("mac.shadow.audio.startup", DISPATCH_QUEUE_SERIAL);
+	if (!subsystem->audioStartupQueue)
+	{
+		free(subsystem);
+		return nullptr;
+	}
 
 	subsystem->eventSource = CGEventSourceCreate(kCGEventSourceStatePrivate);
 	if (!subsystem->eventSource)
 	{
+#if !OS_OBJECT_USE_OBJC
+		dispatch_release(subsystem->audioStartupQueue);
+#endif
 		free(subsystem);
 		return nullptr;
 	}
 	if (!InitializeCriticalSectionAndSpinCount(&subsystem->connectionLock, 4000))
 	{
 		CFRelease(subsystem->eventSource);
+#if !OS_OBJECT_USE_OBJC
+		dispatch_release(subsystem->audioStartupQueue);
+#endif
+		free(subsystem);
+		return nullptr;
+	}
+
+	if (!InitializeCriticalSectionAndSpinCount(&subsystem->publicationLock, 4000))
+	{
+		DeleteCriticalSection(&subsystem->connectionLock);
+		CFRelease(subsystem->eventSource);
+#if !OS_OBJECT_USE_OBJC
+		dispatch_release(subsystem->audioStartupQueue);
+#endif
+		free(subsystem);
+		return nullptr;
+	}
+	subsystem->stopEvent = CreateEvent(nullptr, TRUE, FALSE, nullptr);
+	subsystem->frameEvent = CreateEvent(nullptr, TRUE, FALSE, nullptr);
+	if (!subsystem->stopEvent || !subsystem->frameEvent)
+	{
+		if (subsystem->stopEvent)
+			(void)CloseHandle(subsystem->stopEvent);
+		if (subsystem->frameEvent)
+			(void)CloseHandle(subsystem->frameEvent);
+		DeleteCriticalSection(&subsystem->publicationLock);
+		DeleteCriticalSection(&subsystem->connectionLock);
+		CFRelease(subsystem->eventSource);
+#if !OS_OBJECT_USE_OBJC
+		dispatch_release(subsystem->audioStartupQueue);
+#endif
 		free(subsystem);
 		return nullptr;
 	}

@@ -556,6 +556,22 @@ static BOOL WTSReceiveChannelData(freerdp_peer* client, UINT16 channelId, const 
 
 			if (channel)
 				return WTSProcessChannelData(channel, channelId, data, size, flags, totalSize);
+
+			/* The channel was negotiated and joined, but this server application did not open a
+			 * handler for it. Clients commonly send an initial clipboard/device capability PDU in
+			 * this state. It is not an unknown MCS channel or a registration failure. */
+			if (cur->joined)
+			{
+				WLog_DBG(TAG,
+				         "data for negotiated but unopened channel '%s' (channelId %" PRIu16
+				         ") ignored",
+				         cur->Name, channelId);
+				return TRUE;
+			}
+
+			WLog_WARN(TAG, "data for unjoined channel '%s' (channelId %" PRIu16 ") ignored",
+			          cur->Name, channelId);
+			return TRUE;
 		}
 	}
 

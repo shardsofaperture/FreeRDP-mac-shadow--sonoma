@@ -63,6 +63,7 @@ matrix and lifecycle work below still gate a stable release.
 | 11. Clipboard/files | Later client/channel | Later | Stable capture, input, lifecycle, and legacy security | Predictable opt-in transfer without broader default exposure |
 | 12. Win98 companion | Later client/channel | Later | Validated Patch 7 settings | Optional launcher/add-on makes the connection repeatable |
 | 13. Open-source client | Later client/channel | Later research | Measurements from Patch 8 | Auditable client measurably improves bounded interactive latency |
+| 14. Mobile displays | Later client/display | **Research plan recorded** | Stable adaptive resolution and lifecycle | Android phone, rotation, custom size, and USB-C matrix is measured before implementation |
 
 Status is defined once in this table. The milestone sections below describe
 scope, dependencies, and verification rather than repeating readiness claims.
@@ -219,8 +220,8 @@ start/stop procedure on the target iMac.
    identity.
 3. Negotiate a client-advertised PCM format before publishing samples through
    the existing static `rdpsnd` channel.
-4. Keep audio failure nonfatal to display and input, with a deterministic test
-   tone available for diagnosis.
+4. Keep audio failure nonfatal to display and input; report capture and format
+   failures in the normal server log.
 5. Validate real application playback and repeated reconnects with Microsoft
    Remote Desktop 5.2 on Windows 98.
 
@@ -269,6 +270,18 @@ than video FPS. Retain interoperability with the loopback/SSH and explicit
 legacy-security profile. Publish source, build instructions, measurement method,
 and comparable results. Exit requires an auditable client that meets deployment
 constraints and measurably improves on the Microsoft RDP 5.2 baseline.
+
+### Phase 14 — Mobile and external-display resolution
+
+Measure Android clients before adding device heuristics. Confirm the initial
+desktop request and whether rotation, folding, window resizing, and USB-C
+attachment produce Display Control Monitor Layout PDUs. Preserve the existing
+connection-time adaptive path for legacy clients, add a user-selectable custom
+resolution independently of client identity, and support dynamic single-monitor
+changes only after the capture, surface, desktop-resize, and input-transform
+lifecycle can be updated atomically. The research questions, proposed phases,
+safety bounds, and device matrix are recorded in
+[the mobile resolution research note](mac-shadow-mobile-resolution-research.md).
 
 ## Detailed defect analysis
 

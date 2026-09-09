@@ -51,8 +51,8 @@ matrix.
 
 Grant Screen Recording and Accessibility permission to the Terminal used to
 launch the server. The automatic client profile uses the resolution advertised
-by the first RDP client, switches the main Mac display when that exact mode is
-available, and restores the previous mode after disconnect:
+by the first RDP client. Generic and mobile clients receive that resolution through
+a client-sized capture surface without blocking activation on a physical display-mode switch:
 
 ```zsh
 cd /Users/zach/gitr/RDP/FreeRDP-mac-shadow--sonoma
@@ -75,25 +75,35 @@ Microsoft RDC 2.x for Mac, receive the Mac cursor composited into the captured
 desktop. The server log records the client hostname, product identifier, build,
 platform, requested size, color depth, selected profile, and cursor policy.
 
-The client must request a mode supported by the Mac's main display. For the
-Snow Leopard MacBook, select 1280×800 in RDC 2.1.1; other MacBooks can select
-their native size. If the exact physical mode is unavailable, the server keeps
-the requested RDP surface and selects the closest activatable physical source mode that is at least
-as large and favors the same aspect ratio, then creates a client-sized scaled
-RDP surface. On the validated display, 1280×800 uses the supported 1440×900
-16:10 source, avoiding distortion and letterboxing. Sonoma hides some scaled
-display modes from its public CoreGraphics list, so the Mac backend dynamically
-uses the complete mode list only when no public exact match exists; no external
-display utility is required. Mouse coordinates are mapped back to the physical
-desktop, and source frames are never upscaled. The older
+Generic clients can request any valid size within the documented bounds. The server keeps the
+current Mac display mode and creates a client-sized scaled RDP surface with preserved aspect ratio;
+mouse coordinates are mapped back to the physical desktop. A hostname containing `VAIO` selects
+the legacy profile: a missing client size defaults to 1024×768, and the backend may switch the
+physical display to the best matching mode. It makes at most one private Sonoma mode attempt before
+falling back to a scaled 1024×768 surface, preventing a chain of WindowServer mode attempts from
+stalling activation. The older
 `FREERDP_MAC_SHADOW_CONNECT_DISPLAY_COMMAND`/`DISCONNECT_DISPLAY_COMMAND`
 pair remains available as an explicit deployment override, but the app below
 does not require `displayplacer`, `w981`, or `mac1080`.
 
-Legacy bitmap updates are batched against the exact wire size advertised by the
-client. This prevents RDC 2.1.1 from being disconnected when a multi-rectangle
-update is only a few bytes larger than its fast-path request limit, without
-forcing single-rectangle updates for Win98 or modern mstsc.
+Legacy bitmap tile dimensions are derived from each client's negotiated maximum update size, with
+conservative framing headroom and an exact encoded-size check before transmission. Each tile is a
+single-rectangle update. This avoids oversized fast-path graphics across Android, Win98, and other
+clients without hard-coding one client packet size.
+
+For eligible classic-bitmap sessions, both 16-bit and 32-bit output use bounded newest-state tile
+scheduling. A newer captured framebuffer replaces unsent tile content, output stops as soon as the
+transport reports backpressure, and input is checked between small graphics batches. Sparse updates
+and negotiated ScrBlt remain enabled when they reduce traffic.
+
+The packaged Mac backend initializes only the RDPSND output channel used for system audio; it does
+not start an AUDIN microphone worker. Client-negotiated static channels without a server feature
+handler (such as aFreeRDP clipboard traffic) are recognized and safely ignored rather than reported
+as unknown channel IDs.
+
+Mouse input posts exactly one Quartz button transition for each accepted RDP down/up pair. Repeated
+touch-client transitions and unmatched cleanup releases are suppressed, and held buttons are
+released at disconnect so Android touch translation cannot contaminate the next click or session.
 
 In Tera Term on Windows 98, connect SSH to the Mac's LAN address and configure
 a local forwarding rule with these values:
@@ -130,6 +140,17 @@ cd /Users/zach/gitr/RDP/FreeRDP-mac-shadow--sonoma
 ./scripts/install-macos-shadow-menu.sh
 ```
 
+To build without installing or launching, run:
+
+```zsh
+python3 scripts/build-macos-shadow-app.py
+```
+
+The production output is `dist/FreeRDP Shadow.app`. It contains the Release server
+and its non-system libraries; it does not depend on a development build directory.
+The installer uses this same bundle. Regression tests stay in the separate test
+build. See [production behavior and validation](docs/mac-shadow-latency.md).
+
 The menu-bar item reads `RDP ●` while the server is running and `RDP ○` while
 it is stopped. Its menu provides:
 
@@ -161,11 +182,6 @@ requires the Mac output tap to provide 44.1 kHz stereo 32-bit float audio; if
 that format is unavailable, video and input continue while the log reports
 that audio capture could not start.
 
-For an end-to-end channel diagnostic that does not depend on an application
-playing audio, launch the server with `FREERDP_MAC_SHADOW_TEST_TONE=1`. This
-replaces system-audio capture with a 440 Hz tone for that server run and is not
-enabled by the menu app by default.
-
 If the server process exits unexpectedly, the menu controller restarts it
 automatically with a bounded delay that increases from 1 to 30 seconds for
 repeated failures. The menu displays `RDP ↻` while recovery is pending. An
@@ -179,11 +195,10 @@ the menu if the prompts were dismissed. macOS may require the app to be quit
 and reopened after Screen Recording is enabled; then select **Start RDP
 Server**.
 
-The service accepts one client at a time so the physical display, capture
-surface, and cursor policy always match that client. It switches to the exact
-resolution advertised by the connecting client when macOS exposes that mode,
-then restores the pre-connection resolution on disconnect, server stop, or app
-quit. Its append-only log is stored at:
+The service accepts one client at a time so the capture surface and cursor policy always match that
+client. Generic/mobile sessions leave the physical resolution unchanged. A VAIO-profile or explicit
+external-command mode change is restored on disconnect, server stop, or app quit. Its append-only
+log is stored at:
 
 ```text
 ~/Library/Logs/FreeRDPShadow/server.log

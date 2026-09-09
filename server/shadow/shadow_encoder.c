@@ -468,6 +468,8 @@ static int shadow_encoder_uninit(rdpShadowEncoder* encoder)
 
 int shadow_encoder_reset(rdpShadowEncoder* encoder)
 {
+	shadow_bitmap_free(encoder->bitmapState);
+	encoder->bitmapState = nullptr;
 	int status = 0;
 	UINT32 codecs = encoder->codecs;
 	rdpContext* context = (rdpContext*)encoder->client;
@@ -599,5 +601,6 @@ void shadow_encoder_free(rdpShadowEncoder* encoder)
 		return;
 
 	shadow_encoder_uninit(encoder);
+	shadow_bitmap_free(encoder->bitmapState);
 	free(encoder);
 }

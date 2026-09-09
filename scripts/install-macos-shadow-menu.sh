@@ -3,13 +3,10 @@ set -eu
 
 script_dir="${0:A:h}"
 repo_root="${script_dir:h}"
-source_dir="${repo_root}/packaging/macos-shadow-menu"
-server="${repo_root}/build-sonoma-shadow-p0-channels/server/shadow/cli/freerdp-shadow-cli"
+built_app="${repo_root}/dist/FreeRDP Shadow.app"
 app_dir="${HOME}/Applications/FreeRDP Shadow.app"
 contents_dir="${app_dir}/Contents"
 macos_dir="${contents_dir}/MacOS"
-resources_dir="${contents_dir}/Resources"
-config="${resources_dir}/ShadowConfig.plist"
 
 if [[ "${1:-}" == "--uninstall" ]]; then
 	if [[ ! -d "${app_dir}" ]]; then
@@ -35,32 +32,9 @@ if pgrep -x FreeRDPShadowMenu >/dev/null 2>&1; then
 	exit 1
 fi
 
-if [[ ! -x "${server}" ]]; then
-	print -u2 "Missing shadow server executable: ${server}"
-	print -u2 "Build the freerdp-shadow-cli target before installing the menu app."
-	exit 1
-fi
-
-mkdir -p "${macos_dir}" "${resources_dir}"
-
-xcrun clang \
-	-fobjc-arc \
-	-Wall -Wextra -Wpedantic \
-	-framework AppKit \
-	-framework ApplicationServices \
-	-framework CoreGraphics \
-	-framework ServiceManagement \
-	-o "${macos_dir}/FreeRDPShadowMenu" \
-	"${source_dir}/FreeRDPShadowMenu.m"
-
-cp "${source_dir}/Info.plist" "${contents_dir}/Info.plist"
-cp "${source_dir}/ShadowConfig.plist" "${config}"
-/usr/libexec/PlistBuddy -c "Add :ServerExecutable string ${server}" "${config}"
-/usr/libexec/PlistBuddy -c "Add :LogFile string ${HOME}/Library/Logs/FreeRDPShadow/server.log" \
-	"${config}"
-
-plutil -lint "${contents_dir}/Info.plist" "${config}"
-codesign --force --deep --sign - --identifier io.freerdp.shadow.sonoma.menu "${app_dir}"
+python3 "${script_dir}/build-macos-shadow-app.py"
+mkdir -p "${app_dir:h}"
+ditto "${built_app}" "${app_dir}"
 codesign --verify --deep --strict "${app_dir}"
 "${macos_dir}/FreeRDPShadowMenu" --register-login-item
 
