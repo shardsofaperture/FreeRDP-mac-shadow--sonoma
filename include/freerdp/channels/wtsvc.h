@@ -72,6 +72,13 @@ extern "C"
 	WINPR_ATTR_NODISCARD
 	FREERDP_API BOOL WTSVirtualChannelManagerCheckFileDescriptorEx(HANDLE hServer, BOOL autoOpen);
 
+	/* Shadow sessions use this budgeted variant to yield between ordered channel
+	 * fragments.  A zero budget means unlimited, matching the legacy API. */
+	WINPR_ATTR_NODISCARD
+	FREERDP_API BOOL WTSVirtualChannelManagerCheckFileDescriptorExBounded(
+	    HANDLE hServer, BOOL autoOpen, UINT32 maxMessages, UINT32 maxBytes,
+	    UINT32 maxMilliseconds);
+
 	WINPR_ATTR_NODISCARD
 	FREERDP_API HANDLE WTSVirtualChannelManagerGetEventHandle(HANDLE hServer);
 
