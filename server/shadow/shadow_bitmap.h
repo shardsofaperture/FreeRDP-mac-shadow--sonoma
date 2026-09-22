@@ -15,6 +15,11 @@ typedef struct
 	BOOL copy;
 } shadowBitmapTile;
 
+/* A warm-cache probe is a hint.  Exceeding this bound falls back to a bitmap
+ * update, which is always safe and keeps a repetitive frame from monopolizing
+ * the shadow session. */
+#define SHADOW_BITMAP_COPY_CANDIDATE_LIMIT 16384U
+
 UINT32 shadow_bitmap_color_depth(UINT32 requested);
 BOOL shadow_bitmap_supported(const rdpSettings* settings, BOOL surfaceCommands);
 BOOL shadow_bitmap_pack(BYTE* packed, const BYTE* pixels, UINT32 stride, UINT32 x, UINT32 y,
@@ -32,5 +37,6 @@ BOOL shadow_bitmap_pending(const shadowBitmapState* state);
 BOOL shadow_bitmap_next(shadowBitmapState* state, BOOL allowCopy, shadowBitmapTile* tile);
 void shadow_bitmap_commit(shadowBitmapState* state, const shadowBitmapTile* tile);
 const BYTE* shadow_bitmap_pixels(const shadowBitmapState* state, UINT32* stride);
+UINT32 shadow_bitmap_last_copy_candidate_probes(const shadowBitmapState* state);
 
 #endif

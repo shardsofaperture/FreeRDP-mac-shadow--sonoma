@@ -216,6 +216,8 @@ static BOOL test_movement(void)
 			CHECK(deliver(state, client, width, &tile));
 		}
 		CHECK(operations > 0 && copies > 0);
+		CHECK(shadow_bitmap_last_copy_candidate_probes(state) <=
+		      SHADOW_BITMAP_COPY_CANDIDATE_LIMIT);
 		if (move == 0)
 		{
 			CHECK(bitmapPixels <= width * 13U);

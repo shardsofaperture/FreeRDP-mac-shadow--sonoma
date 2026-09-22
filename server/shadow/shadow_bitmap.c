@@ -26,6 +26,7 @@ struct shadow_bitmap_state
 	BOOL reverseY;
 	BOOL haveMove;
 	INT32 moveX, moveY;
+	UINT32 lastCopyCandidateProbes;
 };
 
 UINT32 shadow_bitmap_color_depth(UINT32 requested)
@@ -181,6 +182,7 @@ BOOL shadow_bitmap_stage(shadowBitmapState* state, const BYTE* pixels, UINT32 fo
 	state->pending = 0;
 	state->chooseDirection = TRUE;
 	state->haveMove = FALSE;
+	state->lastCopyCandidateProbes = 0;
 	for (UINT32 index = 0; index < state->count; index++)
 	{
 		const shadowBitmapTile tile = bitmap_tile(state, index);
@@ -215,11 +217,12 @@ static BOOL source_known(const shadowBitmapState* state, const shadowBitmapTile*
 	return TRUE;
 }
 
-static BOOL find_copy(const shadowBitmapState* state, shadowBitmapTile* tile)
+static BOOL find_copy(shadowBitmapState* state, shadowBitmapTile* tile)
 {
 	/* Bounded search, including non-tile-aligned scrolls and diagonal window moves. Check a
 	 * short signature before the exact rectangle; never trust a hash or an unsent source.
 	 * Each committed copy updates sent, so overlapping subsequent copies remain correct. */
+	state->lastCopyCandidateProbes = 0;
 	if ((tile->width < 8) || (tile->height < 8) || !state->known[tile->index])
 		return FALSE;
 	const INT32 minX = MAX(0, (INT32)tile->x - COPY_RADIUS);
@@ -229,38 +232,62 @@ static BOOL find_copy(const shadowBitmapState* state, shadowBitmapTile* tile)
 	const BYTE* signature = state->latest +
 	                        (size_t)tile->y * state->stride + tile->x * state->bytesPerPixel;
 	UINT32 comparisons = 0;
-	for (INT32 y = minY; y <= maxY; y++)
+	UINT32 candidateProbes = 0;
+	/* Visit candidates from the tile outward.  This keeps the common small scroll
+	 * case warm while the explicit candidate limit bounds the worst case. */
+	for (INT32 radius = 0; radius <= COPY_RADIUS; radius++)
 	{
-		for (INT32 x = minX; x <= maxX; x++)
+		for (INT32 dy = -radius; dy <= radius; dy++)
 		{
-			if ((x == (INT32)tile->x) && (y == (INT32)tile->y))
+			const INT32 y = (INT32)tile->y + dy;
+			if ((y < minY) || (y > maxY))
 				continue;
-			const BYTE* candidate = state->sent +
-			                        (size_t)y * state->stride + (size_t)x * state->bytesPerPixel;
-			const size_t signatureBytes = 8U * state->bytesPerPixel;
-			if (memcmp(signature, candidate, signatureBytes) != 0)
-				continue;
-			const size_t last =
-			    (size_t)(tile->height - 1) * state->stride +
-			    (tile->width - 8U) * state->bytesPerPixel;
-			const size_t middle = (size_t)(tile->height / 2U) * state->stride;
-			if ((memcmp(signature + last, candidate + last, signatureBytes) != 0) ||
-			    (memcmp(signature + middle, candidate + middle, signatureBytes) != 0))
-				continue;
-			/* Flat/repetitive content must not turn a bounded search into thousands of
-			 * full-tile comparisons. Falling back to a bitmap is always safe. */
-			if (++comparisons > 32)
-				return FALSE;
-			if (source_known(state, tile, (UINT32)x, (UINT32)y) &&
-			    pixels_equal(state, tile, (UINT32)x, (UINT32)y))
+			for (INT32 dx = -radius; dx <= radius; dx++)
 			{
-				tile->sourceX = (UINT32)x;
-				tile->sourceY = (UINT32)y;
-				tile->copy = TRUE;
-				return TRUE;
+				if ((MAX(abs(dx), abs(dy)) != radius))
+					continue;
+				const INT32 x = (INT32)tile->x + dx;
+				if ((x < minX) || (x > maxX) || ((x == (INT32)tile->x) &&
+				                                      (y == (INT32)tile->y)))
+					continue;
+				if (candidateProbes >= SHADOW_BITMAP_COPY_CANDIDATE_LIMIT)
+				{
+					state->lastCopyCandidateProbes = candidateProbes;
+					return FALSE;
+				}
+				candidateProbes++;
+				const BYTE* candidate = state->sent +
+				                        (size_t)y * state->stride + (size_t)x * state->bytesPerPixel;
+				const size_t signatureBytes = 8U * state->bytesPerPixel;
+				if (memcmp(signature, candidate, signatureBytes) != 0)
+					continue;
+				const size_t last =
+				    (size_t)(tile->height - 1) * state->stride +
+				    (tile->width - 8U) * state->bytesPerPixel;
+				const size_t middle = (size_t)(tile->height / 2U) * state->stride;
+				if ((memcmp(signature + last, candidate + last, signatureBytes) != 0) ||
+				    (memcmp(signature + middle, candidate + middle, signatureBytes) != 0))
+					continue;
+				/* Flat/repetitive content must not turn a bounded search into thousands of
+				 * full-tile comparisons. Falling back to a bitmap is always safe. */
+				if (++comparisons > 32)
+				{
+					state->lastCopyCandidateProbes = candidateProbes;
+					return FALSE;
+				}
+				if (source_known(state, tile, (UINT32)x, (UINT32)y) &&
+				    pixels_equal(state, tile, (UINT32)x, (UINT32)y))
+				{
+					tile->sourceX = (UINT32)x;
+					tile->sourceY = (UINT32)y;
+					tile->copy = TRUE;
+					state->lastCopyCandidateProbes = candidateProbes;
+					return TRUE;
+				}
 			}
 		}
 	}
+	state->lastCopyCandidateProbes = candidateProbes;
 	return FALSE;
 }
 
@@ -406,4 +433,9 @@ const BYTE* shadow_bitmap_pixels(const shadowBitmapState* state, UINT32* stride)
 		return nullptr;
 	*stride = state->stride;
 	return state->latest;
+}
+
+UINT32 shadow_bitmap_last_copy_candidate_probes(const shadowBitmapState* state)
+{
+	return state ? state->lastCopyCandidateProbes : 0;
 }
