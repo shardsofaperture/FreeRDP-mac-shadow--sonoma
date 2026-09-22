@@ -666,6 +666,7 @@ static BOOL wts_virtual_channel_manager_check_file_descriptor(HANDLE hServer, BO
 	UINT32 messageCount = 0;
 	UINT32 byteCount = 0;
 	UINT64 deadline = 0;
+	const BOOL bounded = maxMessages || maxBytes || maxMilliseconds;
 
 	if (!hServer || hServer == INVALID_HANDLE_VALUE)
 		return FALSE;
@@ -680,23 +681,28 @@ static BOOL wts_virtual_channel_manager_check_file_descriptor(HANDLE hServer, BO
 	if (maxMilliseconds)
 		deadline = GetTickCount64() + maxMilliseconds;
 
-	while (MessageQueue_Peek(vcm->queue, &message, FALSE))
+	/* Preserve the original single dequeue for callers of the unbounded API.
+	 * Only budgeted callers need a non-removing look at the next message. */
+	while (MessageQueue_Peek(vcm->queue, &message, !bounded))
 	{
 		BYTE* buffer = nullptr;
 		UINT32 length = 0;
 		UINT16 channelId = 0;
-		if ((maxMessages && (messageCount >= maxMessages)) ||
-		    (deadline && messageCount && (GetTickCount64() >= deadline)))
-			break;
-		length = (UINT32)(UINT_PTR)message.lParam;
-		/* Peek without removal lets us stop before a fragment would exceed the
-		 * byte budget.  The first fragment is always allowed so a large PDU can
-		 * make progress. */
-		if (maxBytes && messageCount &&
-		    ((byteCount >= maxBytes) || (length > (maxBytes - byteCount))))
-			break;
-		if (!MessageQueue_Peek(vcm->queue, &message, TRUE))
-			break;
+		if (bounded)
+		{
+			if ((maxMessages && (messageCount >= maxMessages)) ||
+			    (deadline && messageCount && (GetTickCount64() >= deadline)))
+				break;
+			length = (UINT32)(UINT_PTR)message.lParam;
+			/* Peek without removal lets us stop before a fragment would exceed the
+			 * byte budget.  The first fragment is always allowed so a large PDU can
+			 * make progress. */
+			if (maxBytes && messageCount &&
+			    ((byteCount >= maxBytes) || (length > (maxBytes - byteCount))))
+				break;
+			if (!MessageQueue_Peek(vcm->queue, &message, TRUE))
+				break;
+		}
 		channelId = (UINT16)(UINT_PTR)message.context;
 		buffer = (BYTE*)message.wParam;
 		length = (UINT32)(UINT_PTR)message.lParam;
