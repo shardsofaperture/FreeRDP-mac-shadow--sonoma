@@ -179,6 +179,22 @@ Submission budgets are eight operations, 16 KiB, and an eight-millisecond deadli
 checked between operations. They bound application scheduling, not end-to-end
 latency through SSH, the network, or client decoding/display queues.
 
+The September 22, 2026 reliability work adds two inner scheduling bounds. Warm
+cache copy search checks candidates from the tile outward and stops at 16,384
+candidate probes; exact pixel verification and overlap-safe ordering are kept,
+and an exhausted search falls back to a bitmap update. Shadow virtual-channel
+output is serviced in ordered slices of at most 32 queue messages, 32 KiB, or
+2 ms. The generic FreeRDP channel-manager API remains unchanged for unrelated
+servers.
+
+Clipboard text requests have a five-second response deadline and a one-response
+quarantine for late data because the cliprdr response has no request ID. Payloads
+over 8 MiB are rejected before decoding. A missing response can therefore leave
+clipboard transfer degraded for the connection, but it does not trigger a blind
+replacement request or require disconnecting to restore graphics/input. This is
+a protocol-safety limit, not a claim that AppKit pasteboard calls are
+cancellable.
+
 ## Validation on September 8, 2026
 
 - Warnings-enabled Release server and native app build on Intel macOS Sonoma.
@@ -217,3 +233,55 @@ sleep/wake, repeated reconnects, Win98 screen copies/input, display restoration,
 and clean shutdown still need the physical Mac/client matrix. Record latency
 and bandwidth separately for idle, typing, window movement, scrolling, and
 full-screen motion; no new end-to-end latency measurements are claimed here.
+
+## Focused reliability validation — September 22, 2026
+
+The earlier Release-checks directory could not launch its tests because it
+pointed at a missing machine-specific Jansson library and stale OpenSSL 3.6.3
+paths. The production directory was subsequently regenerated against OpenSSL
+3.6.4 with json-c available. A complete signed app was built at
+`dist/FreeRDP Shadow.app`; deep/strict signing verification passed on the
+physical Mac with the required Apple Development identity. A sandboxed repeat
+of `codesign --verify --deep --strict` returned `CSSMERR_TP_NOT_TRUSTED`, so
+that environment does not independently establish the host trust result.
+
+An isolated Release validation build used OpenSSL 3.6.4 and disabled JSON. It
+did not install or modify the active app.
+
+The new `TestShadowBitmap` and `TestMacShadowClipboard` binaries passed. The
+targeted 13-test CTest set in that isolated build had 12 passes, including
+`TestMacShadowPublication` and all selected WinPR/codec tests; only the existing
+`TestFreeRDPCodecInterleaved` case exited 255 without diagnostic output. An
+isolated build of clean commit `8ded81d898ca2c8b5432fec73f2d00a68c3bd6eb`
+with JSON disabled reproduced the same exit. The test's final fixture phase
+loads `interleaved/encoder.json`; WinPR's JSON stub always returns null when
+JSON is disabled. The current tree's interleaved test passed in a separate
+JSON-enabled Release build using json-c; the complete targeted set passed
+13/13 there. This classifies the 255 exit as a test-build configuration
+failure, not a codec or working-tree regression.
+
+An isolated Release diagnostic called `shadow_bitmap_next()` on an established
+1920×1080 32-bit cache with an unrelated new frame, forcing copy-search misses.
+Across 100 calls on this host, median was 4.761 ms, p95 was 5.005 ms, and
+maximum was 5.605 ms. The 1024×768 16-bit case measured 4.617 ms median,
+4.886 ms p95, and 5.438 ms maximum. This temporary test harness was kept
+outside the repository; these are local CPU timings, not network latency.
+One `shadow_bitmap_next()` can perform three directional probes plus the chosen
+tile's search, each capped at 16,384 candidates. The outer 8 ms flush deadline
+is checked between calls and cannot interrupt one. No measured call exceeded
+8 ms here, so an internal deadline remains a measured follow-up for slower or
+loaded hardware, not an established source fix. A channel service slice also
+allows its first fragment regardless of byte budget and cannot interrupt an
+individual `SendChannelData` call; its 2 ms target is therefore cooperative.
+Bitmap staging, per-tile compression, and output-buffer draining likewise run
+to completion inside a loop iteration, so the 8 ms value is a scheduling
+target rather than a hard wall-clock limit. Resetting `bitmapFallback` only
+changes eligibility at an encoder generation boundary and adds no inner loop.
+The clipboard's five-second request timer and late-response quarantine run on
+its serial queue; they do not themselves impose a five-second wait on graphics
+or input. Physical aged-session timings and queue-age measurements are still
+needed to determine whether any of these operations needs a tighter bound.
+
+The next candidate target is 0.1.9; the checkout remains 0.1.8. Physical
+Android, Windows 98, and aged-session validation of this candidate remains
+outstanding. No hardware latency or new paste result is claimed by these tests.

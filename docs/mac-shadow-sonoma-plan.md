@@ -14,10 +14,11 @@ backend, not a prerequisite for the Sonoma experiment.
 
 The first validated deliverable excluded video codecs, audio, drive
 redirection, clipboard, multi-monitor support, and Retina optimization. Audio
-has since been added as a separately validated beta feature; the other items
-remain outside that deliverable. The server must not expose a listener directly
-to the Internet or weaken FreeRDP's security defaults globally. The intended
-deployment is `127.0.0.1:3390` through an SSH tunnel.
+has since been added as a separately validated beta feature, and text clipboard
+support has been implemented; file transfer, multi-monitor support, and Retina
+optimization remain outside that deliverable. The server must not expose a
+listener directly to the Internet or weaken FreeRDP's security defaults
+globally. The intended deployment is `127.0.0.1:3390` through an SSH tunnel.
 
 ## Baseline and retained architecture
 
@@ -56,17 +57,38 @@ matrix and lifecycle work below still gate a stable release.
 | 5. Input | Usability | **Keyboard and primary mouse paths validated; matrix incomplete** | Patch 0; coordinate with Patch 4 ownership | Written Win98 keyboard/mouse matrix passes |
 | 6. Permissions | Usability | Planned | Patch 0; precedes packaging | Missing grants produce distinct, actionable diagnostics |
 | 7. Legacy profile | Win98 compatibility | **Manual loopback/SSH configuration validated** | Patches 3–6 | VAIO connects through SSH without changing normal security defaults |
-| 8. Measurement/tuning | Performance | **Dirty-pixel comparison validated; measurements incomplete** | Correctness and Patch 7 | Lowest-latency stable settings selected from recorded measurements |
+| 8. Measurement/tuning | Performance | **Dirty-pixel comparison and bounded warm-cache/channel scheduling implemented; measurements incomplete** | Correctness and Patch 7 | Lowest-latency stable settings selected from recorded measurements |
 | 9. Stable wrapper | Packaging | **Menu app and crash recovery implemented; login-cycle validation pending** | Patches 4, 6–8 | Repeatable install and start/stop procedure on the iMac |
 | 9a. System audio | Optional channel | **Core Audio tap and Win98 `rdpsnd` playback validated on target iMac** | Stable wrapper and static channels | Repeated playback and reconnect checks pass without affecting local playback |
 | 10. ScreenCaptureKit | Modernization | Later | Validated `CGDisplayStream` publication contract | Current-SDK build retains the legacy RDP client path |
-| 11. Clipboard/files | Later client/channel | Later | Stable capture, input, lifecycle, and legacy security | Predictable opt-in transfer without broader default exposure |
+| 11. Clipboard/files | Client/channel | **Text clipboard and timeout/quarantine implemented; file transfer remains later work** | Stable capture, input, lifecycle, and legacy security | Text paste failures preserve the session; file transfer is separately opt-in and bounded |
 | 12. Win98 companion | Later client/channel | Later | Validated Patch 7 settings | Optional launcher/add-on makes the connection repeatable |
 | 13. Open-source client | Later client/channel | Later research | Measurements from Patch 8 | Auditable client measurably improves bounded interactive latency |
 | 14. Mobile displays | Later client/display | **Research plan recorded** | Stable adaptive resolution and lifecycle | Android phone, rotation, custom size, and USB-C matrix is measured before implementation |
 
 Status is defined once in this table. The milestone sections below describe
 scope, dependencies, and verification rather than repeating readiness claims.
+
+### September 22, 2026 focused reliability update
+
+The Mac text clipboard path now bounds client format-data requests to five
+seconds, quarantines one late response because cliprdr carries no response ID,
+and rejects payloads larger than 8 MiB before decoding. This keeps a missing or
+late Android response from being mistaken for a newer offer; a session remains
+usable while clipboard redirection is degraded. The implementation preserves
+Unicode-first modern handling, named UTF-8 IDs, ANSI/OEM text, and the
+connection-specific Win98 CF_TEXT/trailer profile.
+
+The warm bitmap cache now visits nearby candidates first and caps every
+candidate probe at 16,384 per search. Exact source-known and pixel comparisons,
+copy overlap ordering, pending damage, and static convergence remain required;
+the safe result of an exhausted search is a bitmap update. Shadow virtual
+channel output uses an opt-in 32-message/32 KiB/2 ms service slice, while the
+generic FreeRDP channel API remains unbounded for other servers.
+
+These changes have deterministic coverage in `TestMacShadowClipboard` and
+`TestShadowBitmap`. No Android, Win98, WAN/VPN, or aged-session hardware result
+is claimed by this update.
 
 ## Milestone A: Baseline and correctness
 
@@ -243,14 +265,24 @@ legacy clients retain the established bitmap path.
 
 ## Milestone G: Later client and virtual-channel work
 
-### Phase 11 — Clipboard and limited file transfer
+### Phase 11 — Text clipboard and limited file transfer
 
-Add clipboard redirection only after capture, input, lifecycle, and legacy
-security are stable. File transfer must be opt-in and define size, destination,
-overwrite, and cancellation behavior instead of enabling broad drive
-redirection. Treat content as untrusted; test text encodings and filenames with
-modern and Windows 98 clients independently. Exit requires predictable behavior
-without broader default exposure or desktop-update regressions.
+Text clipboard redirection is implemented for modern Mac/Android clients and
+the connection-specific Windows 98 RDP 5.2 dialect. Modern clients receive
+Unicode-first, ANSI, and OEM text offers; named UTF-8 offers retain their wire
+format ID while using UTF-8 decoding. The reliability path uses a finite
+five-second response deadline, one-response quarantine for late data, and an
+8 MiB payload limit. If a peer never returns the quarantined response, the
+server deliberately leaves clipboard transfer degraded for that connection
+rather than risking stale data being applied to a later paste; graphics and
+input continue independently.
+
+File transfer remains a separate later feature. It must be opt-in and define
+size, destination, overwrite, and cancellation behavior instead of enabling
+broad drive redirection. Treat content as untrusted; test text encodings and
+filenames with modern and Windows 98 clients independently. Exit requires
+predictable text behavior and file behavior without broader default exposure or
+desktop-update regressions.
 
 ### Phase 12 — Windows 98 companion launcher and add-on
 
