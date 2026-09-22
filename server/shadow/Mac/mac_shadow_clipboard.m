@@ -2,11 +2,16 @@
 
 #include <freerdp/channels/cliprdr.h>
 #include <freerdp/log.h>
+#include <winpr/sysinfo.h>
 
 #include "mac_shadow_clipboard.h"
 
 #define TAG SERVER_TAG("shadow.mac.cliprdr")
 #define WLog_DEBUG(_tag, ...) WLog_Print_tag((_tag), WLOG_DEBUG, __VA_ARGS__)
+#define MAC_SHADOW_CLIPBOARD_RESPONSE_TIMEOUT_MS 5000U
+#define MAC_SHADOW_CLIPBOARD_MAX_TEXT_BYTES (8U * 1024U * 1024U)
+
+typedef UINT64 (*MacShadowClipboardClock)(void* context);
 
 typedef struct
 {
@@ -21,6 +26,12 @@ typedef struct
 	BOOL monitorReady;
 	BOOL legacyRdp52;
 	BOOL stopped;
+	BOOL requestQuarantined;
+	UINT64 requestDeadlineMs;
+	UINT32 requestTimeouts;
+	UINT32 lateResponses;
+	MacShadowClipboardClock clock;
+	void* clockContext;
 	psCliprdrServerCapabilities sendServerCapabilities;
 	psCliprdrMonitorReady sendMonitorReady;
 } MacShadowClipboard;
@@ -163,10 +174,39 @@ static UINT32 clipboard_text_format(const CLIPRDR_FORMAT* format)
 	return 0;
 }
 
+static UINT64 clipboard_now_ms(const MacShadowClipboard* state)
+{
+	return (state && state->clock) ? state->clock(state->clockContext) : GetTickCount64();
+}
+
+static void clipboard_check_request_timeout(MacShadowClipboard* state)
+{
+	if (!state || state->requestQuarantined || !state->requestedClientFormat ||
+	    !state->requestDeadlineMs)
+		return;
+	if (clipboard_now_ms(state) >= state->requestDeadlineMs)
+	{
+		/* There is no request ID in cliprdr's response.  Keep the request marked
+		 * until one response arrives, then consume that response as late data. */
+		state->requestQuarantined = TRUE;
+		state->requestTimeouts++;
+		WLog_WARN(TAG,
+		          "Client clipboard response timed out after %u ms; quarantining one late response",
+		          MAC_SHADOW_CLIPBOARD_RESPONSE_TIMEOUT_MS);
+	}
+}
+
+static void clipboard_clear_request(MacShadowClipboard* state)
+{
+	state->requestedClientFormat = 0;
+	state->requestedTextFormat = 0;
+	state->requestDeadlineMs = 0;
+}
+
 /* At most one request in flight: data responses have no format ID. */
 static UINT request_client_text(CliprdrServerContext* context, MacShadowClipboard* state)
 {
-	if (state->requestedClientFormat || !state->pendingClientFormat)
+	if (state->requestedClientFormat || state->requestQuarantined || !state->pendingClientFormat)
 		return CHANNEL_RC_OK;
 	CLIPRDR_FORMAT_DATA_REQUEST request = {
 		.common = { .msgType = CB_FORMAT_DATA_REQUEST, .dataLen = 4 },
@@ -175,11 +215,12 @@ static UINT request_client_text(CliprdrServerContext* context, MacShadowClipboar
 	state->requestedClientFormat = state->pendingClientFormat;
 	state->requestedTextFormat = state->pendingTextFormat;
 	state->pendingClientFormat = 0;
+	state->requestDeadlineMs = clipboard_now_ms(state) + MAC_SHADOW_CLIPBOARD_RESPONSE_TIMEOUT_MS;
 	WLog_DEBUG(TAG, "Requesting client clipboard format=%" PRIu32,
 	          request.requestedFormatId);
 	const UINT rc = context->ServerFormatDataRequest(context, &request);
 	if (rc != CHANNEL_RC_OK)
-		state->requestedClientFormat = 0;
+		clipboard_clear_request(state);
 	return rc;
 }
 
@@ -192,6 +233,7 @@ static UINT client_format_list(CliprdrServerContext* context, const CLIPRDR_FORM
 	dispatch_sync(state->queue, ^{
 	  if (state->stopped)
 		  return;
+	  clipboard_check_request_timeout(state);
 	  UINT32 format = 0, textFormat = 0;
 	  for (UINT32 x = 0; x < list->numFormats; x++)
 	  {
@@ -255,11 +297,22 @@ static UINT client_format_data_response(CliprdrServerContext* context,
 	dispatch_sync(state->queue, ^{
 	  if (state->stopped)
 		  return;
+	  clipboard_check_request_timeout(state);
 	  const UINT32 format = state->requestedTextFormat;
 	  const BOOL requested = state->requestedClientFormat != 0;
-	  state->requestedClientFormat = 0;
+	  if (state->requestQuarantined)
+	  {
+		  state->requestQuarantined = FALSE;
+		  state->lateResponses++;
+		  clipboard_clear_request(state);
+		  WLog_WARN(TAG, "Discarded one late client clipboard response after timeout");
+		  rc = request_client_text(context, state);
+		  return;
+	  }
+	  clipboard_clear_request(state);
 	  if ((response->common.msgFlags & CB_RESPONSE_FAIL) ||
-	      !response->requestedFormatData || !requested)
+	      !response->requestedFormatData || !requested ||
+	      (response->common.dataLen > MAC_SHADOW_CLIPBOARD_MAX_TEXT_BYTES))
 	  {
 		  WLog_WARN(TAG, "Client clipboard Format Data Response failed or was unsolicited");
 		  rc = request_client_text(context, state);
@@ -335,7 +388,8 @@ static UINT client_format_data_request(CliprdrServerContext* context,
 			      dataUsingEncoding:clipboard_encoding(request->requestedFormatId)
 			 allowLossyConversion:(request->requestedFormatId != CF_UNICODETEXT)];
 		  }
-		  if (data && (data.length <= UINT32_MAX))
+		  if (data && (data.length <= UINT32_MAX) &&
+		      (data.length <= MAC_SHADOW_CLIPBOARD_MAX_TEXT_BYTES))
 		  {
 			  response.common.msgFlags = CB_RESPONSE_OK;
 			  response.common.dataLen = (UINT32)data.length;
@@ -355,8 +409,10 @@ static UINT client_format_data_request(CliprdrServerContext* context,
 static void poll_pasteboard(void* arg)
 {
 	MacShadowClipboard* state = (MacShadowClipboard*)arg;
-	if (!state || state->stopped || !state->monitorReady || !state->client ||
-	    !state->client->cliprdr)
+	if (!state || state->stopped)
+		return;
+	clipboard_check_request_timeout(state);
+	if (!state->monitorReady || !state->client || !state->client->cliprdr)
 		return;
 	@autoreleasepool {
 		NSPasteboard* pb = [NSPasteboard generalPasteboard];
@@ -476,10 +532,10 @@ void mac_shadow_clipboard_uninit(rdpShadowClient* client)
 		});
 		if (state->timer)
 		{
-			dispatch_semaphore_t cancelled = dispatch_semaphore_create(0);
-			dispatch_source_set_cancel_handler(state->timer, ^{ dispatch_semaphore_signal(cancelled); });
+			/* The serial queue is also the timer target.  Cancel, then fence that
+			 * queue so its cancellation handler has run before freeing state. */
+			dispatch_source_set_cancel_handler(state->timer, ^{});
 			dispatch_source_cancel(state->timer);
-			dispatch_semaphore_wait(cancelled, DISPATCH_TIME_FOREVER);
 		}
 		dispatch_sync(state->queue, ^{});
 	}

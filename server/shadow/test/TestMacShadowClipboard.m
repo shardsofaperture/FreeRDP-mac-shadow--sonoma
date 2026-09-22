@@ -11,6 +11,11 @@
 static UINT requests, acknowledgements, formatLists;
 static UINT32 lastFormat;
 static UINT32 capabilityVersion, capabilityFlags;
+static UINT64 fakeClock;
+static UINT64 test_clock(WINPR_ATTR_UNUSED void* context)
+{
+	return fakeClock;
+}
 static UINT send_request(WINPR_ATTR_UNUSED CliprdrServerContext* context,
                          const CLIPRDR_FORMAT_DATA_REQUEST* request)
 {
@@ -74,6 +79,7 @@ int main(void)
 		CHECK(context);
 		MacShadowClipboard state = { 0 };
 		state.queue = dispatch_queue_create("test.mac.clipboard", DISPATCH_QUEUE_SERIAL);
+		state.clock = test_clock;
 		context->ServerCapabilities = send_capabilities;
 		psCliprdrServerFormatDataRequest original = context->ServerFormatDataRequest;
 		context->MonitorReady = ready;
@@ -165,6 +171,12 @@ int main(void)
 		CLIPRDR_FORMAT_LIST list = { .numFormats = 2, .formats = formats };
 		CHECK(receive_list(context, &list) == CHANNEL_RC_OK);
 		CHECK(requests == 1 && lastFormat == CF_UNICODETEXT);
+		/* A missing response must not leave the request slot occupied forever.  Because
+		 * cliprdr has no response ID, the first response after the deadline is consumed
+		 * as late data before a newer pending format is requested. */
+		fakeClock = state.requestDeadlineMs + 1;
+		clipboard_check_request_timeout(&state);
+		CHECK(state.requestQuarantined && state.requestTimeouts == 1);
 		/* Overlapping lists must not change the encoding of the outstanding response. */
 		CLIPRDR_FORMAT android = { 0xC123, "text/plain" };
 		list.numFormats = 1; list.formats = &android;
@@ -173,13 +185,27 @@ int main(void)
 		CLIPRDR_FORMAT_DATA_RESPONSE failed = { .common.msgFlags = CB_RESPONSE_FAIL };
 		CHECK(context->ClientFormatDataResponse(context, &failed) == CHANNEL_RC_OK);
 		CHECK(requests == 2 && lastFormat == 0xC123 && state.requestedTextFormat == CF_MAX);
+		CHECK(state.lateResponses == 1 && !state.requestQuarantined);
 		CHECK(context->ClientFormatDataResponse(context, &failed) == CHANNEL_RC_OK);
+		CLIPRDR_FORMAT oversizedFormat = { 0xC125, "text/plain" };
+		list.numFormats = 1;
+		list.formats = &oversizedFormat;
+		CHECK(receive_list(context, &list) == CHANNEL_RC_OK);
+		CHECK(requests == 3 && lastFormat == 0xC125);
+		const BYTE oneByte[] = { 'x' };
+		CLIPRDR_FORMAT_DATA_RESPONSE oversized = {
+			.common = { .msgFlags = CB_RESPONSE_OK,
+			            .dataLen = MAC_SHADOW_CLIPBOARD_MAX_TEXT_BYTES + 1U },
+			.requestedFormatData = oneByte
+		};
+		CHECK(context->ClientFormatDataResponse(context, &oversized) == CHANNEL_RC_OK);
+		CHECK(requests == 3 && !state.requestedClientFormat);
 		CLIPRDR_FORMAT image = { 0xC124, "image/png" };
 		list.formats = &image;
 		CHECK(receive_list(context, &list) == CHANNEL_RC_OK);
 		list.numFormats = 0;
 		CHECK(receive_list(context, &list) == CHANNEL_RC_OK);
-		CHECK(requests == 2 && acknowledgements == 4);
+		CHECK(requests == 3 && acknowledgements == 5);
 		CHECK(clipboard_text_format(&image) == 0);
 
 		const BYTE unicode[] = { 'A', 0, 0xE9, 0, 0, 0, 'X', 0 };
