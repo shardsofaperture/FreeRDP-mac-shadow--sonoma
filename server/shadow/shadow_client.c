@@ -41,6 +41,9 @@
 #define SHADOW_BITMAP_UPDATE_HEADER_SIZE 4U
 #define SHADOW_BITMAP_DATA_HEADER_SIZE 18U
 #define SHADOW_BITMAP_COMPRESSION_HEADER_SIZE 8U
+#define SHADOW_CHANNEL_SERVICE_MESSAGES 32U
+#define SHADOW_CHANNEL_SERVICE_BYTES 32768U
+#define SHADOW_CHANNEL_SERVICE_MS 2U
 
 typedef struct
 {
@@ -2414,6 +2417,15 @@ static BOOL shadow_client_flush_bitmap(rdpShadowClient* client)
 	return TRUE;
 }
 
+/* Channel fragments remain in queue order; this only limits how long one pass
+ * may spend serializing them before input, capture, and bitmap work run again. */
+static BOOL shadow_client_service_channels(rdpShadowClient* client, BOOL autoOpen)
+{
+	return WTSVirtualChannelManagerCheckFileDescriptorExBounded(
+	    client->vcm, autoOpen, SHADOW_CHANNEL_SERVICE_MESSAGES, SHADOW_CHANNEL_SERVICE_BYTES,
+	    SHADOW_CHANNEL_SERVICE_MS);
+}
+
 WINPR_ATTR_NODISCARD
 static BOOL shadow_client_send_surface_update(rdpShadowClient* client, SHADOW_GFX_STATUS* pStatus)
 {
@@ -2994,6 +3006,12 @@ static DWORD WINAPI shadow_client_thread(LPVOID arg)
 				break;
 		}
 
+		/* Give already queued channel output a short, ordered service slice before
+		 * capture and bitmap work.  The event stays signaled when the budget ends. */
+		if (WaitForSingleObject(ChannelEvent, 0) == WAIT_OBJECT_0 &&
+		    !shadow_client_service_channels(client, TRUE))
+			goto fail;
+
 		if (WaitForSingleObject(UpdateEvent, 0) == WAIT_OBJECT_0)
 		{
 			/* The UpdateEvent means to start sending current frame. It is
@@ -3056,7 +3074,7 @@ static DWORD WINAPI shadow_client_thread(LPVOID arg)
 				case DRDYNVC_STATE_NONE:
 
 					/* Call this routine to Initialize drdynvc channel */
-					if (!WTSVirtualChannelManagerCheckFileDescriptor(client->vcm))
+					if (!shadow_client_service_channels(client, TRUE))
 					{
 						WLog_ERR(TAG, "Failed to initialize drdynvc channel");
 						goto fail;
@@ -3106,7 +3124,7 @@ static DWORD WINAPI shadow_client_thread(LPVOID arg)
 
 		if (WaitForSingleObject(ChannelEvent, 0) == WAIT_OBJECT_0)
 		{
-			if (!WTSVirtualChannelManagerCheckFileDescriptor(client->vcm))
+			if (!shadow_client_service_channels(client, TRUE))
 			{
 				WLog_ERR(TAG, "WTSVirtualChannelManagerCheckFileDescriptor failure");
 				goto fail;

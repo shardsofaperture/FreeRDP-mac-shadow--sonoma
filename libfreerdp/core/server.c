@@ -655,11 +655,17 @@ BOOL WTSVirtualChannelManagerOpen(HANDLE hServer)
 	return TRUE;
 }
 
-BOOL WTSVirtualChannelManagerCheckFileDescriptorEx(HANDLE hServer, BOOL autoOpen)
+static BOOL wts_virtual_channel_manager_check_file_descriptor(HANDLE hServer, BOOL autoOpen,
+                                                              UINT32 maxMessages,
+                                                              UINT32 maxBytes,
+                                                              UINT32 maxMilliseconds)
 {
 	wMessage message = WINPR_C_ARRAY_INIT;
 	BOOL status = TRUE;
 	WTSVirtualChannelManager* vcm = nullptr;
+	UINT32 messageCount = 0;
+	UINT32 byteCount = 0;
+	UINT64 deadline = 0;
 
 	if (!hServer || hServer == INVALID_HANDLE_VALUE)
 		return FALSE;
@@ -671,12 +677,26 @@ BOOL WTSVirtualChannelManagerCheckFileDescriptorEx(HANDLE hServer, BOOL autoOpen
 		if (!WTSVirtualChannelManagerOpen(hServer))
 			return FALSE;
 	}
+	if (maxMilliseconds)
+		deadline = GetTickCount64() + maxMilliseconds;
 
-	while (MessageQueue_Peek(vcm->queue, &message, TRUE))
+	while (MessageQueue_Peek(vcm->queue, &message, FALSE))
 	{
 		BYTE* buffer = nullptr;
 		UINT32 length = 0;
 		UINT16 channelId = 0;
+		if ((maxMessages && (messageCount >= maxMessages)) ||
+		    (deadline && messageCount && (GetTickCount64() >= deadline)))
+			break;
+		length = (UINT32)(UINT_PTR)message.lParam;
+		/* Peek without removal lets us stop before a fragment would exceed the
+		 * byte budget.  The first fragment is always allowed so a large PDU can
+		 * make progress. */
+		if (maxBytes && messageCount &&
+		    ((byteCount >= maxBytes) || (length > (maxBytes - byteCount))))
+			break;
+		if (!MessageQueue_Peek(vcm->queue, &message, TRUE))
+			break;
 		channelId = (UINT16)(UINT_PTR)message.context;
 		buffer = (BYTE*)message.wParam;
 		length = (UINT32)(UINT_PTR)message.lParam;
@@ -689,12 +709,30 @@ BOOL WTSVirtualChannelManagerCheckFileDescriptorEx(HANDLE hServer, BOOL autoOpen
 		}
 
 		free(buffer);
+		messageCount++;
+		if (UINT32_MAX - byteCount < length)
+			byteCount = UINT32_MAX;
+		else
+			byteCount += length;
 
 		if (!status)
 			break;
 	}
 
 	return status;
+}
+
+BOOL WTSVirtualChannelManagerCheckFileDescriptorEx(HANDLE hServer, BOOL autoOpen)
+{
+	return wts_virtual_channel_manager_check_file_descriptor(hServer, autoOpen, 0, 0, 0);
+}
+
+BOOL WTSVirtualChannelManagerCheckFileDescriptorExBounded(HANDLE hServer, BOOL autoOpen,
+                                                          UINT32 maxMessages, UINT32 maxBytes,
+                                                          UINT32 maxMilliseconds)
+{
+	return wts_virtual_channel_manager_check_file_descriptor(hServer, autoOpen, maxMessages,
+	                                                          maxBytes, maxMilliseconds);
 }
 
 BOOL WTSVirtualChannelManagerCheckFileDescriptor(HANDLE hServer)
