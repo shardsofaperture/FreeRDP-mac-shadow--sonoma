@@ -470,6 +470,9 @@ int shadow_encoder_reset(rdpShadowEncoder* encoder)
 {
 	shadow_bitmap_free(encoder->bitmapState);
 	encoder->bitmapState = nullptr;
+	/* A cache failure is scoped to the previous encoder generation.  Activation
+	 * and lobby transitions rebuild the cache from a clean synchronization point. */
+	encoder->bitmapFallback = FALSE;
 	int status = 0;
 	UINT32 codecs = encoder->codecs;
 	rdpContext* context = (rdpContext*)encoder->client;
