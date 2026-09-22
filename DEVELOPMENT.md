@@ -1,11 +1,11 @@
 # Mac Shadow RDP development
 
 This focused FreeRDP fork shadows a macOS Sonoma desktop for legacy RDP clients.
-The checkout remains **Mac Shadow RDP Build 0.1.8**. The next candidate target is
-**0.1.9**, pending the remaining physical validation; no version has been bumped.
-Build 0.1.7 is the known-good production baseline
+**Mac Shadow RDP Build 0.1.9** is the hardware-test candidate. Its metadata is
+set by the tracked `.source_tag` and app `Info.plist`; no release tag exists for
+it. Physical acceptance remains outstanding. Build 0.1.7 is the known-good
+production baseline
 (`mac-shadow-rdp-0.1.7` at `59386e731`); its tag is an immutable recovery point.
-This repository-maintenance work does not change the application version.
 
 The primary target is Microsoft Remote Desktop 5.2 on a Windows 98 VAIO. Android
 / aFreeRDP and other RDP clients are secondary clients. The server is intended to
@@ -29,7 +29,7 @@ Signing is mandatory: `Apple Development: shardsofaperture (H7V72A5WH6)` with bu
 ID `io.freerdp.shadow.sonoma.menu`. Do not substitute ad-hoc signing.
 On the target Mac, the signing identity is available. The regenerated
 `build-macos-shadow-production` cache resolves OpenSSL 3.6.4 and json-c; a
-complete `dist/FreeRDP Shadow.app` was built and passed deep/strict signing
+complete 0.1.8-metadata app was built and passed deep/strict signing
 verification on that Mac. Historical Jansson lookup warnings are not a current
 production-build blocker. This build has not completed the Android, Windows 98,
 or aged-session hardware acceptance for the next candidate.
@@ -65,9 +65,9 @@ packet sizing, sparse damage/ScrBlt, bounded output backpressure, Android button
 compatibility, automatic resolution (including VAIO behavior), asynchronous system
 audio, and normal FreeRDP channels/transport.
 
-Build 0.1.8 adds plain-text-only `cliprdr`: Unicode text is preferred, with
+Build 0.1.8 added plain-text-only `cliprdr`: Unicode text is preferred, with
 legacy ANSI/OEM text accepted from clients. Unsupported clipboard clients remain
-normal sessions. Client format-data requests now have a five-second deadline,
+normal sessions. The 0.1.9 candidate adds a five-second format-data deadline,
 one-response late-data quarantine, and an 8 MiB payload limit; a quarantined
 request can leave clipboard transfer degraded without stopping input or graphics.
 Per-key and clipboard-PDU tracing is DEBUG-level only. The
