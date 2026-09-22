@@ -19,6 +19,9 @@ FreeRDP's defaults or expose the listener to a LAN or the Internet.
 
 ## Status
 
+Build 0.1.9 is the current hardware-test candidate. Its Android,
+Windows 98, and aged-session acceptance checks remain outstanding.
+
 The shadow CLI now compiles and links on macOS 14.7.1 on Intel. A physical
 Windows 98 SE system running Microsoft RDP Client 5.2 has connected at
 1024×768 and 16-bit color through an SSH tunnel. Desktop capture, classic

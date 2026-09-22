@@ -239,7 +239,7 @@ full-screen motion; no new end-to-end latency measurements are claimed here.
 The earlier Release-checks directory could not launch its tests because it
 pointed at a missing machine-specific Jansson library and stale OpenSSL 3.6.3
 paths. The production directory was subsequently regenerated against OpenSSL
-3.6.4 with json-c available. A complete signed app was built at
+3.6.4 with json-c available. A complete 0.1.8-metadata signed app was built at
 `dist/FreeRDP Shadow.app`; deep/strict signing verification passed on the
 physical Mac with the required Apple Development identity. A sandboxed repeat
 of `codesign --verify --deep --strict` returned `CSSMERR_TP_NOT_TRUSTED`, so
@@ -282,6 +282,7 @@ its serial queue; they do not themselves impose a five-second wait on graphics
 or input. Physical aged-session timings and queue-age measurements are still
 needed to determine whether any of these operations needs a tighter bound.
 
-The next candidate target is 0.1.9; the checkout remains 0.1.8. Physical
-Android, Windows 98, and aged-session validation of this candidate remains
-outstanding. No hardware latency or new paste result is claimed by these tests.
+The 0.1.9 hardware-test candidate has version metadata in `.source_tag` and the
+app `Info.plist`; it has no release tag. Physical Android, Windows 98, and
+aged-session validation remains outstanding. No hardware latency or new paste
+result is claimed by these tests.
