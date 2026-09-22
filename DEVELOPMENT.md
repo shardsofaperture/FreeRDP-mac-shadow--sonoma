@@ -1,7 +1,9 @@
 # Mac Shadow RDP development
 
 This focused FreeRDP fork shadows a macOS Sonoma desktop for legacy RDP clients.
-**Mac Shadow RDP Build 0.1.8** is the current development target; Build 0.1.7 is the known-good production baseline
+The checkout remains **Mac Shadow RDP Build 0.1.8**. The next candidate target is
+**0.1.9**, pending the remaining physical validation; no version has been bumped.
+Build 0.1.7 is the known-good production baseline
 (`mac-shadow-rdp-0.1.7` at `59386e731`); its tag is an immutable recovery point.
 This repository-maintenance work does not change the application version.
 
@@ -25,12 +27,19 @@ local product and is intentionally not tracked. Installation uses the same build
 
 Signing is mandatory: `Apple Development: shardsofaperture (H7V72A5WH6)` with bundle
 ID `io.freerdp.shadow.sonoma.menu`. Do not substitute ad-hoc signing.
+On the target Mac, the signing identity is available. The regenerated
+`build-macos-shadow-production` cache resolves OpenSSL 3.6.4 and json-c; a
+complete `dist/FreeRDP Shadow.app` was built and passed deep/strict signing
+verification on that Mac. Historical Jansson lookup warnings are not a current
+production-build blocker. This build has not completed the Android, Windows 98,
+or aged-session hardware acceptance for the next candidate.
 
 For targeted regression tests, use the separate test build:
 
 ```zsh
 cmake -S . -B build-macos-shadow-release-checks -G Ninja \
-  -C packaging/macos-shadow-menu/production-cache.cmake -DBUILD_TESTING=ON
+  -C packaging/macos-shadow-menu/production-cache.cmake -DBUILD_TESTING=ON \
+  -DWITH_JSONC_REQUIRED=ON
 cmake --build build-macos-shadow-release-checks --target \
   TestSynch TestWinPRUtils TestFreeRDPCodec TestShadowBitmap TestMacShadowPublication TestMacShadowClipboard -j 6
 ctest --test-dir build-macos-shadow-release-checks --output-on-failure \
@@ -58,7 +67,10 @@ audio, and normal FreeRDP channels/transport.
 
 Build 0.1.8 adds plain-text-only `cliprdr`: Unicode text is preferred, with
 legacy ANSI/OEM text accepted from clients. Unsupported clipboard clients remain
-normal sessions. Per-key and clipboard-PDU tracing is DEBUG-level only. The
+normal sessions. Client format-data requests now have a five-second deadline,
+one-response late-data quarantine, and an 8 MiB payload limit; a quarantined
+request can leave clipboard transfer degraded without stopping input or graphics.
+Per-key and clipboard-PDU tracing is DEBUG-level only. The
 hardware-validated legacy Mac RDC keyboard profile requires all of: build 0,
 RDP version `0x00080004`, OS fields Windows/NT (`0x0001/0x0003`), and nonempty,
 identical hostname and product ID. It does not depend on "Mac" in either name or

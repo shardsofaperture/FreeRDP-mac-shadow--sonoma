@@ -30,6 +30,12 @@ from building a multi-second queue in the legacy bitmap encoder. The macOS
 input backend maintains private keyboard state, and the RDP client displays a
 local system pointer so pointer movement is not tied to framebuffer latency.
 
+Modern and Windows 98 text clipboard redirection is implemented. Android/Mac
+format-data requests now have a finite response deadline, late-response
+quarantine, and an 8 MiB text limit; file transfer remains unimplemented.
+Warm-cache copy search and shadow channel servicing are bounded so a busy
+session can return to input and graphics work between ordered output slices.
+
 Known alpha limitations include:
 
 - automatic display-mode switching relies on explicitly configured local
