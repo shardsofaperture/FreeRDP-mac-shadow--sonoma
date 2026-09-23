@@ -1,123 +1,82 @@
-# Mac Shadow RDP development
+# Development and release workflow
 
-This focused FreeRDP fork shadows a macOS Sonoma desktop for legacy RDP clients.
-**Mac Shadow RDP 1.0.0** is the production app, promoted from the physically
-accepted 0.2.1A behavior. Continuous video caused major lag during installed
-smoke testing; the user accepted this limitation. The build config is fixed
-250 KiB/s (256000 B/s) ordinary/F graphics pacing, 50 ms latest-state
-publication aggregation, default SO_SNDBUF, and no adaptive probing, burst,
-or coverage scheduler. Its signed bundle is built at
-`dist/FreeRDP Shadow 1.0.0.app` and installed at
-`~/Applications/FreeRDP Shadow.app`. See the [1.0.0 release note](docs/mac-shadow-1.0.0.md)
-and the completed [physical RateSweep campaign](experiments/transport-rate-sweep/CAMPAIGN.md)
-for the rate decision and validation limits. The menu app uses the existing
-SMAppService Launch at Login mechanism; the listener remains `127.0.0.1:3390`.
-The signed 0.2.0 and 0.1.9 recovery artifacts remain available in `dist/`.
+Mac Shadow RDP 1.0.0 is the published production configuration. Its signed
+bundle uses fixed 256000 B/s graphics pacing, 50 ms publication aggregation,
+ordinary/F bitmap scheduling, system-default `SO_SNDBUF`, and no adaptive
+probing, burst, or coverage scheduler. The installed listener is
+`127.0.0.1:3390` behind SSH. See the [architecture guide](docs/mac-shadow-architecture.md)
+and [engineering history](docs/mac-shadow-engineering-history.md).
 
-The 0.2.0-rc3 burst work and isolated 0.2.0N coverage experiment are retained
-as opt-in source history in their [RC note](docs/mac-shadow-0.2.0-rc3.md) and
-[N note](docs/mac-shadow-0.2.0n.md). Both are disabled in production. Build
-0.1.9 was the preceding committed source baseline at
-`c72de69d5066a5a48346385484f3becf8f424483`. Build 0.1.7 remains the
-earlier immutable recovery tag `mac-shadow-rdp-0.1.7` at `59386e731`.
+## Production build and package
 
-The primary target is Microsoft Remote Desktop 5.2 on a Windows 98 VAIO. Android
-/ aFreeRDP and other RDP clients are secondary clients. The server is intended to
-listen only on `127.0.0.1:3390`; remote use is through an SSH tunnel, never a direct
-LAN or Internet listener.
-
-## Build and package
-
-The authoritative production workflow is:
+Build and sign the app on the target Mac:
 
 ```zsh
 python3 scripts/build-macos-shadow-app.py
 ```
 
-It configures the Release preset, builds `freerdp-shadow-cli`, assembles
-`dist/FreeRDP Shadow 1.0.0.app`, and verifies nested signatures. The app is a generated
-local product and is intentionally not tracked. Installation uses the same build via
-`./scripts/install-macos-shadow-menu.sh`.
-
-Signing is mandatory: `Apple Development: shardsofaperture (H7V72A5WH6)` with bundle
-ID `io.freerdp.shadow.sonoma.menu`. Do not substitute ad-hoc signing.
-On the target Mac, the signing identity is available. The regenerated
-`build-macos-shadow-production` cache resolves OpenSSL 3.6.4 and json-c; a
-complete 0.1.8-metadata app was built and passed deep/strict signing
-verification on that Mac. Historical Jansson lookup warnings are not a current
-production-build blocker. The exact 1.0.0 app still requires Windows 98, Mac RDC,
-aged-session, and reboot/login acceptance.
-
-For targeted regression tests, use the separate test build:
+The builder configures Release, builds `freerdp-shadow-cli`, packages
+`dist/FreeRDP Shadow 1.0.0.app`, and verifies nested signatures. Installation
+uses the same generated app:
 
 ```zsh
-cmake -S . -B build-macos-shadow-release-checks -G Ninja \
-  -C packaging/macos-shadow-menu/production-cache.cmake -DBUILD_TESTING=ON \
-  -DWITH_JSONC_REQUIRED=ON
-cmake --build build-macos-shadow-release-checks --target \
-  TestSynch TestWinPRUtils TestFreeRDPCodec TestShadowBitmap TestShadowPacer TestShadowDiagnosticM TestShadowPublicationPacing TestShadowLatencyWorkload TestShadowAggregationWorkload TestShadowCoverage TestShadowSocketCap TestMacShadowPublication TestMacShadowClipboard -j 6
-ctest --test-dir build-macos-shadow-release-checks --output-on-failure \
+./scripts/install-macos-shadow-menu.sh
+```
+
+The production signing identity is
+`Apple Development: shardsofaperture (H7V72A5WH6)` and the bundle identifier
+is `io.freerdp.shadow.sonoma.menu`. Never use ad-hoc signing or modify the
+bundle after signing. Build provenance and the member SHA-256 manifest are
+written beside the generated app. The app uses macOS SMAppService Launch at
+Login and starts its child server on `127.0.0.1:3390` only.
+
+## Clean Release build
+
+Use an isolated build directory when validating a change. This builds and
+signs a temporary package without replacing the installed application or the
+retained bundle in `dist/`:
+
+```zsh
+build_dir=/private/tmp/mac-shadow-1.0.0-release
+python3 scripts/build-macos-shadow-app.py \
+  --build-dir "$build_dir" \
+  --output "/private/tmp/FreeRDP Shadow 1.0.0.app"
+```
+
+The target Mac needs the Apple signing identity, Xcode command-line tools,
+CMake, Ninja, and dependencies selected by
+`packaging/macos-shadow-menu/production-cache.cmake`.
+
+## Regression tests
+
+Configure a separate Release/json-c test build, build the relevant targets,
+and run the regression filter:
+
+```zsh
+test_dir=/private/tmp/mac-shadow-1.0.0-tests
+cmake -S . -B "$test_dir" -G Ninja \
+  -C packaging/macos-shadow-menu/production-cache.cmake \
+  -DBUILD_TESTING=ON -DWITH_JSONC_REQUIRED=ON
+cmake --build "$test_dir" --target \
+  TestSynch TestWinPRUtils TestFreeRDPCodec TestShadowBitmap \
+  TestShadowPacer TestShadowDiagnosticM TestShadowPublicationPacing \
+  TestShadowLatencyWorkload TestShadowAggregationWorkload \
+  TestShadowCoverage TestShadowSocketCap TestMacShadowPublication \
+  TestMacShadowClipboard -j 6
+ctest --test-dir "$test_dir" --output-on-failure \
   -R '^TestShadow(Bitmap|Pacer|DiagnosticM|PublicationPacing|LatencyWorkload|AggregationWorkload|Coverage|SocketCap)$|^TestMacShadow(Publication|Clipboard)$|^TestFreeRDPRegion$|^TestFreeRDPCodec(Color|Copy|Interleaved|Planar)$|^Test(SynchEvent|SynchCritical|SynchThread|MessageQueue|MessagePipe)$'
 ```
 
-## Custom code map
+The custom tests cover publication and aggregation, bitmap reconstruction,
+pacing, socket behavior, clipboard, and Mac input/publication paths. Do not
+count skipped or unbuilt tests as passes. See [the architecture guide](docs/mac-shadow-architecture.md)
+for code locations and [the release record](docs/mac-shadow-1.0.0.md) for
+hardware acceptance and validation limits.
 
-| Area | Primary location |
-| --- | --- |
-| macOS capture, display changes/restoration, client profiles, input, lifecycle | `server/shadow/Mac/mac_shadow.c`, `mac_shadow.h` |
-| macOS system-audio capture | `server/shadow/Mac/mac_shadow_audio.m` |
-| newest-state/sparse damage/ScrBlt scheduling and backpressure | `server/shadow/shadow_client.c`, `shadow_bitmap.c`, `shadow_publication.c`, `shadow_pacer.c`, `shadow_encoder.c` |
-| channel handling | `server/shadow/shadow_channels.c` |
-| legacy transport behavior | `libfreerdp/core/transport.c`, `libfreerdp/core/info.c`, `libfreerdp/core/server.c` |
-| menu app, packaging, signing | `packaging/macos-shadow-menu/`, `scripts/build-macos-shadow-app.py` |
-| deterministic custom regressions | `server/shadow/test/TestShadowBitmap.c`, `TestShadowPacer.c`, `TestMacShadowPublication.c`, `TestShadowAggregationWorkload.c`, `TestMacShadowClipboard.m` |
+## Recovery
 
-The post-0.1.9 Mac bitmap pacing experiments and their physical-test handoff are
-documented in [the graphics pacing note](docs/mac-shadow-graphics-pacing.md).
-The separate [accepted-socket experiment](docs/mac-shadow-socket-cap-experiment.md)
-documents the transport-owned descriptor, opt-in SO_SNDBUF arms, and the
-0.2.0E-I matched socket/fixed-admission matrix; it is not a default policy.
-`TestShadowPacer` adds deterministic slow/fast/degradation/recovery models. The
-historical candidate status is recorded in those notes.
-
-The Mac backend gives input priority and favors newest desktop state over animation
-smoothness. Brief self-correcting visual roughness is acceptable; persistent
-corruption is not. Preserve 16-bit interleaved and 32-bit planar paths, negotiated
-packet sizing, sparse damage/ScrBlt, bounded output backpressure, Android button
-compatibility, automatic resolution (including VAIO behavior), asynchronous system
-audio, and normal FreeRDP channels/transport.
-
-Build 0.1.8 added plain-text-only `cliprdr`: Unicode text is preferred, with
-legacy ANSI/OEM text accepted from clients. Unsupported clipboard clients remain
-normal sessions. The 0.1.9 candidate adds a five-second format-data deadline,
-one-response late-data quarantine, and an 8 MiB payload limit; a quarantined
-request can leave clipboard transfer degraded without stopping input or graphics.
-Per-key and clipboard-PDU tracing is DEBUG-level only. The
-hardware-validated legacy Mac RDC keyboard profile requires all of: build 0,
-RDP version `0x00080004`, OS fields Windows/NT (`0x0001/0x0003`), and nonempty,
-identical hostname and product ID. It does not depend on "Mac" in either name or
-on resolution/color depth. Clients not matching this fingerprint keep their
-existing mappings.
-
-For this profile only, incoming RDP Left Control maps generally to macOS Command
-on both key-down and key-up. Hardware testing established that physical right
-Command and physical left Control send identical Left Control events: **both
-therefore become Command**. Physical left Command is consumed locally by RDC and
-cannot be restored server-side. Extended RDP Right Control remains genuine macOS
-Control if the client can transmit it; the tested MacBook has no physical right
-Control, so no distinct physical Control route has been established there.
-Option, Shift, Caps Lock, and other keys retain their existing behavior. This is
-an observed compatibility fingerprint, not a unique authenticated client ID.
-
-## Hardware smoke test
-
-On Sonoma, grant **Screen & System Audio Recording** and **Accessibility** to the
-signed app, then connect through loopback SSH. Confirm the first frame, input, audio
-(when supported), disconnect/reconnect, and display restoration. For latency
-regression, run a high-motion screensaver locally, connect at target depth/resolution
-(Win98: 1024x768, 16-bit), and separately note idle, typing, window movement,
-scrolling, and full-screen-motion responsiveness. See `docs/mac-shadow-latency.md`
-for detailed behavior and test notes.
-
-Build 0.1.8 hardware acceptance, protocol repairs, and regression evidence are
-recorded in [the regression report](docs/mac-shadow-0.1.8-regression.md).
+Use a separate worktree at the desired recovery tag; build and sign with the
+same identity before installing. The 0.2.0 source release and 0.1.9 Recovery
+are retained as release history. Do not reset or rewrite published release
+history. See the [engineering history](docs/mac-shadow-engineering-history.md)
+for the selected rate and retained conclusions.
