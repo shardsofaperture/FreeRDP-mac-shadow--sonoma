@@ -1,0 +1,70 @@
+{
+  "rate_kib_per_s": 250,
+  "requested_bytes_per_s": 256000,
+  "run_directory": "/Users/<redacted>/gitr/RDP/FreeRDP-mac-shadow--sonoma/experiments/transport-rate-sweep/runs/20260923-073259-250KiB",
+  "start_utc": "2026-09-23T11:32:59.887663+00:00",
+  "ready_utc": "2026-09-23T11:33:11.250429+00:00",
+  "stop_utc": "2026-09-23T11:34:06.575021+00:00",
+  "rdp_plaintext_bytes_per_s": {
+    "mean": 135189.5,
+    "median": 120069.0,
+    "p95": 279439.0,
+    "max": 297618.0,
+    "samples": 66
+  },
+  "ssh_encrypted_bytes_per_s": {
+    "mean": 134744.12307692308,
+    "median": 131208.0,
+    "p95": 261944.0,
+    "max": 268728.0,
+    "samples": 65
+  },
+  "external_to_input_ratio_paired_samples": 0.9854910043686991,
+  "detected_high_rate_phase_plaintext_bytes_per_s": {
+    "mean": 188648.73684210525,
+    "median": 205799.5,
+    "p95": 288005.0,
+    "max": 297618.0,
+    "samples": 38
+  },
+  "detected_high_rate_phase_external_bytes_per_s": {
+    "mean": 184079.8947368421,
+    "median": 190232.0,
+    "p95": 267116.0,
+    "max": 268728.0,
+    "samples": 38
+  },
+  "detected_high_rate_phase_external_to_input_ratio": 0.9757812207929748,
+  "max_queues_bytes": {
+    "FreeRDP Send-Q": 18137,
+    "sshd loopback Recv-Q": 38493,
+    "sshd external Send-Q": 30292
+  },
+  "end_queues_bytes": {
+    "FreeRDP Send-Q": 0,
+    "sshd loopback Recv-Q": 9166,
+    "sshd external Send-Q": 20088
+  },
+  "queue_at_end_of_detected_high_rate_phase_bytes": {
+    "FreeRDP Send-Q": 0,
+    "sshd loopback Recv-Q": 0,
+    "sshd external Send-Q": 19948
+  },
+  "peak_to_32k_sustained_first_sample_seconds": 0.508698,
+  "post_high_rate_to_32k_sustained_first_sample_seconds": 0,
+  "rtt_avg_ms": {
+    "mean": 85.79676923076923,
+    "max_sampled_average": 107.06
+  },
+  "nettop_re_tx_raw_sum": 0.0,
+  "nettop_re_tx_nonzero_samples": 0,
+  "material_input_external_gap_intervals": 2,
+  "max_material_gap_bytes_per_s": 63138.0,
+  "sshd_loopback_recvq_samples_above_64k": 0,
+  "sshd_loopback_recvq_samples_above_128k": 0,
+  "sshd_loopback_recvq_samples_above_256k": 0,
+  "queue_capture_errors": [],
+  "auto_stop_reason": "activity_then_drain",
+  "detected_high_rate_first_sample": 19,
+  "detected_high_rate_last_sample": 56
+}

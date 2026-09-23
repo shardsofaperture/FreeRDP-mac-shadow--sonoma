@@ -2,6 +2,7 @@
 #import <ApplicationServices/ApplicationServices.h>
 #import <CoreGraphics/CoreGraphics.h>
 #import <ServiceManagement/ServiceManagement.h>
+#include "RateSweepSelection.h"
 
 typedef NS_ENUM(NSInteger, ShadowServerState)
 {
@@ -23,6 +24,7 @@ typedef NS_ENUM(NSInteger, ShadowServerState)
 @property(nonatomic, assign) NSUInteger restartGeneration;
 @property(nonatomic, assign) NSUInteger restartFailures;
 @property(nonatomic, strong) NSDate* serverStartedAt;
+@property(nonatomic, assign) unsigned rateSweepKiB;
 @end
 
 @implementation ShadowAppDelegate
@@ -31,6 +33,14 @@ typedef NS_ENUM(NSInteger, ShadowServerState)
 {
 	NSURL* url = [[NSBundle mainBundle] URLForResource:@"ShadowConfig" withExtension:@"plist"];
 	NSDictionary* config = url ? [NSDictionary dictionaryWithContentsOfURL:url] : nil;
+	if (self.rateSweepKiB > 0 && [config[@"ExperimentalArm"] isEqualToString:@"RateSweep"])
+	{
+		NSMutableDictionary* selected = [config mutableCopy];
+		selected[@"GraphicsRateKiBPerSecond"] = @(self.rateSweepKiB);
+		selected[@"BuildLabel"] =
+		    [NSString stringWithFormat:@"0.2.0-RateSweep — Fixed %u KiB/s", self.rateSweepKiB];
+		return selected;
+	}
 	return config ? config : @{};
 }
 
@@ -56,6 +66,24 @@ typedef NS_ENUM(NSInteger, ShadowServerState)
 		fprintf(stdout, "Login-item status: %ld\n", (long)[SMAppService mainAppService].status);
 		[NSApp terminate:nil];
 		return;
+	}
+	if ([[[NSBundle mainBundle] objectForInfoDictionaryKey:@"FreeRDPShadowExperimentalArm"]
+	        isEqualToString:@"RateSweep"])
+	{
+		NSArray<NSString*>* arguments = [[NSProcessInfo processInfo] arguments];
+		if (arguments.count != 2)
+		{
+			fprintf(stderr, "RateSweep requires exactly one --rate-sweep-kib={150|200|250|300|400} argument\n");
+			[NSApp terminate:nil];
+			return;
+		}
+		self.rateSweepKiB = shadow_rate_sweep_select(arguments[1].UTF8String);
+		if (self.rateSweepKiB == 0)
+		{
+			fprintf(stderr, "Invalid RateSweep rate; use 150, 200, 250, 300, or 400 KiB/s\n");
+			[NSApp terminate:nil];
+			return;
+		}
 	}
 
 	self.state = ShadowServerStopped;
@@ -116,7 +144,9 @@ typedef NS_ENUM(NSInteger, ShadowServerState)
 - (void)rebuildMenu
 {
 	[self.menu removeAllItems];
-	NSString* version = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
+	NSString* version = [self config][@"BuildLabel"];
+	if (!version)
+		version = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
 	NSString* title = [NSString stringWithFormat:@"Mac Shadow RDP — Build %@", version];
 	NSMenuItem* identity = [[NSMenuItem alloc] initWithTitle:title action:nil keyEquivalent:@""];
 	identity.enabled = NO;
@@ -307,6 +337,33 @@ typedef NS_ENUM(NSInteger, ShadowServerState)
 	];
 	NSMutableDictionary* environment = [[[NSProcessInfo processInfo] environment] mutableCopy];
 	environment[@"FREERDP_MAC_SHADOW_AUTO_CLIENT_PROFILE"] = @"1";
+	NSNumber* pacingDiagnostics = config[@"PacingDiagnostics"];
+	if (pacingDiagnostics.boolValue)
+		environment[@"FREERDP_MAC_SHADOW_PACING_DIAGNOSTICS"] = @"1";
+	else
+		[environment removeObjectForKey:@"FREERDP_MAC_SHADOW_PACING_DIAGNOSTICS"];
+	NSNumber* socketSendBufferKiB = config[@"SocketSendBufferKiB"];
+	if (socketSendBufferKiB)
+		environment[@"FREERDP_MAC_SHADOW_SO_SNDBUF_KIB"] = socketSendBufferKiB.stringValue;
+	else
+		[environment removeObjectForKey:@"FREERDP_MAC_SHADOW_SO_SNDBUF_KIB"];
+	NSNumber* graphicsRateKiB = config[@"GraphicsRateKiBPerSecond"];
+	if (graphicsRateKiB.unsignedIntegerValue > 0)
+		environment[@"FREERDP_MAC_SHADOW_FIXED_RATE_KIB"] = graphicsRateKiB.stringValue;
+	else
+		[environment removeObjectForKey:@"FREERDP_MAC_SHADOW_FIXED_RATE_KIB"];
+	NSNumber* largeRefreshBurst = config[@"LargeRefreshBurst"];
+	if (largeRefreshBurst.boolValue)
+		environment[@"FREERDP_MAC_SHADOW_LARGE_REFRESH_BURST"] =
+		    ([config[@"ExperimentalArm"] isEqualToString:@"M"] ||
+		     [config[@"ExperimentalArm"] hasPrefix:@"RC"]) ? @"2" : @"1";
+	else
+		[environment removeObjectForKey:@"FREERDP_MAC_SHADOW_LARGE_REFRESH_BURST"];
+	NSNumber* coverageScheduler = config[@"CoverageScheduler"];
+	if (coverageScheduler.boolValue)
+		environment[@"FREERDP_MAC_SHADOW_COVERAGE_SCHEDULER"] = @"1";
+	else
+		[environment removeObjectForKey:@"FREERDP_MAC_SHADOW_COVERAGE_SCHEDULER"];
 	[environment removeObjectForKey:@"FREERDP_MAC_SHADOW_CONNECT_DISPLAY_COMMAND"];
 	[environment removeObjectForKey:@"FREERDP_MAC_SHADOW_DISCONNECT_DISPLAY_COMMAND"];
 	task.environment = environment;

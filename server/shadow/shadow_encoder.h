@@ -27,6 +27,9 @@
 
 #include <freerdp/server/shadow.h>
 #include "shadow_bitmap.h"
+#if defined(__APPLE__)
+#include "shadow_pacer.h"
+#endif
 
 struct rdp_shadow_encoder
 {
@@ -63,6 +66,55 @@ struct rdp_shadow_encoder
 	UINT32 queueDepth;
 	BOOL bitmapFallback;
 	shadowBitmapState* bitmapState;
+#if defined(__APPLE__)
+	shadowPacer bitmapPacer;
+	int bitmapPacerSocketFd; /* Owned duplicate of the transport socket. */
+	UINT32 bitmapSocketCapRequest;
+	UINT32 bitmapSocketCapEffective;
+	BOOL bitmapPacerDiagnostics;
+	BOOL bitmapCoverageEnabled;
+	UINT64 bitmapCoveragePublicationId;
+	UINT64 bitmapCoverageStartedMs;
+	UINT32 bitmapCoverageEarlyCount;
+	UINT32 bitmapCoverageEarlyMinY;
+	UINT32 bitmapCoverageEarlyMaxY;
+	UINT32 bitmapCoverageEarlyLastY;
+	UINT32 bitmapCoverageEarlySamples[4];
+	BOOL bitmapCoverageEarlyReported;
+	UINT64 bitmapPacerReportMs;
+	UINT64 bitmapPacerBytes;
+	UINT64 bitmapPacerOps;
+	UINT64 bitmapPacerPauses;
+	UINT64 bitmapPacerBurstEntries;
+	UINT64 bitmapPacerReportedStopMs;
+	UINT64 bitmapPacerQualifiedActive;
+	UINT64 bitmapPacerQualifiedCooldown;
+	UINT64 bitmapPacerQualifiedPressure;
+	UINT64 bitmapPacerQualifiedSocket;
+	UINT64 bitmapPacerQualifiedMotion;
+	UINT64 bitmapPacerLastFreshPixels;
+	UINT64 bitmapPacerLastDesktopPixels;
+	UINT64 bitmapPacerBurstBytes;
+	UINT64 bitmapPacerBurstDeferrals;
+	UINT64 bitmapPacerDamagePixels;
+	UINT64 bitmapPacerDamageTotalPixels;
+	UINT64 bitmapPacerBlockedMs;
+	UINT64 bitmapPacerBlockedSinceMs;
+	UINT32 bitmapPacerMaxQueued;
+	UINT64 bitmapPacerPublications;
+	UINT64 bitmapPacerPublicationId;
+	UINT64 bitmapPacerLifetimeBurstEntries;
+	UINT64 bitmapPacerLastRefreshPixels;
+	UINT32 bitmapPacerLastDecision;
+	UINT64 bitmapPacerEstimatedBytes;
+	UINT64 bitmapPacerAdmittedBytes;
+	UINT64 bitmapPacerPayloadBytes;
+	UINT64 bitmapPacerChargeFallbacks;
+	UINT64 bitmapPacerFirstSubmitMs;
+	UINT64 bitmapPacerLastSubmitMs;
+	UINT32 bitmapPacerMinTileY;
+	UINT32 bitmapPacerMaxTileY;
+#endif
 };
 
 #ifdef __cplusplus

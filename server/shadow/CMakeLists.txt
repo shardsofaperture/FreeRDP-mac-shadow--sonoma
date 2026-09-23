@@ -22,6 +22,10 @@ set(MODULE_NAME "freerdp-shadow")
 set(SRCS
     shadow_bitmap.c
     shadow_bitmap.h
+    shadow_pacer.c
+    shadow_pacer.h
+    shadow_publication.c
+    shadow_publication.h
     shadow_client.c
     shadow_client.h
     shadow_lobby.c
@@ -55,6 +59,10 @@ set(SRCS
     shadow_server.c
     shadow.h
 )
+
+if(APPLE)
+  list(APPEND SRCS shadow_socket_cap.c shadow_socket_cap.h)
+endif()
 
 if(WITH_RDTK)
   if(NOT FREERDP_UNIFIED_BUILD)
@@ -102,6 +110,29 @@ if(BUILD_TESTING)
   add_executable(TestShadowBitmap test/TestShadowBitmap.c shadow_bitmap.c)
   target_link_libraries(TestShadowBitmap PRIVATE freerdp winpr)
   add_test(NAME TestShadowBitmap COMMAND TestShadowBitmap)
+  add_executable(TestShadowPacer test/TestShadowPacer.c shadow_pacer.c)
+  target_link_libraries(TestShadowPacer PRIVATE winpr)
+  add_test(NAME TestShadowPacer COMMAND TestShadowPacer)
+  add_executable(TestShadowDiagnosticM test/TestShadowDiagnosticM.c shadow_pacer.c)
+  target_link_libraries(TestShadowDiagnosticM PRIVATE winpr)
+  add_test(NAME TestShadowDiagnosticM COMMAND TestShadowDiagnosticM)
+  add_executable(TestShadowPublicationPacing test/TestShadowPublicationPacing.c
+    shadow_publication.c shadow_bitmap.c shadow_pacer.c shadow_surface.c)
+  target_link_libraries(TestShadowPublicationPacing PRIVATE freerdp winpr)
+  add_test(NAME TestShadowPublicationPacing COMMAND TestShadowPublicationPacing)
+  add_executable(TestShadowLatencyWorkload test/TestShadowLatencyWorkload.c
+    shadow_publication.c shadow_bitmap.c shadow_pacer.c shadow_surface.c)
+  target_link_libraries(TestShadowLatencyWorkload PRIVATE freerdp winpr)
+  add_test(NAME TestShadowLatencyWorkload COMMAND TestShadowLatencyWorkload)
+  add_executable(TestShadowCoverage test/TestShadowCoverage.c
+    shadow_publication.c shadow_bitmap.c shadow_pacer.c shadow_surface.c)
+  target_link_libraries(TestShadowCoverage PRIVATE freerdp winpr)
+  add_test(NAME TestShadowCoverage COMMAND TestShadowCoverage)
+  if(APPLE)
+    add_executable(TestShadowSocketCap test/TestShadowSocketCap.c shadow_socket_cap.c)
+    target_link_libraries(TestShadowSocketCap PRIVATE winpr)
+    add_test(NAME TestShadowSocketCap COMMAND TestShadowSocketCap)
+  endif()
 endif()
 
 # subsystem library

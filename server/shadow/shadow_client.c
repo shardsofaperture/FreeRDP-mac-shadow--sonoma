@@ -33,8 +33,15 @@
 #include <freerdp/log.h>
 #include <freerdp/utils/gfx.h>
 #include <freerdp/channels/drdynvc.h>
+#if defined(__APPLE__)
+#include <fcntl.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include "shadow_socket_cap.h"
+#endif
 
 #include "shadow.h"
+#include "shadow_publication.h"
 
 #define TAG CLIENT_TAG("shadow")
 
@@ -2251,6 +2258,91 @@ static BOOL shadow_client_bitmap_scheduler(const rdpShadowClient* client)
 #endif
 }
 
+#if defined(__APPLE__)
+static const char* shadow_client_burst_decision(UINT32 reason)
+{
+	switch (reason)
+	{
+		case 0: return "started";
+		case 1: return "below-threshold";
+		case 2: return "active";
+		case 3: return "cooldown";
+		case 4: return "transport-blocked";
+		case 5: return "local-socket-queue";
+		case 7: return "recent-large-publication";
+		default: return "disabled";
+	}
+}
+
+static void shadow_client_pacer_log_m_end(rdpShadowEncoder* encoder)
+{
+	shadowPacer* pacer = &encoder->bitmapPacer;
+	if (!encoder->bitmapPacerDiagnostics || !pacer->largeRefreshDiagnosticM ||
+	    !pacer->burstEndReason ||
+	    pacer->burstStoppedMs == encoder->bitmapPacerReportedStopMs)
+		return;
+	encoder->bitmapPacerReportedStopMs = pacer->burstStoppedMs;
+	WLog_INFO(TAG,
+	          "M burst end: reason=%s admitted=%" PRIu64 " elapsedMs=%" PRIu64
+	          " activeRate=%.0f rearmAtMs=%" PRIu64,
+	          pacer->burstEndReason == 1 ? "time" :
+	          (pacer->burstEndReason == 2 ? "byte-cap" :
+	          (pacer->burstEndReason == 3 ? "unusable-remainder" : "local-socket-queue")),
+	          pacer->burstBytes,
+	          pacer->burstStoppedMs - pacer->burstStartMs, pacer->rate,
+	          pacer->burstEligibleMs);
+}
+
+static BOOL shadow_client_pacer_can_submit(rdpShadowEncoder* encoder, UINT32 bytes)
+{
+	shadow_pacer_note_time(&encoder->bitmapPacer, GetTickCount64(), TRUE);
+	const BOOL allowed = shadow_pacer_can_submit(&encoder->bitmapPacer, bytes);
+	shadow_client_pacer_log_m_end(encoder);
+	return allowed;
+}
+
+static BOOL shadow_client_pacer_preflight(rdpShadowEncoder* encoder, UINT32 bytes)
+{
+	shadow_pacer_note_time(&encoder->bitmapPacer, GetTickCount64(), TRUE);
+	shadow_client_pacer_log_m_end(encoder);
+	return shadow_pacer_preflight(&encoder->bitmapPacer, bytes);
+}
+
+static void shadow_client_bitmap_deferred(rdpShadowEncoder* encoder)
+{
+	encoder->bitmapPacerPauses++;
+	if (encoder->bitmapPacer.burstActive)
+		encoder->bitmapPacerBurstDeferrals++;
+}
+
+static void shadow_client_coverage_report(rdpShadowEncoder* encoder, UINT64 nowMs)
+{
+	if (!encoder->bitmapPacerDiagnostics || !encoder->bitmapCoverageEnabled ||
+	    !encoder->bitmapCoveragePublicationId || encoder->bitmapCoverageEarlyReported ||
+	    nowMs < encoder->bitmapCoverageStartedMs + 200U)
+		return;
+	const shadowBitmapScheduleState schedule =
+	    shadow_bitmap_schedule_state(encoder->bitmapState);
+	WLog_INFO(TAG,
+	          "N coverage early: publicationId=%" PRIu64
+	          " windowMs=200 submitted=%" PRIu32 " firstY=%" PRIu32
+	          " lastY=%" PRIu32 " minY=%" PRIu32 " maxY=%" PRIu32
+	          " sampleY=%" PRIu32 ",%" PRIu32 ",%" PRIu32 ",%" PRIu32
+	          " pending=%" PRIu32 " cursor=%" PRIu32 " columnPass=%" PRIu32
+	          " rowStep=%" PRIu32 " active=%s moveFallback=%s publicationAgeMs=%" PRIu64,
+	          encoder->bitmapCoveragePublicationId, encoder->bitmapCoverageEarlyCount,
+	          encoder->bitmapCoverageEarlySamples[0], encoder->bitmapCoverageEarlyLastY,
+	          encoder->bitmapCoverageEarlyMinY, encoder->bitmapCoverageEarlyMaxY,
+	          encoder->bitmapCoverageEarlySamples[0], encoder->bitmapCoverageEarlySamples[1],
+	          encoder->bitmapCoverageEarlySamples[2], encoder->bitmapCoverageEarlySamples[3],
+	          shadow_bitmap_pending_tiles(encoder->bitmapState), schedule.cursor,
+	          schedule.rows ? schedule.cursor / schedule.rows : 0U, schedule.rowStep,
+	          schedule.active ? "true" : "false", schedule.moveFallback ? "true" : "false",
+	          nowMs - encoder->bitmapCoverageStartedMs);
+	encoder->bitmapCoverageEarlyReported = TRUE;
+}
+#endif
+
 /* Submit bounded work between input checks. The cache is advanced only after a successful
  * ordered write. Socket/SSH/client buffers cannot be retracted; never discard serialized PDUs. */
 static BOOL shadow_client_flush_bitmap(rdpShadowClient* client)
@@ -2267,6 +2359,142 @@ static BOOL shadow_client_flush_bitmap(rdpShadowClient* client)
 	const UINT64 deadline = GetTickCount64() + 8;
 	UINT32 bytes = 0;
 	const UINT32 colorDepth = freerdp_settings_get_uint32(settings, FreeRDP_ColorDepth);
+#if defined(__APPLE__)
+	shadowPacer* pacer = &encoder->bitmapPacer;
+	const UINT64 nowMs = GetTickCount64();
+	UINT32 queuedBytes = 0;
+	BOOL queueValid = FALSE;
+	if (encoder->bitmapPacerSocketFd >= 0)
+	{
+		int queued = 0;
+		socklen_t length = sizeof(queued);
+		if (getsockopt(encoder->bitmapPacerSocketFd, SOL_SOCKET, SO_NWRITE, &queued, &length) == 0 &&
+		    length == sizeof(queued) && queued >= 0)
+		{
+			queueValid = TRUE;
+			queuedBytes = (UINT32)queued;
+		}
+	}
+	if (queueValid && queuedBytes > encoder->bitmapPacerMaxQueued)
+		encoder->bitmapPacerMaxQueued = queuedBytes;
+	const BOOL writeBlocked = peer->IsWriteBlocked && peer->IsWriteBlocked(peer);
+	if (writeBlocked && !encoder->bitmapPacerBlockedSinceMs)
+		encoder->bitmapPacerBlockedSinceMs = nowMs;
+	if (!writeBlocked && encoder->bitmapPacerBlockedSinceMs)
+	{
+		encoder->bitmapPacerBlockedMs += nowMs - encoder->bitmapPacerBlockedSinceMs;
+		encoder->bitmapPacerBlockedSinceMs = 0;
+	}
+	shadow_pacer_observe(pacer, nowMs, queueValid, queuedBytes, writeBlocked,
+	                     shadow_bitmap_pending(encoder->bitmapState));
+	shadow_client_pacer_log_m_end(encoder);
+	shadow_client_coverage_report(encoder, nowMs);
+	if (encoder->bitmapPacerDiagnostics &&
+	    nowMs - encoder->bitmapPacerReportMs >= 5000)
+	{
+		UINT32 currentSendBuffer = 0;
+		if (encoder->bitmapPacerSocketFd >= 0)
+			(void)shadow_socket_cap_configure(encoder->bitmapPacerSocketFd, 0,
+			                                  &currentSendBuffer);
+		if (encoder->bitmapPacerBlockedSinceMs)
+		{
+			encoder->bitmapPacerBlockedMs += nowMs - encoder->bitmapPacerBlockedSinceMs;
+			encoder->bitmapPacerBlockedSinceMs = nowMs;
+		}
+		WLog_INFO(TAG,
+		          "Mac bitmap pacer: mode=%s baseRate=%.0f activeRate=%.0f"
+		          " adaptiveProbing=%s burstRate=%.0f burstDurationMs=%" PRIu32
+		          " burstByteCap=%" PRIu64 " burstCooldownMs=%" PRIu32
+		          " burstEntries=%" PRIu64 " burstActive=%s burstBytes=%" PRIu64
+		          " triggerSource=%s maxPublishedArea=%" PRIu64 "/%" PRIu64
+		          "px threshold=%" PRIu32 "%%"
+		          " lastPublishedArea=%" PRIu64 "/%" PRIu64 "px percent=%.2f qualified=%s"
+		          " lastRefreshArea=%" PRIu64 " lastDecision=%s"
+		          " periodQualifiedActive=%" PRIu64 " periodQualifiedCooldown=%" PRIu64
+		          " periodQualifiedPressure=%" PRIu64 " periodQualifiedSocket=%" PRIu64
+		          " periodQualifiedMotion=%" PRIu64
+		          " burstCurrentBytes=%" PRIu64 " burstElapsedMs=%" PRIu64
+		          " rearmInMs=%" PRIu64
+		          " periodChargedDelta=%" PRIu64 " periodEstimated=%" PRIu64
+		          " periodAdmitted=%" PRIu64 " periodCompressedPayload=%" PRIu64
+		          " periodChargeFallbacks=%" PRIu64
+		          " credit=%.0f maxCredit=%.0f"
+		          " normalDeferrals=%" PRIu64 " burstDeferrals=%" PRIu64
+		          " ops=%" PRIu64 " socketQueued=%s%" PRIu32
+		          " socketMax=%" PRIu32 " blockedMs=%" PRIu64
+		          " drain=%.0f periodStaged=%" PRIu64 " pendingTiles=%" PRIu32
+		          " lifetimePublicationId=%" PRIu64 " lifetimeBurstEntries=%" PRIu64
+		          " periodFirstSubmitMs=%" PRIu64 " periodLastSubmitMs=%" PRIu64
+		          " periodMinTileY=%" PRIu32 " periodMaxTileY=%" PRIu32
+		          " sndbufRequest=%" PRIu32 " sndbufInitial=%" PRIu32
+		          " sndbufNow=%" PRIu32,
+		          pacer->largeRefreshBurstEnabled ? "fixed+large-refresh-burst" :
+		          (pacer->fixed ? "fixed" : "adaptive"),
+		          pacer->fixed ? pacer->baseRate : pacer->rate, pacer->rate,
+		          pacer->fixed ? "disabled" : "enabled", pacer->burstRate,
+		          pacer->burstDurationMs, pacer->burstByteCap, pacer->burstCooldownMs,
+		          encoder->bitmapPacerBurstEntries, pacer->burstActive ? "true" : "false",
+		          encoder->bitmapPacerBurstBytes,
+		          pacer->largeRefreshBurstEnabled ? "published-region-area" : "disabled",
+		          encoder->bitmapPacerDamagePixels, encoder->bitmapPacerDamageTotalPixels,
+		          pacer->largeDamagePercent,
+		          encoder->bitmapPacerLastFreshPixels, encoder->bitmapPacerLastDesktopPixels,
+		          encoder->bitmapPacerLastDesktopPixels
+		              ? 100.0 * (double)encoder->bitmapPacerLastFreshPixels /
+		                    (double)encoder->bitmapPacerLastDesktopPixels
+		              : 0.0,
+		          encoder->bitmapPacerLastDesktopPixels &&
+		                  encoder->bitmapPacerLastFreshPixels * 100U >=
+		                      encoder->bitmapPacerLastDesktopPixels * pacer->largeDamagePercent
+		              ? "true" : "false",
+		          encoder->bitmapPacerLastRefreshPixels,
+		          shadow_client_burst_decision(encoder->bitmapPacerLastDecision),
+		          encoder->bitmapPacerQualifiedActive, encoder->bitmapPacerQualifiedCooldown,
+		          encoder->bitmapPacerQualifiedPressure, encoder->bitmapPacerQualifiedSocket,
+		          encoder->bitmapPacerQualifiedMotion,
+		          pacer->burstBytes,
+		          pacer->burstActive ? nowMs - pacer->burstStartMs : 0,
+		          nowMs < pacer->burstEligibleMs ? pacer->burstEligibleMs - nowMs : 0,
+		          encoder->bitmapPacerBytes, encoder->bitmapPacerEstimatedBytes,
+		          encoder->bitmapPacerAdmittedBytes, encoder->bitmapPacerPayloadBytes,
+		          encoder->bitmapPacerChargeFallbacks,
+		          pacer->credit, shadow_pacer_credit_limit(pacer),
+		          encoder->bitmapPacerPauses - encoder->bitmapPacerBurstDeferrals,
+		          encoder->bitmapPacerBurstDeferrals, encoder->bitmapPacerOps,
+		          queueValid ? "" : "unsupported:", queuedBytes,
+		          encoder->bitmapPacerMaxQueued, encoder->bitmapPacerBlockedMs,
+		          pacer->drainRate, encoder->bitmapPacerPublications,
+		          shadow_bitmap_pending_tiles(encoder->bitmapState),
+		          encoder->bitmapPacerPublicationId, encoder->bitmapPacerLifetimeBurstEntries,
+		          encoder->bitmapPacerFirstSubmitMs, encoder->bitmapPacerLastSubmitMs,
+		          encoder->bitmapPacerMinTileY, encoder->bitmapPacerMaxTileY,
+		          encoder->bitmapSocketCapRequest, encoder->bitmapSocketCapEffective,
+		          currentSendBuffer);
+		encoder->bitmapPacerReportMs = nowMs;
+		encoder->bitmapPacerBytes = 0;
+		encoder->bitmapPacerOps = 0;
+		encoder->bitmapPacerPauses = 0;
+		encoder->bitmapPacerBurstEntries = 0;
+		encoder->bitmapPacerBurstBytes = 0;
+		encoder->bitmapPacerBurstDeferrals = 0;
+		encoder->bitmapPacerDamagePixels = 0;
+		encoder->bitmapPacerDamageTotalPixels = 0;
+		encoder->bitmapPacerBlockedMs = 0;
+		encoder->bitmapPacerMaxQueued = 0;
+		encoder->bitmapPacerPublications = 0;
+		encoder->bitmapPacerEstimatedBytes = 0;
+		encoder->bitmapPacerAdmittedBytes = 0;
+		encoder->bitmapPacerPayloadBytes = 0;
+		encoder->bitmapPacerChargeFallbacks = 0;
+		encoder->bitmapPacerFirstSubmitMs = 0;
+		encoder->bitmapPacerLastSubmitMs = 0;
+		encoder->bitmapPacerMinTileY = 0;
+		encoder->bitmapPacerMaxTileY = 0;
+		encoder->bitmapPacerQualifiedPressure = 0;
+		encoder->bitmapPacerQualifiedSocket = 0;
+		encoder->bitmapPacerQualifiedMotion = 0;
+	}
+#endif
 	/* CheckFileDescriptor reads input; it does not flush FreeRDP's buffered BIO. Drain
 	 * explicitly, including the last submitted tile on an otherwise static desktop. */
 	if (peer->IsWriteBlocked && peer->IsWriteBlocked(peer))
@@ -2282,15 +2510,38 @@ static BOOL shadow_client_flush_bitmap(rdpShadowClient* client)
 	for (UINT32 count = 0; (count < 8) && (bytes < 16384) && (GetTickCount64() < deadline); count++)
 	{
 		shadowBitmapTile tile = { 0 };
+#if defined(__APPLE__)
+		UINT64 outputBefore = 0;
+		UINT64 outputAfter = 0;
+		UINT32 chargeEstimate = 64;
+		UINT32 compressedPayload = 0;
+		/* Avoid repeatedly searching/compressing the same pending tile when
+		 * there is not even enough credit for a small bitmap. */
+		if (!shadow_client_pacer_preflight(encoder, 2048))
+		{
+			shadow_client_bitmap_deferred(encoder);
+			break;
+		}
+#endif
 		/* Do not serialize another tile while FreeRDP still has buffered output. */
 		if (peer->IsWriteBlocked && peer->IsWriteBlocked(peer))
 			break;
 		if (!shadow_bitmap_next(encoder->bitmapState, allowCopy, &tile))
 			break;
+#if defined(__APPLE__)
+		(void)freerdp_get_stats(client->context.rdp, nullptr, &outputBefore, nullptr, nullptr);
+#endif
 		if (tile.copy)
 		{
 			if (bytes + 64U > 16384U)
 				break;
+#if defined(__APPLE__)
+			if (!shadow_client_pacer_can_submit(encoder, 64))
+			{
+				shadow_client_bitmap_deferred(encoder);
+				break;
+			}
+#endif
 			SCRBLT_ORDER order = { 0 };
 			order.nLeftRect = (INT32)tile.x;
 			order.nTopRect = (INT32)tile.y;
@@ -2331,6 +2582,10 @@ static BOOL shadow_client_flush_bitmap(rdpShadowClient* client)
 			         ? 0U
 			         : SHADOW_BITMAP_COMPRESSION_HEADER_SIZE) +
 			    length;
+#if defined(__APPLE__)
+			compressedPayload = length;
+			chargeEstimate = wireSize + 64U;
+#endif
 			if (wireSize > freerdp_settings_get_uint32(settings, FreeRDP_MultifragMaxRequestSize))
 			{
 				WLog_ERR(TAG, "Low-latency bitmap tile exceeds the negotiated update size");
@@ -2338,6 +2593,13 @@ static BOOL shadow_client_flush_bitmap(rdpShadowClient* client)
 			}
 			if ((bytes > 0) && (bytes + wireSize > 16384U))
 				break;
+#if defined(__APPLE__)
+			if (!shadow_client_pacer_can_submit(encoder, wireSize + 64U))
+			{
+				shadow_client_bitmap_deferred(encoder);
+				break;
+			}
+#endif
 			bitmap.destLeft = tile.x;
 			bitmap.destTop = tile.y;
 			bitmap.destRight = tile.x + tile.width - 1;
@@ -2383,6 +2645,10 @@ static BOOL shadow_client_flush_bitmap(rdpShadowClient* client)
 			                             ? 0U
 			                             : SHADOW_BITMAP_COMPRESSION_HEADER_SIZE) +
 			                        length;
+#if defined(__APPLE__)
+			compressedPayload = length;
+			chargeEstimate = wireSize + 64U;
+#endif
 			if (wireSize >
 			    freerdp_settings_get_uint32(settings, FreeRDP_MultifragMaxRequestSize))
 			{
@@ -2391,6 +2657,13 @@ static BOOL shadow_client_flush_bitmap(rdpShadowClient* client)
 			}
 			if ((bytes > 0) && (bytes + wireSize > 16384U))
 				break;
+#if defined(__APPLE__)
+			if (!shadow_client_pacer_can_submit(encoder, wireSize + 64U))
+			{
+				shadow_client_bitmap_deferred(encoder);
+				break;
+			}
+#endif
 			BITMAP_DATA bitmap = { 0 };
 			BITMAP_UPDATE message = { 0 };
 			bitmap.destLeft = tile.x;
@@ -2412,7 +2685,55 @@ static BOOL shadow_client_flush_bitmap(rdpShadowClient* client)
 				return FALSE;
 			bytes += wireSize;
 		}
+#if defined(__APPLE__)
+		(void)freerdp_get_stats(client->context.rdp, nullptr, &outputAfter, nullptr, nullptr);
+		const BOOL measured = outputAfter > outputBefore &&
+		                      outputAfter - outputBefore <= UINT32_MAX;
+		const UINT32 submitted = measured ? (UINT32)(outputAfter - outputBefore) : chargeEstimate;
+		const BOOL burstAdmission = pacer->burstActive;
+		const UINT32 admitted = pacer->fixed ? pacer->admittedBytes : 0;
+		const UINT64 submittedAtMs = GetTickCount64();
+		if (encoder->bitmapCoverageEnabled && encoder->bitmapCoveragePublicationId &&
+		    !encoder->bitmapCoverageEarlyReported &&
+		    submittedAtMs <= encoder->bitmapCoverageStartedMs + 200U)
+		{
+			if (!encoder->bitmapCoverageEarlyCount)
+				encoder->bitmapCoverageEarlyMinY = tile.y;
+			encoder->bitmapCoverageEarlyMinY =
+			    MIN(encoder->bitmapCoverageEarlyMinY, tile.y);
+			encoder->bitmapCoverageEarlyMaxY =
+			    MAX(encoder->bitmapCoverageEarlyMaxY, tile.y);
+			if (encoder->bitmapCoverageEarlyCount < ARRAYSIZE(encoder->bitmapCoverageEarlySamples))
+				encoder->bitmapCoverageEarlySamples[encoder->bitmapCoverageEarlyCount] = tile.y;
+			encoder->bitmapCoverageEarlyLastY = tile.y;
+			encoder->bitmapCoverageEarlyCount++;
+		}
+		if (encoder->bitmapPacerOps == 0)
+		{
+			encoder->bitmapPacerFirstSubmitMs = submittedAtMs;
+			encoder->bitmapPacerMinTileY = tile.y;
+			encoder->bitmapPacerMaxTileY = tile.y;
+		}
+		else
+		{
+			encoder->bitmapPacerMinTileY = MIN(encoder->bitmapPacerMinTileY, tile.y);
+			encoder->bitmapPacerMaxTileY = MAX(encoder->bitmapPacerMaxTileY, tile.y);
+		}
+		encoder->bitmapPacerLastSubmitMs = submittedAtMs;
+		encoder->bitmapPacerPayloadBytes += compressedPayload;
+		encoder->bitmapPacerEstimatedBytes += chargeEstimate;
+		encoder->bitmapPacerAdmittedBytes += admitted;
+		encoder->bitmapPacerChargeFallbacks += measured ? 0U : 1U;
+		shadow_publication_commit(encoder->bitmapState, pacer, &tile, submitted);
+		shadow_client_pacer_log_m_end(encoder);
+		encoder->bitmapPacerBytes += submitted;
+		if (burstAdmission)
+			encoder->bitmapPacerBurstBytes += submitted;
+		encoder->bitmapPacerOps++;
+#endif
+#if !defined(__APPLE__)
 		shadow_bitmap_commit(encoder->bitmapState, &tile);
+#endif
 	}
 	return TRUE;
 }
@@ -2468,7 +2789,8 @@ static BOOL shadow_client_send_surface_update(rdpShadowClient* client, SHADOW_GF
 		region16_init(&invalidRegion);
 
 		const BOOL res = region16_copy(&invalidRegion, &(client->invalidRegion));
-		region16_clear(&(client->invalidRegion));
+		if (res)
+			region16_clear(&(client->invalidRegion));
 		LeaveCriticalSection(&(client->lock));
 		if (!res)
 		{
@@ -2494,15 +2816,97 @@ static BOOL shadow_client_send_surface_update(rdpShadowClient* client, SHADOW_GF
 			    shadow_bitmap_new(surface->width, surface->height, colorDepth, maxRequestSize);
 			if (encoder->bitmapState)
 			{
+#if defined(__APPLE__)
+				shadow_bitmap_enable_coverage(encoder->bitmapState,
+				                              encoder->bitmapCoverageEnabled);
+#endif
 				WLog_INFO(TAG,
 				          "Bounded newest-state bitmap scheduler active at %" PRIu32
 				          "x%" PRIu32 "@%" PRIu32,
 				          surface->width, surface->height, colorDepth);
 			}
 		}
-		if (shadow_bitmap_stage(encoder->bitmapState, surface->data, surface->format,
-		                        surface->scanline, &invalidRegion))
+		BOOL staged = FALSE;
+#if defined(__APPLE__)
+		shadowPublicationResult publication = { 0 };
+		staged = shadow_publication_stage(encoder->bitmapState, &encoder->bitmapPacer,
+		                                  surface, &invalidRegion, GetTickCount64(), &publication);
+#else
+		staged = shadow_bitmap_stage(encoder->bitmapState, surface->data, surface->format,
+		                             surface->scanline, &invalidRegion);
+#endif
+		if (staged)
+		{
+#if defined(__APPLE__)
+			encoder->bitmapPacerPublications++;
+			encoder->bitmapPacerPublicationId++;
+			if (encoder->bitmapCoverageEnabled && publication.desktopArea &&
+			    publication.publicationArea * 4U >= publication.desktopArea &&
+			    shadow_bitmap_schedule_state(encoder->bitmapState).active)
+			{
+				encoder->bitmapCoveragePublicationId = encoder->bitmapPacerPublicationId;
+				encoder->bitmapCoverageStartedMs = GetTickCount64();
+				encoder->bitmapCoverageEarlyCount = 0;
+				encoder->bitmapCoverageEarlyMinY = 0;
+				encoder->bitmapCoverageEarlyMaxY = 0;
+				encoder->bitmapCoverageEarlyLastY = 0;
+				memset(encoder->bitmapCoverageEarlySamples, 0,
+				       sizeof(encoder->bitmapCoverageEarlySamples));
+				encoder->bitmapCoverageEarlyReported = FALSE;
+			}
+			encoder->bitmapPacerLastRefreshPixels = publication.clientRefreshArea;
+			encoder->bitmapPacerLastDecision = publication.denialReason;
+			if (encoder->bitmapPacer.largeRefreshBurstEnabled)
+			{
+				const UINT64 damagePixels = publication.publicationArea;
+				const UINT64 totalPixels = publication.desktopArea;
+				const BOOL qualified = publication.qualified;
+				encoder->bitmapPacerLastFreshPixels = damagePixels;
+				encoder->bitmapPacerLastDesktopPixels = totalPixels;
+				if (encoder->bitmapPacer.largeRefreshDiagnosticM && qualified)
+				{
+					if (publication.denialReason == 2)
+						encoder->bitmapPacerQualifiedActive++;
+					else if (publication.denialReason == 3)
+						encoder->bitmapPacerQualifiedCooldown++;
+					else if (publication.denialReason == 4)
+						encoder->bitmapPacerQualifiedPressure++;
+					else if (publication.denialReason == 5)
+						encoder->bitmapPacerQualifiedSocket++;
+					else if (publication.denialReason == 7)
+						encoder->bitmapPacerQualifiedMotion++;
+				}
+				if (damagePixels > encoder->bitmapPacerDamagePixels)
+				{
+					encoder->bitmapPacerDamagePixels = damagePixels;
+					encoder->bitmapPacerDamageTotalPixels = totalPixels;
+				}
+				if (publication.burstStarted)
+				{
+					encoder->bitmapPacerBurstEntries++;
+					encoder->bitmapPacerLifetimeBurstEntries++;
+					if (encoder->bitmapPacerDiagnostics &&
+					    encoder->bitmapPacer.largeRefreshDiagnosticM)
+						WLog_INFO(TAG,
+						          "M burst start: publicationId=%" PRIu64
+						          " published=%" PRIu64 "/%" PRIu64
+						          "px refresh=%" PRIu64
+						          "px percent=%.2f qualified=true entries=%" PRIu64
+						          " activeRate=%.0f credit=%.0f endAtMs=%" PRIu64
+						          " rearmAtMs=%" PRIu64,
+						          encoder->bitmapPacerPublicationId, damagePixels, totalPixels,
+						          publication.clientRefreshArea,
+						          100.0 * (double)damagePixels / (double)totalPixels,
+						          encoder->bitmapPacerBurstEntries, encoder->bitmapPacer.rate,
+						          encoder->bitmapPacer.credit, encoder->bitmapPacer.burstEndMs,
+						          encoder->bitmapPacer.burstEligibleMs);
+				}
+				else
+					shadow_client_pacer_log_m_end(encoder);
+			}
+#endif
 			goto out;
+		}
 		encoder->bitmapFallback = TRUE;
 		cacheFailed = TRUE;
 		WLog_WARN(TAG, "Bitmap cache unavailable; using the standard encoder");
@@ -2981,7 +3385,17 @@ static DWORD WINAPI shadow_client_thread(LPVOID arg)
 		                           shadow_bitmap_pending(client->encoder->bitmapState);
 		const BOOL bufferedBitmap = peer->IsWriteBlocked &&
 		                            peer->IsWriteBlocked(peer);
-		const DWORD timeout = bufferedBitmap ? 8U : (pendingBitmap ? 1U : INFINITE);
+		DWORD timeout = bufferedBitmap ? 8U :
+#if defined(__APPLE__)
+		                      (pendingBitmap ? shadow_pacer_wait_ms(&client->encoder->bitmapPacer)
+		                                     : INFINITE);
+#else
+		                      (pendingBitmap ? 1U : INFINITE);
+#endif
+#if defined(__APPLE__)
+		if (client->encoder->bitmapPacerDiagnostics && timeout > 5000U)
+			timeout = 5000U;
+#endif
 		status = WaitForMultipleObjects(nCount, events, FALSE, timeout);
 
 		if (status == WAIT_FAILED)
@@ -3291,6 +3705,11 @@ BOOL shadow_client_accepted(freerdp_listener* listener, freerdp_peer* peer)
 {
 	rdpShadowClient* client = nullptr;
 	rdpShadowServer* server = nullptr;
+#if defined(__APPLE__)
+	int diagnosticSocketFd = -1;
+	UINT32 socketCapRequest = 0;
+	UINT32 socketCapEffective = 0;
+#endif
 
 	if (!listener || !peer)
 		return FALSE;
@@ -3298,16 +3717,82 @@ BOOL shadow_client_accepted(freerdp_listener* listener, freerdp_peer* peer)
 	server = (rdpShadowServer*)listener->info;
 	WINPR_ASSERT(server);
 
+#if defined(__APPLE__)
+	/* The peer owns this descriptor until context setup transfers it to the
+	 * transport BIO. Apply the experiment before that transfer. A duplicate
+	 * provides an independently owned diagnostic handle after transfer. */
+	const char* capValue = getenv("FREERDP_MAC_SHADOW_SO_SNDBUF_KIB");
+	if (!shadow_socket_cap_parse_kib(capValue, &socketCapRequest))
+	{
+		WLog_ERR(TAG,
+		         "Invalid FREERDP_MAC_SHADOW_SO_SNDBUF_KIB: use 0, 4, 8, 16, 32, 64, or 128");
+		return FALSE;
+	}
+	if (peer->sockfd >= 0)
+	{
+		struct sockaddr_storage address = { 0 };
+		socklen_t length = sizeof(address);
+		if (getsockname(peer->sockfd, (struct sockaddr*)&address, &length) == 0 &&
+		    (address.ss_family == AF_INET || address.ss_family == AF_INET6))
+		{
+			if (!shadow_socket_cap_configure(peer->sockfd, socketCapRequest,
+			                                 &socketCapEffective))
+			{
+				if (socketCapRequest != 0)
+				{
+					WLog_ERR(TAG, "Could not apply experimental SO_SNDBUF=%" PRIu32,
+					         socketCapRequest);
+					return FALSE;
+				}
+				WLog_WARN(TAG, "Could not read accepted TCP SO_SNDBUF");
+			}
+			diagnosticSocketFd = fcntl(peer->sockfd, F_DUPFD_CLOEXEC, 0);
+			if (diagnosticSocketFd < 0)
+			{
+				WLog_ERR(TAG, "Could not duplicate accepted socket for Mac diagnostics");
+				return FALSE;
+			}
+		}
+		else if (socketCapRequest != 0)
+		{
+			WLog_ERR(TAG, "Experimental SO_SNDBUF requires an accepted TCP socket");
+			return FALSE;
+		}
+	}
+	else if (socketCapRequest != 0)
+	{
+		WLog_ERR(TAG, "Experimental SO_SNDBUF requires an accepted socket");
+		return FALSE;
+	}
+	if (capValue)
+		WLog_INFO(TAG, "Mac accepted TCP SO_SNDBUF experiment: requested=%" PRIu32
+		              " effective=%" PRIu32 " (bytes)", socketCapRequest,
+		              socketCapEffective);
+#endif
+
 	peer->ContextExtra = (void*)server;
 	peer->ContextSize = sizeof(rdpShadowClient);
 	peer->ContextNew = shadow_client_context_new;
 	peer->ContextFree = shadow_client_context_free;
 
 	if (!freerdp_peer_context_new_ex(peer, server->settings))
+	{
+#if defined(__APPLE__)
+		if (diagnosticSocketFd >= 0)
+			close(diagnosticSocketFd);
+#endif
 		return FALSE;
+	}
 
 	client = (rdpShadowClient*)peer->context;
 	WINPR_ASSERT(client);
+
+#if defined(__APPLE__)
+	WINPR_ASSERT(client->encoder);
+	client->encoder->bitmapPacerSocketFd = diagnosticSocketFd;
+	client->encoder->bitmapSocketCapRequest = socketCapRequest;
+	client->encoder->bitmapSocketCapEffective = socketCapEffective;
+#endif
 
 	if (!(client->thread = CreateThread(nullptr, 0, shadow_client_thread, client, 0, nullptr)))
 	{

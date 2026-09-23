@@ -8,7 +8,7 @@ abi-checker
 /build-macos-shadow-production/
 /build-macos-shadow-release-checks/
 /build-sonoma-*/
-/dist/FreeRDP Shadow.app/
+/dist/
 
 # Local tool and Finder metadata
 .DS_Store

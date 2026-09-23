@@ -1,0 +1,33 @@
+{
+  "selected_rate_kib_per_s": 150,
+  "selected_rate_bytes_per_s": 153600,
+  "installed_build_label": "0.2.0-RateSweep \u2014 select fixed rate at launch",
+  "runtime_build_label": "0.2.0-RateSweep \u2014 Fixed 150 KiB/s",
+  "installed_app": "/Users/<redacted>/Applications/FreeRDP Shadow.app",
+  "menu_command": "30399 /Users/<redacted>/Applications/FreeRDP Shadow.app/Contents/MacOS/FreeRDPShadowMenu --rate-sweep-kib=150",
+  "listener_pid": 30406,
+  "listener_command": "/Users/<redacted>/Applications/FreeRDP Shadow.app/Contents/MacOS/freerdp-shadow-cli /bind-address:127.0.0.1 /port:3390 /sec:rdp /max-connections:1 -auth -gfx -rfx -nsc /log-level:INFO",
+  "sshd_pid": 30439,
+  "loopback_local": "127.0.0.1:60723",
+  "loopback_remote": "127.0.0.1:3390",
+  "external_local": "192.168.50.75:22",
+  "external_remote": "172.59.27.90:31669",
+  "start_utc": "2026-09-23T11:11:11.284336+00:00",
+  "nettop_command": [
+    "nettop",
+    "-L",
+    "0",
+    "-d",
+    "-x",
+    "-n",
+    "-m",
+    "tcp",
+    "-p",
+    "30406",
+    "-p",
+    "30439",
+    "-s",
+    "1"
+  ],
+  "stop_utc": "2026-09-23T11:12:28.605469+00:00"
+}

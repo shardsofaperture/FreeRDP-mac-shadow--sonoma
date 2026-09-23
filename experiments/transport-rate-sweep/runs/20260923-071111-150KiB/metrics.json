@@ -1,0 +1,54 @@
+{
+  "rate_kib_per_s": 150,
+  "requested_bytes_per_s": 153600,
+  "run_directory": "/Users/<redacted>/gitr/RDP/FreeRDP-mac-shadow--sonoma/experiments/transport-rate-sweep/runs/20260923-071111-150KiB",
+  "start_utc": "2026-09-23T11:11:11.284336+00:00",
+  "ready_utc": null,
+  "stop_utc": "2026-09-23T11:12:28.605469+00:00",
+  "rdp_plaintext_bytes_per_s": {
+    "mean": 71287.98611111111,
+    "median": 40741.0,
+    "p95": 155009.0,
+    "max": 156135.0,
+    "samples": 72
+  },
+  "ssh_encrypted_bytes_per_s": {
+    "mean": 74595.33333333333,
+    "median": 47976.0,
+    "p95": 157900.0,
+    "max": 166436.0,
+    "samples": 72
+  },
+  "external_to_input_ratio_paired_samples": 1.0463941738663696,
+  "detected_high_rate_phase_plaintext_bytes_per_s": null,
+  "detected_high_rate_phase_external_bytes_per_s": null,
+  "detected_high_rate_phase_external_to_input_ratio": null,
+  "max_queues_bytes": {
+    "FreeRDP Send-Q": 14649,
+    "sshd loopback Recv-Q": 11406,
+    "sshd external Send-Q": 28012
+  },
+  "end_queues_bytes": {
+    "FreeRDP Send-Q": 0,
+    "sshd loopback Recv-Q": 0,
+    "sshd external Send-Q": 3180
+  },
+  "queue_at_end_of_detected_high_rate_phase_bytes": null,
+  "peak_to_32k_sustained_first_sample_seconds": 0,
+  "post_high_rate_to_32k_sustained_first_sample_seconds": null,
+  "rtt_avg_ms": {
+    "mean": 89.60652777777779,
+    "max_sampled_average": 135.84
+  },
+  "nettop_re_tx_raw_sum": 4240.0,
+  "nettop_re_tx_nonzero_samples": 2,
+  "material_input_external_gap_intervals": 0,
+  "max_material_gap_bytes_per_s": 0,
+  "sshd_loopback_recvq_samples_above_64k": 0,
+  "sshd_loopback_recvq_samples_above_128k": 0,
+  "sshd_loopback_recvq_samples_above_256k": 0,
+  "queue_capture_errors": [],
+  "auto_stop_reason": null,
+  "detected_high_rate_first_sample": null,
+  "detected_high_rate_last_sample": null
+}

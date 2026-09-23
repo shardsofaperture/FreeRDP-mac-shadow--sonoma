@@ -1,0 +1,15 @@
+Evidence: experiments/transport-rate-sweep/runs/20260923-073051-200KiB
+Rate selected: 200 KiB/s = 204800 B/s
+BuildLabel: 0.2.0-RateSweep — select fixed rate at launch; runtime: 0.2.0-RateSweep — Fixed 200 KiB/s
+Start UTC: 2026-09-23T11:30:51.213444+00:00; stop UTC: 2026-09-23T11:31:46.515020+00:00
+Bytes: plaintext RDP on loopback; encrypted SSH output externally includes SSH/TCP overhead.
+No client display or visible convergence timing is inferred from these transport counters.
+Loopback FreeRDP→sshd: mean 100128, median 93884, p95 205561, max 233531 B/s (55 one-second samples)
+External sshd→phone: mean 104973, median 101004, p95 210972, max 213372 B/s (55 one-second samples)
+External sampled rtt_avg: mean 83.51 ms; max sampled average 97.81 ms
+External nettop re-tx: raw sum 2728 across 1 nonzero delta samples (field unit not established)
+Loopback materially above external output: 0 aligned 1 s intervals (>16,384 B/s and >20% of external output); sample indices/byte gaps: []
+FreeRDP Send-Q: max 17316 B; end 0 B
+sshd loopback Recv-Q: max 32078 B; end 0 B
+sshd external Send-Q: max 29732 B; end 4200 B
+Approximate drain: not observed before capture stopped
