@@ -17,11 +17,13 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.2.0</string>
+	<string>1.0.0</string>
 	<key>CFBundleVersion</key>
-	<string>0.2.0</string>
+	<string>1.0.0</string>
 	<key>FreeRDPShadowBuildLabel</key>
-	<string>0.2.0 — Fixed 250 KiB/s</string>
+	<string>1.0.0 — 50 ms latest-state / Fixed 250 KiB/s</string>
+	<key>FreeRDPShadowPublicationAggregationMs</key>
+	<integer>50</integer>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
 	<key>LSUIElement</key>

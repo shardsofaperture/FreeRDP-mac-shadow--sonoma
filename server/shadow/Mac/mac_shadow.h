@@ -79,6 +79,27 @@ struct mac_shadow_subsystem
 	HANDLE stopEvent;
 	HANDLE frameEvent;
 	BOOL publishedFrame;
+	/* Guarded by captureSurface->lock, with publicationLock held while the
+	 * worker reads or releases the surface. Ordinary capture damage has one
+	 * first-event deadline; later frames never extend it. */
+	UINT32 aggregationMs;
+	UINT64 captureFirstPendingMs;
+	UINT64 windowCaptureEvents;
+	UINT64 periodCaptureEvents;
+	UINT64 periodPublications;
+	UINT64 periodCoalescedEvents;
+	UINT64 periodSuppressedEvents;
+	UINT64 periodWindowArea;
+	UINT64 periodBypassPublications;
+	UINT64 publicationId;
+	UINT64 lastPublicationMs;
+	UINT64 periodCadenceSumMs;
+	UINT64 periodCadenceCount;
+	UINT64 periodCadenceMinMs;
+	UINT64 periodCadenceMaxMs;
+	UINT64 lastWindowArea;
+	UINT64 lastWindowEvents;
+	UINT64 aggregationReportMs;
 	BOOL audioNegotiated;
 	BOOL audioUnavailable;
 	_Atomic UINT32 audioGeneration;

@@ -1094,6 +1094,17 @@ static int mac_shadow_capture_get_dirty_region(macShadowSubsystem* subsystem,
 	return 1;
 }
 
+/* Caller holds captureSurface->lock. This records events, not a frame queue. */
+static void mac_shadow_aggregation_capture_locked(macShadowSubsystem* subsystem, UINT64 nowMs)
+{
+	if (!subsystem->aggregationMs)
+		return;
+	if (!subsystem->windowCaptureEvents)
+		subsystem->captureFirstPendingMs = nowMs;
+	subsystem->windowCaptureEvents++;
+	subsystem->periodCaptureEvents++;
+}
+
 static int freerdp_image_copy_from_retina(BYTE* pDstData, DWORD DstFormat, int nDstStep, int nXDst,
                                           int nYDst, int nWidth, int nHeight, BYTE* pSrcData,
                                           int nSrcStep, int nXSrc, int nYSrc)
@@ -1308,6 +1319,7 @@ static void mac_shadow_capture_frame(macShadowSubsystem* subsystem,
 		}
 
 		subsystem->captureNeedsFullFrame = FALSE;
+		mac_shadow_aggregation_capture_locked(subsystem, GetTickCount64());
 		/* One level-triggered notification, regardless of how many frames arrive while the
 		 * publisher is busy. Keep the union of unsent damage in captureSurface. */
 		(void)SetEvent(subsystem->frameEvent);
@@ -1368,6 +1380,9 @@ static int mac_shadow_capture_init(macShadowSubsystem* subsystem)
 
 	EnterCriticalSection(&subsystem->publicationLock);
 	subsystem->publishedFrame = FALSE;
+	subsystem->captureFirstPendingMs = 0;
+	subsystem->windowCaptureEvents = 0;
+	subsystem->lastPublicationMs = 0;
 	if (!subsystem->captureSurface)
 		subsystem->captureSurface =
 		    mac_shadow_latest_surface_new((UINT32)subsystem->width, (UINT32)subsystem->height);
@@ -1414,6 +1429,8 @@ static int mac_shadow_capture_release_stream(macShadowSubsystem* subsystem)
 	EnterCriticalSection(&subsystem->publicationLock);
 	mac_shadow_latest_surface_free(subsystem->captureSurface);
 	subsystem->captureSurface = nullptr;
+	subsystem->captureFirstPendingMs = 0;
+	subsystem->windowCaptureEvents = 0;
 	(void)ResetEvent(subsystem->frameEvent);
 	LeaveCriticalSection(&subsystem->publicationLock);
 	return 1;
@@ -2170,10 +2187,100 @@ static int mac_shadow_switch_display_mode(macShadowSubsystem* subsystem, const c
 	return commandSucceeded ? 1 : -1;
 }
 
+static UINT64 mac_shadow_region_area(const REGION16* region)
+{
+	UINT32 count = 0;
+	UINT64 area = 0;
+	const RECTANGLE_16* rects = region16_rects(region, &count);
+	for (UINT32 index = 0; index < count; index++)
+		area += (UINT64)(rects[index].right - rects[index].left) *
+		        (rects[index].bottom - rects[index].top);
+	return area;
+}
+
+/* Caller holds publicationLock, then captureSurface->lock. A later capture
+ * never extends the first event's deadline, including while a subscriber is
+ * still consuming an earlier immutable publication. */
+static UINT32 mac_shadow_aggregation_delay_locked(const macShadowSubsystem* subsystem,
+                                                   const rdpShadowSurface* latest, BOOL refresh,
+                                                   UINT64 nowMs)
+{
+	if (!subsystem->aggregationMs || refresh || !subsystem->publishedFrame || !latest ||
+	    !subsystem->windowCaptureEvents || region16_is_empty(&latest->invalidRegion))
+		return 0;
+	if (nowMs >= subsystem->captureFirstPendingMs + subsystem->aggregationMs)
+		return 0;
+	return (UINT32)(subsystem->captureFirstPendingMs + subsystem->aggregationMs - nowMs);
+}
+
+static UINT32 mac_shadow_aggregation_delay(macShadowSubsystem* subsystem, BOOL refresh,
+                                            UINT64 nowMs)
+{
+	UINT32 delay = 0;
+	if (!subsystem->aggregationMs || refresh)
+		return 0;
+	EnterCriticalSection(&subsystem->publicationLock);
+	rdpShadowSurface* latest = subsystem->captureSurface;
+	if (latest)
+	{
+		EnterCriticalSection(&latest->lock);
+		delay = mac_shadow_aggregation_delay_locked(subsystem, latest, refresh, nowMs);
+		LeaveCriticalSection(&latest->lock);
+	}
+	LeaveCriticalSection(&subsystem->publicationLock);
+	return delay;
+}
+
+static void mac_shadow_aggregation_report(macShadowSubsystem* subsystem, UINT64 nowMs)
+{
+	if (!subsystem->aggregationMs || nowMs - subsystem->aggregationReportMs < 5000)
+		return;
+	EnterCriticalSection(&subsystem->publicationLock);
+	rdpShadowSurface* latest = subsystem->captureSurface;
+	if (latest)
+		EnterCriticalSection(&latest->lock);
+	const UINT64 publications = subsystem->periodPublications;
+	const UINT64 cadenceCount = subsystem->periodCadenceCount;
+	WLog_INFO(TAG,
+	          "Mac publication aggregate: intervalMs=%" PRIu32
+	          " captureEvents=%" PRIu64 " publications=%" PRIu64
+	          " coalescedEvents=%" PRIu64 " suppressedEvents=%" PRIu64
+	          " lastWindowEvents=%" PRIu64 " lastWindowArea=%" PRIu64
+	          " totalPublishedArea=%" PRIu64 " bypassPublications=%" PRIu64
+	          " cadenceMinMs=%" PRIu64 " cadenceMeanMs=%" PRIu64
+	          " cadenceMaxMs=%" PRIu64 " publicationId=%" PRIu64
+	          " pendingCaptureEvents=%" PRIu64 " pendingArea=%" PRIu64,
+	          subsystem->aggregationMs, subsystem->periodCaptureEvents,
+	          publications, subsystem->periodCoalescedEvents,
+	          subsystem->periodSuppressedEvents, subsystem->lastWindowEvents,
+	          subsystem->lastWindowArea, subsystem->periodWindowArea,
+	          subsystem->periodBypassPublications, subsystem->periodCadenceMinMs,
+	          cadenceCount ? subsystem->periodCadenceSumMs / cadenceCount : 0,
+	          subsystem->periodCadenceMaxMs, subsystem->publicationId,
+	          subsystem->windowCaptureEvents,
+	          latest ? mac_shadow_region_area(&latest->invalidRegion) : 0);
+	subsystem->periodCaptureEvents = 0;
+	subsystem->periodPublications = 0;
+	subsystem->periodCoalescedEvents = 0;
+	subsystem->periodSuppressedEvents = 0;
+	subsystem->periodWindowArea = 0;
+	subsystem->periodBypassPublications = 0;
+	subsystem->periodCadenceSumMs = 0;
+	subsystem->periodCadenceCount = 0;
+	subsystem->periodCadenceMinMs = 0;
+	subsystem->periodCadenceMaxMs = 0;
+	subsystem->aggregationReportMs = nowMs;
+	if (latest)
+		LeaveCriticalSection(&latest->lock);
+	LeaveCriticalSection(&subsystem->publicationLock);
+}
+
 static BOOL mac_shadow_publish_pending(macShadowSubsystem* subsystem, BOOL refresh)
 {
 	BOOL result = TRUE;
 	BOOL changed = TRUE;
+	UINT64 windowArea = 0;
+	UINT64 windowEvents = 0;
 	EnterCriticalSection(&subsystem->publicationLock);
 	rdpShadowSurface* latest = subsystem->captureSurface;
 	rdpShadowSurface* surface = subsystem->common.server->surface;
@@ -2192,9 +2299,17 @@ static BOOL mac_shadow_publish_pending(macShadowSubsystem* subsystem, BOOL refre
 	}
 	if (!result || region16_is_empty(&latest->invalidRegion))
 	{
-		(void)ResetEvent(subsystem->frameEvent);
+		if (result)
+			(void)ResetEvent(subsystem->frameEvent);
+		else
+			(void)SetEvent(subsystem->frameEvent);
 		LeaveCriticalSection(&latest->lock);
 		goto out;
+	}
+	if (subsystem->aggregationMs)
+	{
+		windowArea = mac_shadow_region_area(&latest->invalidRegion);
+		windowEvents = subsystem->windowCaptureEvents;
 	}
 	EnterCriticalSection(&surface->lock);
 	result = region16_copy(&surface->invalidRegion, &latest->invalidRegion);
@@ -2230,8 +2345,43 @@ static BOOL mac_shadow_publish_pending(macShadowSubsystem* subsystem, BOOL refre
 		    latest->scanline, rect->left, rect->top, nullptr, FREERDP_FLIP_NONE);
 	}
 	if (result)
+	{
 		region16_clear(&latest->invalidRegion);
-	(void)ResetEvent(subsystem->frameEvent);
+		(void)ResetEvent(subsystem->frameEvent);
+		if (subsystem->aggregationMs)
+		{
+			const UINT64 nowMs = GetTickCount64();
+			subsystem->lastWindowArea = windowArea;
+			subsystem->lastWindowEvents = windowEvents;
+			subsystem->captureFirstPendingMs = 0;
+			subsystem->windowCaptureEvents = 0;
+			if (changed)
+			{
+				subsystem->publicationId++;
+				subsystem->periodPublications++;
+				subsystem->periodWindowArea += windowArea;
+				subsystem->periodCoalescedEvents += windowEvents ? windowEvents - 1 : 0;
+				if (refresh || !subsystem->publishedFrame)
+					subsystem->periodBypassPublications++;
+				if (subsystem->lastPublicationMs && nowMs >= subsystem->lastPublicationMs)
+				{
+					const UINT64 cadence = nowMs - subsystem->lastPublicationMs;
+					subsystem->periodCadenceSumMs += cadence;
+					subsystem->periodCadenceCount++;
+					if (!subsystem->periodCadenceMinMs ||
+					    cadence < subsystem->periodCadenceMinMs)
+						subsystem->periodCadenceMinMs = cadence;
+					subsystem->periodCadenceMaxMs = MAX(subsystem->periodCadenceMaxMs,
+					                                     cadence);
+				}
+				subsystem->lastPublicationMs = nowMs;
+			}
+			else
+				subsystem->periodSuppressedEvents += windowEvents;
+		}
+	}
+	else
+		(void)SetEvent(subsystem->frameEvent);
 	LeaveCriticalSection(&surface->lock);
 	LeaveCriticalSection(&latest->lock);
 	if (result && changed)
@@ -2254,13 +2404,14 @@ static DWORD WINAPI mac_shadow_subsystem_thread(LPVOID arg)
 	macShadowSubsystem* subsystem = (macShadowSubsystem*)arg;
 	wMessagePipe* pipe = subsystem->common.MsgPipe;
 	HANDLE events[] = { subsystem->stopEvent, MessageQueue_Event(pipe->In), subsystem->frameEvent };
+	BOOL retryRefresh = FALSE;
 	for (;;)
 	{
 		const DWORD status = WaitForMultipleObjects(ARRAYSIZE(events), events, FALSE, INFINITE);
 		if ((status == WAIT_FAILED) ||
 		    (WaitForSingleObject(subsystem->stopEvent, 0) == WAIT_OBJECT_0))
 			break;
-		BOOL refresh = FALSE;
+		BOOL refresh = retryRefresh;
 		wMessage message = { 0 };
 		while (MessageQueue_Peek(pipe->In, &message, TRUE))
 		{
@@ -2271,8 +2422,27 @@ static DWORD WINAPI mac_shadow_subsystem_thread(LPVOID arg)
 			if (message.Free)
 				message.Free(&message);
 		}
+		const UINT32 delay =
+		    mac_shadow_aggregation_delay(subsystem, refresh, GetTickCount64());
+		if (delay)
+		{
+			/* frameEvent is manual-reset and remains signaled. Exclude it while
+			 * waiting, but wake immediately for stop or client refresh messages. */
+			(void)WaitForMultipleObjects(2, events, FALSE, delay);
+			continue;
+		}
 		if (!mac_shadow_publish_pending(subsystem, refresh))
+		{
+			/* A failed copy may have partially changed server->surface. Retry
+			 * with a full refresh, even if the failed request was ordinary damage. */
+			retryRefresh = TRUE;
 			WLog_ERR(TAG, "Failed to publish the latest captured frame");
+			/* Keep pending damage and its event for a bounded retry. */
+			(void)WaitForMultipleObjects(2, events, FALSE, 500);
+		}
+		else
+			retryRefresh = FALSE;
+		mac_shadow_aggregation_report(subsystem, GetTickCount64());
 	}
 	return 0;
 }
@@ -2303,6 +2473,14 @@ static UINT32 mac_shadow_enum_monitors(MONITOR_DEF* monitors, UINT32 maxMonitors
 static int mac_shadow_subsystem_init(rdpShadowSubsystem* rdpsubsystem)
 {
 	macShadowSubsystem* subsystem = (macShadowSubsystem*)rdpsubsystem;
+	const char* aggregate = getenv("FREERDP_MAC_SHADOW_PUBLICATION_AGGREGATION_MS");
+	if (aggregate && strcmp(aggregate, "0") != 0 && strcmp(aggregate, "50") != 0)
+	{
+		WLog_ERR(TAG, "Publication aggregation accepts only 0 or 50 ms");
+		return -1;
+	}
+	subsystem->aggregationMs = aggregate && strcmp(aggregate, "50") == 0 ? 50U : 0U;
+	subsystem->aggregationReportMs = GetTickCount64();
 	const char* autoClientProfile = getenv("FREERDP_MAC_SHADOW_AUTO_CLIENT_PROFILE");
 	subsystem->autoClientProfile =
 	    autoClientProfile && (strcmp(autoClientProfile, "0") != 0);

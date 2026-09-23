@@ -352,6 +352,11 @@ typedef NS_ENUM(NSInteger, ShadowServerState)
 		environment[@"FREERDP_MAC_SHADOW_FIXED_RATE_KIB"] = graphicsRateKiB.stringValue;
 	else
 		[environment removeObjectForKey:@"FREERDP_MAC_SHADOW_FIXED_RATE_KIB"];
+	NSNumber* publicationAggregationMs = config[@"PublicationAggregationMs"];
+	if (publicationAggregationMs.unsignedIntegerValue == 50)
+		environment[@"FREERDP_MAC_SHADOW_PUBLICATION_AGGREGATION_MS"] = @"50";
+	else
+		[environment removeObjectForKey:@"FREERDP_MAC_SHADOW_PUBLICATION_AGGREGATION_MS"];
 	NSNumber* largeRefreshBurst = config[@"LargeRefreshBurst"];
 	if (largeRefreshBurst.boolValue)
 		environment[@"FREERDP_MAC_SHADOW_LARGE_REFRESH_BURST"] =

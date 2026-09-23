@@ -176,6 +176,59 @@ static DWORD WINAPI capture_newer(void* arg)
 	return 0;
 }
 
+static void aggregation_event(macShadowSubsystem* mac, UINT64 nowMs, BYTE value,
+                              const RECTANGLE_16* rect)
+{
+	rdpShadowSurface* latest = mac->captureSurface;
+	EnterCriticalSection(&latest->lock);
+	latest->data[(size_t)rect->top * latest->scanline + rect->left * 4U] = value;
+	CHECK(region16_union_rect(&latest->invalidRegion, &latest->invalidRegion, rect));
+	mac_shadow_aggregation_capture_locked(mac, nowMs);
+	CHECK(SetEvent(mac->frameEvent));
+	LeaveCriticalSection(&latest->lock);
+}
+
+static void test_aggregation(macShadowSubsystem* mac)
+{
+	rdpShadowSurface* latest = mac->captureSurface;
+	const RECTANGLE_16 top = { 0, 0, 1, 1 };
+	const RECTANGLE_16 bottom = { 63, 63, 64, 64 };
+	mac->aggregationMs = 50;
+	mac->publishedFrame = TRUE;
+	aggregation_event(mac, 1000, 11, &top);
+	CHECK(mac_shadow_aggregation_delay(mac, FALSE, 1000) == 50);
+	aggregation_event(mac, 1025, 22, &top);
+	aggregation_event(mac, 1040, 33, &bottom);
+	CHECK(mac_shadow_region_area(&latest->invalidRegion) == 2);
+	CHECK(mac_shadow_aggregation_delay(mac, FALSE, 1049) == 1);
+	CHECK(mac_shadow_aggregation_delay(mac, FALSE, 1050) == 0);
+	CHECK(mac->windowCaptureEvents == 3);
+	CHECK(mac_shadow_publish_pending(mac, FALSE));
+	CHECK(mac->publicationId == 1 && mac->periodCoalescedEvents == 2);
+	CHECK(mac->lastWindowArea == 2 && mac->lastWindowEvents == 3);
+	CHECK(mac->common.server->surface->data[0] == 22);
+	CHECK(mac->common.server->surface->data[(size_t)63 * latest->scanline + 63 * 4U] == 33);
+	CHECK(region16_is_empty(&latest->invalidRegion));
+	CHECK(WaitForSingleObject(mac->frameEvent, 0) == WAIT_TIMEOUT);
+	aggregation_event(mac, 1100, 44, &top);
+	CHECK(mac_shadow_aggregation_delay(mac, FALSE, 1149) == 1);
+	CHECK(mac_shadow_aggregation_delay(mac, TRUE, 1100) == 0);
+	CHECK(mac_shadow_publish_pending(mac, TRUE));
+	CHECK(mac->publicationId == 2 && mac->periodBypassPublications == 1);
+	CHECK(mac->common.server->surface->data[0] == 44);
+	mac->publishedFrame = FALSE; /* new connection/first frame bypass */
+	aggregation_event(mac, 1200, 55, &top);
+	CHECK(mac_shadow_aggregation_delay(mac, FALSE, 1200) == 0);
+	CHECK(mac_shadow_publish_pending(mac, FALSE));
+	CHECK(mac->publicationId == 3 && mac->periodBypassPublications == 2);
+	CHECK(mac->common.server->surface->data[0] == 55);
+	mac->aggregationMs = 0; /* production 0.2.0 immediate publication */
+	aggregation_event(mac, 1300, 66, &top);
+	CHECK(mac_shadow_aggregation_delay(mac, FALSE, 1300) == 0);
+	CHECK(mac_shadow_publish_pending(mac, FALSE));
+	CHECK(mac->common.server->surface->data[0] == 66);
+}
+
 static void test_client_sizes(void)
 {
 	const UINT32 sizes[][2] = { {800,600}, {1024,768}, {1280,720}, {1280,800},
@@ -311,6 +364,7 @@ int main(void)
 	CHECK(CloseHandle(publisher));
 	CHECK(WaitForSingleObject(mac->frameEvent, 0) == WAIT_TIMEOUT);
 	shadow_multiclient_release_subscriber(subscriber);
+	test_aggregation(mac);
 	/* Stop joins the message worker before generic teardown can release its queue. */
 	for (UINT32 n = 0; n < 25; n++)
 	{

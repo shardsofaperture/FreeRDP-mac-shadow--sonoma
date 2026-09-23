@@ -2423,6 +2423,7 @@ static BOOL shadow_client_flush_bitmap(rdpShadowClient* client)
 		          " ops=%" PRIu64 " socketQueued=%s%" PRIu32
 		          " socketMax=%" PRIu32 " blockedMs=%" PRIu64
 		          " drain=%.0f periodStaged=%" PRIu64 " pendingTiles=%" PRIu32
+		          " pendingAgeUpperMs=%" PRIu64 " restagedPendingTiles=%" PRIu64
 		          " lifetimePublicationId=%" PRIu64 " lifetimeBurstEntries=%" PRIu64
 		          " periodFirstSubmitMs=%" PRIu64 " periodLastSubmitMs=%" PRIu64
 		          " periodMinTileY=%" PRIu32 " periodMaxTileY=%" PRIu32
@@ -2465,6 +2466,9 @@ static BOOL shadow_client_flush_bitmap(rdpShadowClient* client)
 		          encoder->bitmapPacerMaxQueued, encoder->bitmapPacerBlockedMs,
 		          pacer->drainRate, encoder->bitmapPacerPublications,
 		          shadow_bitmap_pending_tiles(encoder->bitmapState),
+		          encoder->bitmapPendingSinceMs && shadow_bitmap_pending(encoder->bitmapState)
+		              ? nowMs - encoder->bitmapPendingSinceMs : 0,
+		          encoder->bitmapRestagedPendingTiles,
 		          encoder->bitmapPacerPublicationId, encoder->bitmapPacerLifetimeBurstEntries,
 		          encoder->bitmapPacerFirstSubmitMs, encoder->bitmapPacerLastSubmitMs,
 		          encoder->bitmapPacerMinTileY, encoder->bitmapPacerMaxTileY,
@@ -2482,6 +2486,7 @@ static BOOL shadow_client_flush_bitmap(rdpShadowClient* client)
 		encoder->bitmapPacerBlockedMs = 0;
 		encoder->bitmapPacerMaxQueued = 0;
 		encoder->bitmapPacerPublications = 0;
+		encoder->bitmapRestagedPendingTiles = 0;
 		encoder->bitmapPacerEstimatedBytes = 0;
 		encoder->bitmapPacerAdmittedBytes = 0;
 		encoder->bitmapPacerPayloadBytes = 0;
@@ -2735,6 +2740,10 @@ static BOOL shadow_client_flush_bitmap(rdpShadowClient* client)
 		shadow_bitmap_commit(encoder->bitmapState, &tile);
 #endif
 	}
+#if defined(__APPLE__)
+	if (!shadow_bitmap_pending(encoder->bitmapState))
+		encoder->bitmapPendingSinceMs = 0;
+#endif
 	return TRUE;
 }
 
@@ -2812,6 +2821,9 @@ static BOOL shadow_client_send_surface_update(rdpShadowClient* client, SHADOW_GF
 		                                colorDepth, maxRequestSize))
 		{
 			shadow_bitmap_free(encoder->bitmapState);
+#if defined(__APPLE__)
+			encoder->bitmapPendingSinceMs = 0;
+#endif
 			encoder->bitmapState =
 			    shadow_bitmap_new(surface->width, surface->height, colorDepth, maxRequestSize);
 			if (encoder->bitmapState)
@@ -2828,9 +2840,11 @@ static BOOL shadow_client_send_surface_update(rdpShadowClient* client, SHADOW_GF
 		}
 		BOOL staged = FALSE;
 #if defined(__APPLE__)
+		const UINT32 pendingBefore = shadow_bitmap_pending_tiles(encoder->bitmapState);
+		const UINT64 stageNowMs = GetTickCount64();
 		shadowPublicationResult publication = { 0 };
 		staged = shadow_publication_stage(encoder->bitmapState, &encoder->bitmapPacer,
-		                                  surface, &invalidRegion, GetTickCount64(), &publication);
+		                                  surface, &invalidRegion, stageNowMs, &publication);
 #else
 		staged = shadow_bitmap_stage(encoder->bitmapState, surface->data, surface->format,
 		                             surface->scanline, &invalidRegion);
@@ -2838,6 +2852,14 @@ static BOOL shadow_client_send_surface_update(rdpShadowClient* client, SHADOW_GF
 		if (staged)
 		{
 #if defined(__APPLE__)
+			encoder->bitmapRestagedPendingTiles += pendingBefore;
+			if (shadow_bitmap_pending(encoder->bitmapState))
+			{
+				if (!encoder->bitmapPendingSinceMs)
+					encoder->bitmapPendingSinceMs = stageNowMs;
+			}
+			else
+				encoder->bitmapPendingSinceMs = 0;
 			encoder->bitmapPacerPublications++;
 			encoder->bitmapPacerPublicationId++;
 			if (encoder->bitmapCoverageEnabled && publication.desktopArea &&

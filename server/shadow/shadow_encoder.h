@@ -103,6 +103,8 @@ struct rdp_shadow_encoder
 	UINT32 bitmapPacerMaxQueued;
 	UINT64 bitmapPacerPublications;
 	UINT64 bitmapPacerPublicationId;
+	UINT64 bitmapPendingSinceMs;
+	UINT64 bitmapRestagedPendingTiles;
 	UINT64 bitmapPacerLifetimeBurstEntries;
 	UINT64 bitmapPacerLastRefreshPixels;
 	UINT32 bitmapPacerLastDecision;
