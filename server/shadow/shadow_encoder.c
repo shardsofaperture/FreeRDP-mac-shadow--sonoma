@@ -18,6 +18,10 @@
 
 #include <freerdp/config.h>
 
+#if defined(__APPLE__)
+#include <unistd.h>
+#endif
+
 #include <winpr/assert.h>
 
 #include "shadow.h"
@@ -468,6 +472,20 @@ static int shadow_encoder_uninit(rdpShadowEncoder* encoder)
 
 int shadow_encoder_reset(rdpShadowEncoder* encoder)
 {
+#if defined(__APPLE__)
+	const UINT32 fixedRateKiB = encoder->bitmapPacer.fixed
+	                                ? (UINT32)(encoder->bitmapPacer.baseRate / 1024.0)
+	                                : 0;
+	const BOOL largeRefreshBurst = encoder->bitmapPacer.largeRefreshBurstEnabled;
+	const BOOL diagnosticM = encoder->bitmapPacer.largeRefreshDiagnosticM;
+	shadow_pacer_reset(&encoder->bitmapPacer);
+	if (fixedRateKiB && !shadow_pacer_set_fixed_rate_kib(&encoder->bitmapPacer, fixedRateKiB))
+		return -1;
+	if (largeRefreshBurst &&
+	    !(diagnosticM ? shadow_pacer_enable_large_refresh_diagnostic_m(&encoder->bitmapPacer)
+	                  : shadow_pacer_enable_large_refresh_burst(&encoder->bitmapPacer)))
+		return -1;
+#endif
 	shadow_bitmap_free(encoder->bitmapState);
 	encoder->bitmapState = nullptr;
 	/* A cache failure is scoped to the previous encoder generation.  Activation
@@ -588,6 +606,50 @@ rdpShadowEncoder* shadow_encoder_new(rdpShadowClient* client)
 	encoder->server = server;
 	encoder->fps = 16;
 	encoder->maxFps = 32;
+#if defined(__APPLE__)
+	shadow_pacer_reset(&encoder->bitmapPacer);
+	UINT32 fixedRateKiB = 0;
+	const char* fixedRate = getenv("FREERDP_MAC_SHADOW_FIXED_RATE_KIB");
+	if (!shadow_pacer_parse_fixed_rate_kib(fixedRate, &fixedRateKiB) ||
+	    (fixedRateKiB && !shadow_pacer_set_fixed_rate_kib(&encoder->bitmapPacer, fixedRateKiB)))
+	{
+		WLog_ERR(TAG,
+		         "Invalid FREERDP_MAC_SHADOW_FIXED_RATE_KIB: use 0, 150, 175, 200, 250, 300, or 400");
+		free(encoder);
+		return nullptr;
+	}
+	const char* largeRefreshBurst = getenv("FREERDP_MAC_SHADOW_LARGE_REFRESH_BURST");
+	if (largeRefreshBurst && (strcmp(largeRefreshBurst, "0") != 0) &&
+	    (strcmp(largeRefreshBurst, "1") != 0) &&
+	    (strcmp(largeRefreshBurst, "2") != 0))
+	{
+		WLog_ERR(TAG,
+		         "Invalid FREERDP_MAC_SHADOW_LARGE_REFRESH_BURST: use 0, 1, or 2");
+		free(encoder);
+		return nullptr;
+	}
+	if (largeRefreshBurst && (strcmp(largeRefreshBurst, "1") == 0 ||
+	                          strcmp(largeRefreshBurst, "2") == 0) &&
+	    !(strcmp(largeRefreshBurst, "2") == 0
+	          ? shadow_pacer_enable_large_refresh_diagnostic_m(&encoder->bitmapPacer)
+	          : shadow_pacer_enable_large_refresh_burst(&encoder->bitmapPacer)))
+	{
+		WLog_ERR(TAG, "Large-refresh burst requires fixed 150 KiB/s mode");
+		free(encoder);
+		return nullptr;
+	}
+	encoder->bitmapPacerSocketFd = -1;
+	const char* diagnostics = getenv("FREERDP_MAC_SHADOW_PACING_DIAGNOSTICS");
+	encoder->bitmapPacerDiagnostics = diagnostics && strcmp(diagnostics, "1") == 0;
+	const char* coverage = getenv("FREERDP_MAC_SHADOW_COVERAGE_SCHEDULER");
+	if (coverage && strcmp(coverage, "0") != 0 && strcmp(coverage, "1") != 0)
+	{
+		WLog_ERR(TAG, "Invalid FREERDP_MAC_SHADOW_COVERAGE_SCHEDULER: use 0 or 1");
+		free(encoder);
+		return nullptr;
+	}
+	encoder->bitmapCoverageEnabled = coverage && strcmp(coverage, "1") == 0;
+#endif
 
 	if (shadow_encoder_init(encoder) < 0)
 	{
@@ -603,6 +665,10 @@ void shadow_encoder_free(rdpShadowEncoder* encoder)
 	if (!encoder)
 		return;
 
+#if defined(__APPLE__)
+	if (encoder->bitmapPacerSocketFd >= 0)
+		close(encoder->bitmapPacerSocketFd);
+#endif
 	shadow_encoder_uninit(encoder);
 	shadow_bitmap_free(encoder->bitmapState);
 	free(encoder);

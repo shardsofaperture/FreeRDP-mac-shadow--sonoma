@@ -1,5 +1,34 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<dict/>
+<dict>
+	<key>BuildLabel</key>
+	<string>0.2.0 — Fixed 250 KiB/s</string>
+	<key>ExperimentalArm</key>
+	<string>Production</string>
+	<key>PacingDiagnostics</key>
+	<false/>
+	<key>SocketSendBufferKiB</key>
+	<integer>0</integer>
+	<key>GraphicsPacingMode</key>
+	<string>Fixed</string>
+	<key>GraphicsRateKiBPerSecond</key>
+	<integer>250</integer>
+	<key>GraphicsBurstBytes</key>
+	<integer>0</integer>
+	<key>LargeRefreshBurst</key>
+	<false/>
+	<key>CoverageScheduler</key>
+	<false/>
+	<key>ListenerAddress</key>
+	<string>127.0.0.1</string>
+	<key>ListenerPort</key>
+	<integer>3390</integer>
+	<key>Security</key>
+	<string>rdp</string>
+	<key>MaxConnections</key>
+	<integer>1</integer>
+	<key>AutomaticClientProfile</key>
+	<true/>
+</dict>
 </plist>

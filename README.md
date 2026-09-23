@@ -19,8 +19,15 @@ FreeRDP's defaults or expose the listener to a LAN or the Internet.
 
 ## Status
 
-Build 0.1.9 is the current hardware-test candidate. Its Android,
-Windows 98, and aged-session acceptance checks remain outstanding.
+Mac Shadow RDP **0.2.0** is the stable production app, using fixed 250 KiB/s
+graphics pacing and the system-default socket buffer. The rate was selected
+from the [physical RateSweep campaign](experiments/transport-rate-sweep/CAMPAIGN.md):
+300 and 400 KiB/s added downstream queue pressure without a clear client-visible
+gain. The signed app is installed at `~/Applications/FreeRDP Shadow.app` and
+listens only on `127.0.0.1:3390` behind SSH. The 0.1.9 recovery app remains
+available. See the [0.2.0 release note](docs/mac-shadow-0.2.0.md) for checks
+and limits; Windows 98, Mac RDC, and aged-session retesting of this exact app
+remains outstanding.
 
 The shadow CLI now compiles and links on macOS 14.7.1 on Intel. A physical
 Windows 98 SE system running Microsoft RDP Client 5.2 has connected at

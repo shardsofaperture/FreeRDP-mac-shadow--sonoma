@@ -15,6 +15,17 @@ typedef struct
 	BOOL copy;
 } shadowBitmapTile;
 
+typedef struct
+{
+	UINT32 cursor;
+	UINT32 rows;
+	UINT32 columns;
+	UINT32 rowStep;
+	BOOL enabled;
+	BOOL active;
+	BOOL moveFallback;
+} shadowBitmapScheduleState;
+
 /* A warm-cache probe is a hint.  Exceeding this bound falls back to a bitmap
  * update, which is always safe and keeps a repetitive frame from monopolizing
  * the shadow session. */
@@ -34,6 +45,10 @@ BOOL shadow_bitmap_size_matches(const shadowBitmapState* state, UINT32 width, UI
 BOOL shadow_bitmap_stage(shadowBitmapState* state, const BYTE* pixels, UINT32 format, UINT32 stride,
                          const REGION16* refresh);
 BOOL shadow_bitmap_pending(const shadowBitmapState* state);
+UINT32 shadow_bitmap_pending_tiles(const shadowBitmapState* state);
+void shadow_bitmap_enable_coverage(shadowBitmapState* state, BOOL enabled);
+void shadow_bitmap_note_publication_area(shadowBitmapState* state, UINT64 area, UINT64 total);
+shadowBitmapScheduleState shadow_bitmap_schedule_state(const shadowBitmapState* state);
 BOOL shadow_bitmap_next(shadowBitmapState* state, BOOL allowCopy, shadowBitmapTile* tile);
 void shadow_bitmap_commit(shadowBitmapState* state, const shadowBitmapTile* tile);
 const BYTE* shadow_bitmap_pixels(const shadowBitmapState* state, UINT32* stride);

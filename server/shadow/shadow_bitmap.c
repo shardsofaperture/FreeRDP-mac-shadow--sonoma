@@ -13,7 +13,8 @@
 
 struct shadow_bitmap_state
 {
-	UINT32 width, height, stride, columns, count, cursor, bitsPerPixel, bytesPerPixel, format;
+	UINT32 width, height, stride, columns, rows, count, cursor, bitsPerPixel, bytesPerPixel, format;
+	UINT32 coverageStep, coverageInverse;
 	UINT32 maxRequestSize;
 	UINT32 tileWidth, tileHeight;
 	BYTE* latest;
@@ -25,9 +26,22 @@ struct shadow_bitmap_state
 	BOOL reverseX;
 	BOOL reverseY;
 	BOOL haveMove;
+	BOOL coverageEnabled;
+	BOOL coverageActive;
 	INT32 moveX, moveY;
 	UINT32 lastCopyCandidateProbes;
 };
+
+static UINT32 bitmap_gcd(UINT32 a, UINT32 b)
+{
+	while (b)
+	{
+		const UINT32 remainder = a % b;
+		a = b;
+		b = remainder;
+	}
+	return a;
+}
 
 UINT32 shadow_bitmap_color_depth(UINT32 requested)
 {
@@ -108,8 +122,22 @@ shadowBitmapState* shadow_bitmap_new(UINT32 width, UINT32 height, UINT32 bitsPer
 	}
 	state->stride = ((width + 3U) & ~3U) * state->bytesPerPixel;
 	state->columns = (width + state->tileWidth - 1) / state->tileWidth;
-	state->count =
-	    state->columns * ((height + state->tileHeight - 1) / state->tileHeight);
+	state->rows = (height + state->tileHeight - 1) / state->tileHeight;
+	state->count = state->columns * state->rows;
+	state->coverageStep = state->rows / 2U;
+	while ((state->coverageStep > 1U) &&
+	       (bitmap_gcd(state->coverageStep, state->rows) != 1U))
+		state->coverageStep--;
+	if (!state->coverageStep)
+		state->coverageStep = 1U;
+	for (UINT32 value = 1; value <= state->rows; value++)
+	{
+		if (((UINT64)value * state->coverageStep) % state->rows == (1U % state->rows))
+		{
+			state->coverageInverse = value;
+			break;
+		}
+	}
 	state->latest = calloc(height, state->stride);
 	state->sent = calloc(height, state->stride);
 	state->known = calloc(state->count, 1);
@@ -193,12 +221,56 @@ BOOL shadow_bitmap_stage(shadowBitmapState* state, const BYTE* pixels, UINT32 fo
 		state->dirty[index] = !state->known[index] || !pixels_equal(state, &tile, tile.x, tile.y);
 		state->pending += state->dirty[index] ? 1U : 0U;
 	}
+	if (!state->pending)
+		state->coverageActive = FALSE;
 	return TRUE;
 }
 
 BOOL shadow_bitmap_pending(const shadowBitmapState* state)
 {
 	return state && (state->pending > 0);
+}
+
+UINT32 shadow_bitmap_pending_tiles(const shadowBitmapState* state)
+{
+	return state ? state->pending : 0;
+}
+
+void shadow_bitmap_enable_coverage(shadowBitmapState* state, BOOL enabled)
+{
+	if (!state)
+		return;
+	state->coverageEnabled = enabled;
+	if (!enabled)
+		state->coverageActive = FALSE;
+}
+
+void shadow_bitmap_note_publication_area(shadowBitmapState* state, UINT64 area, UINT64 total)
+{
+	if (!state || !state->coverageEnabled)
+		return;
+	if (!state->pending)
+		state->coverageActive = FALSE;
+	else if (total && area * 4U >= total &&
+	         state->pending >= MAX(8U, state->rows * 2U))
+		state->coverageActive = TRUE;
+	/* A small replacement retains coverage while older unsent damage remains. */
+}
+
+shadowBitmapScheduleState shadow_bitmap_schedule_state(const shadowBitmapState* state)
+{
+	shadowBitmapScheduleState result = { 0 };
+	if (state)
+	{
+		result.cursor = state->cursor;
+		result.rows = state->rows;
+		result.columns = state->columns;
+		result.rowStep = state->coverageStep;
+		result.enabled = state->coverageEnabled;
+		result.active = state->coverageActive && !state->haveMove;
+		result.moveFallback = state->coverageActive && state->haveMove;
+	}
+	return result;
 }
 
 static BOOL source_known(const shadowBitmapState* state, const shadowBitmapTile* tile, UINT32 x,
@@ -381,12 +453,22 @@ BOOL shadow_bitmap_next(shadowBitmapState* state, BOOL allowCopy, shadowBitmapTi
 	for (UINT32 n = 0; n < state->count; n++)
 	{
 		const UINT32 ordinal = (state->cursor + n) % state->count;
-		UINT32 row = ordinal / state->columns;
-		UINT32 col = ordinal % state->columns;
-		if (state->reverseY)
-			row = state->count / state->columns - 1U - row;
-		if (state->reverseX)
-			col = state->columns - 1U - col;
+		UINT32 row = 0, col = 0;
+		if (state->coverageActive && !state->haveMove)
+		{
+			row = (UINT32)(((UINT64)(ordinal % state->rows) *
+			                state->coverageStep) % state->rows);
+			col = ordinal / state->rows;
+		}
+		else
+		{
+			row = ordinal / state->columns;
+			col = ordinal % state->columns;
+			if (state->reverseY)
+				row = state->rows - 1U - row;
+			if (state->reverseX)
+				col = state->columns - 1U - col;
+		}
 		const UINT32 index = row * state->columns + col;
 		if (!state->dirty[index])
 			continue;
@@ -419,12 +501,21 @@ void shadow_bitmap_commit(shadowBitmapState* state, const shadowBitmapTile* tile
 		state->pending--;
 	UINT32 row = tile->index / state->columns;
 	UINT32 col = tile->index % state->columns;
-	if (state->reverseY)
-		row = state->count / state->columns - 1U - row;
-	if (state->reverseX)
-		col = state->columns - 1U - col;
-	state->cursor =
-	    (row * state->columns + col + (state->dirty[tile->index] ? 0U : 1U)) % state->count;
+	UINT32 ordinal = 0;
+	if (state->coverageActive && !state->haveMove)
+		ordinal = col * state->rows +
+		          (UINT32)(((UINT64)row * state->coverageInverse) % state->rows);
+	else
+	{
+		if (state->reverseY)
+			row = state->rows - 1U - row;
+		if (state->reverseX)
+			col = state->columns - 1U - col;
+		ordinal = row * state->columns + col;
+	}
+	state->cursor = (ordinal + (state->dirty[tile->index] ? 0U : 1U)) % state->count;
+	if (!state->pending)
+		state->coverageActive = FALSE;
 }
 
 const BYTE* shadow_bitmap_pixels(const shadowBitmapState* state, UINT32* stride)
