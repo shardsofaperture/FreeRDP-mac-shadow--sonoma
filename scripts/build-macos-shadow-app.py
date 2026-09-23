@@ -15,8 +15,8 @@ ROOT = Path(__file__).resolve().parent.parent
 SIGNING_IDENTITY = 'Apple Development: shardsofaperture (H7V72A5WH6)'
 BUNDLE_ID = 'io.freerdp.shadow.sonoma.menu'
 EXPERIMENT_VERSION = '0.2.0'
-PRODUCTION_VERSION = '0.2.0'
-PRODUCTION_LABEL = '0.2.0 — Fixed 250 KiB/s'
+PRODUCTION_VERSION = '1.0.0'
+PRODUCTION_LABEL = '1.0.0 — 50 ms latest-state / Fixed 250 KiB/s'
 EXPERIMENT_ARMS = {
     'A': {'socket_kib': 0, 'rate_kib': 0, 'label': '0.2.0A'},
     'B': {'socket_kib': 32, 'rate_kib': 0, 'label': '0.2.0B'},
@@ -47,6 +47,9 @@ EXPERIMENT_ARMS = {
           'coverage_scheduler': True},
     'RateSweep': {'socket_kib': 0, 'rate_kib': 0,
                   'label': '0.2.0-RateSweep — select fixed rate at launch'},
+    'AggregationA': {'socket_kib': 0, 'rate_kib': 250,
+                     'label': '0.2.1A — 50 ms latest-state aggregator / Fixed 250 KiB/s',
+                     'publication_aggregation_ms': 50},
 }
 
 
@@ -156,15 +159,16 @@ def verify_production_config(metadata, config):
         'CFBundleShortVersionString': PRODUCTION_VERSION,
         'CFBundleVersion': PRODUCTION_VERSION,
         'FreeRDPShadowBuildLabel': PRODUCTION_LABEL,
+        'FreeRDPShadowPublicationAggregationMs': 50,
     }
     expected_config = {
         'BuildLabel': PRODUCTION_LABEL,
-        'ExperimentalArm': 'Production',
         'PacingDiagnostics': False,
         'SocketSendBufferKiB': 0,
         'GraphicsPacingMode': 'Fixed',
         'GraphicsRateKiBPerSecond': 250,
         'GraphicsBurstBytes': 0,
+        'PublicationAggregationMs': 50,
         'LargeRefreshBurst': False,
         'CoverageScheduler': False,
         'ListenerAddress': '127.0.0.1',
@@ -181,6 +185,8 @@ def verify_production_config(metadata, config):
     for name, expected in expected_config.items():
         if config.get(name) != expected:
             raise RuntimeError(f'Production ShadowConfig.plist {name}: expected {expected!r}')
+    if 'ExperimentalArm' in config:
+        raise RuntimeError('Production ShadowConfig.plist must not select an experiment')
 
 
 def main():
@@ -199,7 +205,7 @@ def main():
         parser.error('--release-candidate selects its own unused dist path')
     build = args.build_dir.resolve()
     candidate_number = None
-    capture_provenance = args.release_candidate or args.experimental_arm in ('N', 'RateSweep')
+    capture_provenance = not args.experimental_arm or args.release_candidate or args.experimental_arm in ('N', 'RateSweep', 'AggregationA')
     if args.release_candidate:
         candidate_number = 1
         while any((ROOT / 'dist' /
@@ -211,13 +217,16 @@ def main():
     elif args.output:
         destination = args.output.resolve()
     elif args.experimental_arm:
-        suffix = ('-RateSweep' if args.experimental_arm == 'RateSweep'
-                  else args.experimental_arm)
-        destination = (ROOT / 'dist' /
-                       f'FreeRDP Shadow {EXPERIMENT_VERSION}{suffix}.app').resolve()
+        if args.experimental_arm == 'AggregationA':
+            destination = (ROOT / 'dist' / 'FreeRDP Shadow 0.2.1A.app').resolve()
+        else:
+            suffix = ('-RateSweep' if args.experimental_arm == 'RateSweep'
+                      else args.experimental_arm)
+            destination = (ROOT / 'dist' /
+                           f'FreeRDP Shadow {EXPERIMENT_VERSION}{suffix}.app').resolve()
     else:
         destination = (ROOT / 'dist' / f'FreeRDP Shadow {PRODUCTION_VERSION}.app').resolve()
-    if args.experimental_arm in ('N', 'RateSweep') and any(path.exists() for path in
+    if args.experimental_arm in ('N', 'RateSweep', 'AggregationA') and any(path.exists() for path in
                                             (destination, Path(str(destination.with_suffix('')) + '.source.patch'),
                                              Path(str(destination.with_suffix('')) + '.sha256.txt'))):
         raise RuntimeError(f'Preserving existing diagnostic candidate: {destination}')
@@ -266,14 +275,17 @@ def main():
                            'Fixed' if rate_kib else 'Adaptive')
             burst_bytes = (max(rate_kib * 1024 // 10, 64 * 64 * 4 + 30 + 64)
                            if rate_kib else 0)
+            if arm == 'AggregationA':
+                burst_bytes = 0  # Match signed 0.2.0 production metadata exactly.
             large_refresh_burst = experiment.get('large_refresh_burst', False)
             coverage_scheduler = experiment.get('coverage_scheduler', False)
             diagnostic_m = arm == 'M' or args.release_candidate
             burst_rate = 600 if diagnostic_m else 300
             burst_duration = 500 if diagnostic_m else 150
             burst_cap = 256 * 1024 if diagnostic_m else 48 * 1024
-            metadata['CFBundleShortVersionString'] = EXPERIMENT_VERSION
-            metadata['CFBundleVersion'] = EXPERIMENT_VERSION
+            bundle_version = '0.2.1' if arm == 'AggregationA' else EXPERIMENT_VERSION
+            metadata['CFBundleShortVersionString'] = bundle_version
+            metadata['CFBundleVersion'] = bundle_version
             metadata['FreeRDPShadowBuildLabel'] = build_label
             metadata['FreeRDPShadowExperimentalArm'] = arm
             metadata['FreeRDPShadowPacingDiagnostics'] = True
@@ -283,6 +295,8 @@ def main():
             metadata['FreeRDPShadowGraphicsBurstBytes'] = burst_bytes
             metadata['FreeRDPShadowLargeRefreshBurst'] = large_refresh_burst
             metadata['FreeRDPShadowCoverageScheduler'] = coverage_scheduler
+            if arm == 'AggregationA':
+                metadata['FreeRDPShadowPublicationAggregationMs'] = 50
             if large_refresh_burst:
                 metadata['FreeRDPShadowLargeRefreshBurstRateKiBPerSecond'] = burst_rate
                 metadata['FreeRDPShadowLargeRefreshBurstDurationMs'] = burst_duration
@@ -305,6 +319,8 @@ def main():
                 'MaxConnections': 1,
                 'AutomaticClientProfile': True,
             })
+            if arm == 'AggregationA':
+                config['PublicationAggregationMs'] = 50
             if large_refresh_burst:
                 config.update({
                     'LargeRefreshBurstRateKiBPerSecond': burst_rate,
@@ -324,7 +340,14 @@ def main():
                 'untrackedSourceFiles': untracked_sources,
                 'buildDirectory': str(build),
                 'configuration': 'Release; WITH_JSONC_REQUIRED=ON; BUILD_TESTING=OFF',
-                'policy': ('RateSweep: one launch-selected fixed rate from '
+                'policy': ('1.0.0 production: 50 ms first-damage publication gate; '
+                           'fixed 256000 B/s; ordinary F bitmap traversal; no adaptive '
+                           'probing, burst, coverage, or socket cap'
+                           if not args.experimental_arm and not args.release_candidate else
+                           '0.2.1A: 50 ms first-damage publication gate; fixed 256000 B/s; '
+                           'ordinary F bitmap traversal; no burst; system-default socket buffer'
+                           if args.experimental_arm == 'AggregationA' else
+                           'RateSweep: one launch-selected fixed rate from '
                            '150, 200, 250, 300, 400 KiB/s; ordinary F bitmap traversal; '
                            'no burst; system-default socket buffer'
                            if args.experimental_arm == 'RateSweep' else
@@ -423,7 +446,7 @@ def main():
                 raise RuntimeError(f'Bundled server smoke check failed: {version.stdout}{version.stderr}')
             print(version.stdout.strip())
         backup = Path(temporary) / 'previous.app'
-        if args.experimental_arm in ('N', 'RateSweep') and destination.exists():
+        if args.experimental_arm in ('N', 'RateSweep', 'AggregationA') and destination.exists():
             raise RuntimeError(f'Preserving existing diagnostic candidate: {destination}')
         if destination.exists():
             destination.rename(backup)

@@ -11,7 +11,7 @@ tunnel. Legacy RDP security is required for this client, but must not weaken
 FreeRDP's defaults or expose the listener to a LAN or the Internet.
 
 > [!CAUTION]
-> This project is an alpha-quality, machine-specific development build. It has
+> This is a machine-specific build. It has
 > been compiled and exercised on the target Intel Sonoma iMac with Microsoft
 > RDP 5.2 on Windows 98 SE, but lifecycle, automatic display-mode switching,
 > permissions, reconnect stress, and broader client compatibility are not yet
@@ -19,15 +19,17 @@ FreeRDP's defaults or expose the listener to a LAN or the Internet.
 
 ## Status
 
-Mac Shadow RDP **0.2.0** is the stable production app, using fixed 250 KiB/s
-graphics pacing and the system-default socket buffer. The rate was selected
+Mac Shadow RDP **1.0.0** is the production app, promoted from the physically
+accepted 0.2.1A behavior. It is installed at
+`~/Applications/FreeRDP Shadow.app` and uses fixed 250 KiB/s
+graphics pacing, the system-default socket buffer, and 50 ms latest-state
+publication aggregation. The rate was selected
 from the [physical RateSweep campaign](experiments/transport-rate-sweep/CAMPAIGN.md):
 300 and 400 KiB/s added downstream queue pressure without a clear client-visible
-gain. The signed app is installed at `~/Applications/FreeRDP Shadow.app` and
-listens only on `127.0.0.1:3390` behind SSH. The 0.1.9 recovery app remains
-available. See the [0.2.0 release note](docs/mac-shadow-0.2.0.md) for checks
-and limits; Windows 98, Mac RDC, and aged-session retesting of this exact app
-remains outstanding.
+gain. It listens only on `127.0.0.1:3390` behind SSH. Continuous video can
+cause major lag; the user accepted this limitation for 1.0.0. The 0.2.0
+bundle and 0.1.9 recovery app remain available. See the
+[1.0.0 release note](docs/mac-shadow-1.0.0.md) for checks and limits.
 
 The shadow CLI now compiles and links on macOS 14.7.1 on Intel. A physical
 Windows 98 SE system running Microsoft RDP Client 5.2 has connected at
@@ -46,7 +48,7 @@ quarantine, and an 8 MiB text limit; file transfer remains unimplemented.
 Warm-cache copy search and shadow channel servicing are bounded so a busy
 session can return to input and graphics work between ordered output slices.
 
-Known alpha limitations include:
+Known limitations include:
 
 - automatic display-mode switching relies on explicitly configured local
   helper executables and has completed only an initial connect/disconnect test;
@@ -141,7 +143,7 @@ connection. Stop it with `Ctrl+C` in its Mac Terminal when it is no longer
 needed.
 
 The listener uses legacy RDP security for client compatibility and has no
-authentication in this alpha command. It must remain bound to `127.0.0.1` and
+authentication in this compatibility mode. It must remain bound to `127.0.0.1` and
 must not be exposed directly to a LAN or the Internet.
 
 ## Menu-bar service on the validated iMac
@@ -162,7 +164,7 @@ To build without installing or launching, run:
 python3 scripts/build-macos-shadow-app.py
 ```
 
-The production output is `dist/FreeRDP Shadow.app`. It contains the Release server
+The production output is `dist/FreeRDP Shadow 1.0.0.app`. It contains the Release server
 and its non-system libraries; it does not depend on a development build directory.
 The installer uses this same bundle. Regression tests stay in the separate test
 build. See [production behavior and validation](docs/mac-shadow-latency.md).

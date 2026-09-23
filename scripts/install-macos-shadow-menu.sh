@@ -3,7 +3,7 @@ set -eu
 
 script_dir="${0:A:h}"
 repo_root="${script_dir:h}"
-built_app="${repo_root}/dist/FreeRDP Shadow 0.2.0.app"
+built_app="${repo_root}/dist/FreeRDP Shadow 1.0.0.app"
 app_dir="${HOME}/Applications/FreeRDP Shadow.app"
 contents_dir="${app_dir}/Contents"
 macos_dir="${contents_dir}/MacOS"

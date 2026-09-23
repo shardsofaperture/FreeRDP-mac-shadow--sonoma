@@ -3,9 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>BuildLabel</key>
-	<string>0.2.0 — Fixed 250 KiB/s</string>
-	<key>ExperimentalArm</key>
-	<string>Production</string>
+	<string>1.0.0 — 50 ms latest-state / Fixed 250 KiB/s</string>
 	<key>PacingDiagnostics</key>
 	<false/>
 	<key>SocketSendBufferKiB</key>
@@ -16,6 +14,8 @@
 	<integer>250</integer>
 	<key>GraphicsBurstBytes</key>
 	<integer>0</integer>
+	<key>PublicationAggregationMs</key>
+	<integer>50</integer>
 	<key>LargeRefreshBurst</key>
 	<false/>
 	<key>CoverageScheduler</key>

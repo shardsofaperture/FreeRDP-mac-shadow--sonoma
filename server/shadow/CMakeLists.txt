@@ -124,6 +124,10 @@ if(BUILD_TESTING)
     shadow_publication.c shadow_bitmap.c shadow_pacer.c shadow_surface.c)
   target_link_libraries(TestShadowLatencyWorkload PRIVATE freerdp winpr)
   add_test(NAME TestShadowLatencyWorkload COMMAND TestShadowLatencyWorkload)
+  add_executable(TestShadowAggregationWorkload test/TestShadowAggregationWorkload.c
+    shadow_publication.c shadow_bitmap.c shadow_pacer.c shadow_surface.c)
+  target_link_libraries(TestShadowAggregationWorkload PRIVATE freerdp winpr)
+  add_test(NAME TestShadowAggregationWorkload COMMAND TestShadowAggregationWorkload)
   add_executable(TestShadowCoverage test/TestShadowCoverage.c
     shadow_publication.c shadow_bitmap.c shadow_pacer.c shadow_surface.c)
   target_link_libraries(TestShadowCoverage PRIVATE freerdp winpr)
