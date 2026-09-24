@@ -18,7 +18,7 @@ The signed app is built at `dist/FreeRDP Shadow 1.0.0.app` and installed at
 ## Selected behavior and evidence
 
 The fixed graphics budget is **250 KiB/s = 256000 B/s**. The [physical
-RateSweep campaign](../experiments/transport-rate-sweep/CAMPAIGN.md) found it
+RateSweep findings](mac-shadow-engineering-history.md#transport-rate-selection) found it
 to be the highest tested low-queue rate with an estimated three-second large
 foreground-window refresh and responsive icons on the phone. At 300 KiB/s,
 sshd loopback Recv-Q peaked near 279 KiB and took about 3.56 seconds to
@@ -26,7 +26,7 @@ recover to the sustained 32 KiB band. At 400 KiB/s, it peaked near 315 KiB,
 took about 7.64 seconds to recover, and gave no reported visible gain. Those
 observations do not establish a general network or client decoding limit.
 
-The [0.2.1A experiment](mac-shadow-0.2.1a.md) added a 50 ms first-damage
+The [0.2.1A implementation](mac-shadow-engineering-history.md#publication-aggregation) added a 50 ms first-damage
 publication gate to the private Mac capture surface. Capture events within a
 window union damage and retain only newest pixels; the generic bitmap sender
 still replaces obsolete unsent targets against its committed sent cache. First
@@ -86,7 +86,7 @@ operation, and actual reboot/login autostart of this exact 1.0.0 bundle remain
 separate acceptance work. An enabled SMAppService registration and a correct
 installed target do not by themselves prove startup after reboot.
 
-The signed artifact member hashes are recorded in
+The release bundle member hashes are recorded in
 `dist/FreeRDP Shadow 1.0.0.sha256.txt`. The adjacent `.source.patch` and
 bundled `SourceProvenance.json` describe the exact source state used for the
 package.
