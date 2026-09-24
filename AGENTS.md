@@ -14,22 +14,22 @@ readable text, fresh desktop state, and bounded resource use over animation FPS.
 ## Start with the right evidence
 
 - Read `DEVELOPMENT.md` for the build, signing, compatibility, and test contract.
-  Read `docs/mac-shadow-sonoma-plan.md` for architecture and remaining milestones;
-  use `docs/mac-shadow-latency.md` and the relevant regression report for the
-  implemented behavior. Read other history only when it bears on the task.
+  Read `docs/mac-shadow-architecture.md` for the current data path and
+  invariants, `docs/mac-shadow-1.0.0.md` for release evidence, and
+  `docs/mac-shadow-engineering-history.md` for retained experiment conclusions.
+  Read other history only when it bears on the task.
 - Record the actual branch, HEAD, worktree, build directory, configuration, and
   tested executable. Do not equate a source checkout, built app, installed app,
   and running server. Verify the runtime profile and negotiated capabilities.
-- The supplied September 22, 2026 checkpoint is `mac-shadow-rdp-0.1.8`, commit
-  `8ded81d898ca2c8b5432fec73f2d00a68c3bd6eb`. Recovery baseline
-  `mac-shadow-rdp-0.1.7` is `59386e731`. Verify the checkout; never reset to these
-  refs merely to make the worktree match this description. Existing tags are
-  immutable.
+- The published 1.0.0 release is commit `f225ac1bb2335bae53ac8d39deea54b446fa5e44`
+  and annotated tag `1.0.0`. Treat both as immutable. Historical checkpoint
+  `mac-shadow-rdp-0.1.8` is `8ded81d898ca2c8b5432fec73f2d00a68c3bd6eb`; recovery
+  baseline `mac-shadow-rdp-0.1.7` is `59386e731`. Verify the checkout; never
+  reset to an older reference merely to make the worktree match this description.
 - Separate observed behavior, source findings, hypotheses, and tested fixes.
-  Historical acceptance does not overrule a new failure. The roadmap contains
-  older phase descriptions; do not mistake implemented text clipboard/audio
-  for unimplemented features or historical defects for proven current bugs.
-  Reconcile contradictions explicitly, preserving dated evidence.
+  Historical acceptance does not overrule a new failure. Do not mistake
+  implemented text clipboard/audio for unimplemented features or historical
+  defects for proven current bugs. Reconcile contradictions explicitly.
 
 ## Work autonomously, within scope
 
